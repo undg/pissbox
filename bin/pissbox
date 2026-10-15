@@ -38,7 +38,16 @@ confirm() {
 	done
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+# Follow launcher symlinks without readlink -f (unavailable on older macOS).
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
 SANDBOX_NAME=""
 WORKSPACES=()

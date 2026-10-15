@@ -21,7 +21,7 @@ Do not hard-code either directory location.
   user's Bash command-line scripting conventions.
 - `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
   Do not rewrite it as part of environment setup.
-- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox-start --help`.
+- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox --help`.
 - `tests/`: launcher regression tests using a stub SBX CLI (Python standard library).
 
 ## Image and kit
@@ -39,8 +39,10 @@ No configuration or credentials are copied into image layers.
 
 ## Workspaces and lifecycle
 
-From a project's worktree, run `/path/to/pissbox/bin/pissbox-start` with
-optional workspace directories. The first is primary; the rest are additional
+From a project's worktree, run `/path/to/pissbox/bin/pissbox` (or a symlink
+to it on PATH) with optional workspace directories. Resolve launcher symlinks
+before locating the checkout's kit and default Pi directory; preserve the caller's
+working directory. The first workspace is primary; the rest are additional
 mounts. With none, the current directory is primary. SBX picks the sandbox
 name unless `--name NAME` (or `--name=NAME`) is provided; the launcher forwards
 it to `sbx run` to allow multiple named sandboxes for the same workspaces.
@@ -55,7 +57,7 @@ Pi configuration. Keep overrides sandbox-only. It calls
 sandbox kit as the first positional argument, followed by workspaces and the
 Pi directory. Sandbox selection is left to SBX; no custom discovery or exec
 bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
-to replace existing data or a different symlink. Run `bin/pissbox-start --help`
+to replace existing data or a different symlink. Run `bin/pissbox --help`
 for usage. On SBX's existing-sandbox/workspace conflict, the launcher uses the
 name reported by SBX and asks `Get into it? [Y/n]`. Accepting runs
 `sbx run --name NAME` without new mounts. Declining offers deletion with
@@ -109,12 +111,13 @@ checked without a daemon, but v0.48.0 requires Docker sign-in even for
 
 Keep changes simple and reproducible. Read kit files before editing. Validate
 kit and launcher changes with `sbx kit validate ./sbx-kit`,
-`bash -n bin/pissbox-start`, and `git diff --check`. Do not claim a real sandbox run,
+`bash -n bin/pissbox`, and `git diff --check`. Do not claim a real sandbox run,
 authentication, or restart persistence is verified without testing it.
 Run launcher regression tests with
 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
-These cover confirmation defaults, deletion consent, EOF, argument forwarding,
-exit statuses, and terminal stdin/stdout preservation; they do not run real SBX.
+These cover symlink launches from another directory, caller-relative overrides,
+confirmation defaults, deletion consent, EOF, argument forwarding, exit statuses,
+and terminal stdin/stdout preservation; they do not run real SBX.
 
 After a real sandbox is created, check the link from the host:
 

@@ -14,7 +14,7 @@ on an npm install.
 
 ## Requirements
 
-The repository's `bin/pissbox-start` launcher requires **SBX v0.39.0 or newer**
+The repository's `bin/pissbox` launcher requires **SBX v0.39.0 or newer**
 on the host; **v0.48.0 or newer is recommended**. The launcher uses
 `sbx run --env` to pass the mounted Pi configuration path to sandbox setup.
 SBX added this flag in v0.39.0; older versions fail with
@@ -34,9 +34,14 @@ brew upgrade docker/tap/sbx
 
 ## Usage
 
-For this checkout's launcher, run `/path/to/pissbox/bin/pissbox-start` from
-any project directory (or pass workspace paths). When SBX reports that the
-sandbox already exists and cannot accept new workspaces, the launcher asks:
+For this checkout's launcher, run `/path/to/pissbox/bin/pissbox` from
+any project directory (or pass workspace paths). A symlink on PATH also works:
+the launcher finds its kit and default Pi directory beside the real script,
+not beside the symlink. The caller's directory remains the default workspace;
+relative Pi directory overrides also resolve from there.
+
+When SBX reports that the sandbox already exists and cannot accept new
+workspaces, the launcher asks:
 
 ```text
 Sandbox 'pi-project' already exists.

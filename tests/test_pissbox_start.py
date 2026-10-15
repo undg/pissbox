@@ -7,7 +7,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "bin" / "pissbox-start"
+LAUNCHER = ROOT / "bin" / "pissbox"
 PI_DIR = ROOT / "pi-agent"
 
 
@@ -22,10 +22,10 @@ class LauncherTests(unittest.TestCase):
         env.update(overrides)
         return env
 
-    def launch(self, *args, answers="", **env):
+    def launch(self, *args, answers="", launcher=LAUNCHER, cwd=ROOT, **env):
         result = subprocess.run(
-            [str(LAUNCHER), *args],
-            cwd=ROOT,
+            [str(launcher), *args],
+            cwd=cwd,
             env=self.environment(**env),
             input=answers,
             text=True,
@@ -50,6 +50,32 @@ class LauncherTests(unittest.TestCase):
             str(ROOT / "bin" / "../sbx-kit"), str(ROOT), str(PI_DIR),
         ]])
         self.assertEqual(result.stderr, "")
+
+    def test_launch_from_another_directory(self):
+        cwd = ROOT / "tests" / "fixtures"
+        for launcher in (LAUNCHER, "pissbox", cwd / "linked bin" / "pissbox"):
+            with self.subTest(launcher=launcher):
+                result, calls = self.launch(launcher=launcher, cwd=cwd)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(calls, [[
+                    "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
+                    str(ROOT / "bin" / "../sbx-kit"), str(cwd), str(PI_DIR),
+                ]])
+
+    def test_symlink_keeps_overrides_relative_to_caller(self):
+        cwd = ROOT / "tests" / "fixtures"
+        for args in ((), ("--pissbox-pi-dir", "../../pi-agent")):
+            with self.subTest(args=args):
+                result, calls = self.launch(
+                    *args, ".", launcher="pissbox", cwd=cwd,
+                    PISSBOX_PI_DIR="../../pi-agent" if not args else "missing",
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [[
+                    "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
+                    str(ROOT / "bin" / "../sbx-kit"), ".", str(PI_DIR),
+                ]])
 
     def test_attach_defaults_to_yes(self):
         result, calls = self.conflict("\n")
