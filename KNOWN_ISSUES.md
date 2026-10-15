@@ -17,3 +17,9 @@ Deferred investigations; migration details are in `PLAN.md`.
 - [ ] **Fresh sandbox verification:** Full custom-image build, local image
   availability in SBX, shared-config symlink, Copilot login, and persistence
   across restart/replacement remain unverified. Shell regression tests passed.
+
+## Herd integration
+
+- [ ] **Sandbox agent detection:** Herd's sidebar does not recognize agents
+  running inside sandboxes. Investigate a host–sandbox bridge so Herd can detect
+  and display those agents; the mechanism is not yet determined.
