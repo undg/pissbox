@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Create a Pi sandbox with the host's Pi directory mounted, then attach.
+set -euo pipefail
+
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  printf 'Usage: %s [WORKSPACE ...]\n' "${0##*/}"
+  printf 'First workspace is primary; additional ones are mounted read-write.\n'
+  printf 'Defaults to the current directory. SBX chooses the sandbox name.\n'
+  printf 'Pi config: $HOME/.config/pi (override with PI_HOST_CONFIG_DIR).\n'
+  exit 0
+fi
+
+if (( $# == 0 )); then
+  set -- "$PWD"
+fi
+
+config_dir=${PI_HOST_CONFIG_DIR:-$HOME/.config/pi}
+if [[ ! -d $config_dir ]]; then
+  printf 'Pi config directory does not exist: %s\n' "$config_dir" >&2
+  exit 1
+fi
+config_dir=$(cd "$config_dir" && pwd -P)
+
+workspaces=()
+for workspace in "$@"; do
+  if [[ ! -d $workspace ]]; then
+    printf 'Workspace does not exist: %s\n' "$workspace" >&2
+    exit 1
+  fi
+  workspaces+=("$(cd "$workspace" && pwd -P)")
+done
+script_dir=$(cd "$(dirname "$0")" && pwd -P)
+kit_dir=$(cd "$script_dir/../sbx-kit" && pwd -P)
+
+find_sandbox() {
+  sbx ls --json | python3 -c '
+import json, sys
+wanted = sys.argv[1:]
+matches = [box["name"] for box in json.load(sys.stdin)["sandboxes"]
+           if box["agent"] == "pi" and box["workspaces"] == wanted]
+if len(matches) > 1:
+    sys.exit("Multiple sandboxes match these workspaces; refusing to guess")
+if matches:
+    print(matches[0])
+' "${workspaces[@]}" "$config_dir"
+}
+
+# Create without attaching: the config link must exist before Pi starts.
+# Also recover a sandbox left behind by a failed earlier launch.
+sandbox=$(find_sandbox)
+if [[ -z $sandbox ]]; then
+  sbx create --kit "$kit_dir" pi "${workspaces[@]}" "$config_dir"
+  sandbox=$(find_sandbox)
+fi
+if [[ -z $sandbox ]]; then
+  echo 'Could not find the sandbox after creation' >&2
+  exit 1
+fi
+
+sbx exec "$sandbox" sh -c '
+  set -eu
+  source_dir=$1
+  target="$HOME/.pi/agent"
+  if [ ! -d "$source_dir" ]; then
+    echo "Pi config mount is missing inside the sandbox: $source_dir" >&2
+    exit 1
+  fi
+  if [ -L "$target" ]; then
+    if [ "$(readlink "$target")" != "$source_dir" ]; then
+      echo "Refusing to replace existing Pi config symlink: $target" >&2
+      exit 1
+    fi
+  elif [ -e "$target" ]; then
+    echo "Refusing to replace existing Pi config directory: $target" >&2
+    exit 1
+  else
+    mkdir -p "$HOME/.pi"
+    ln -s "$source_dir" "$target"
+  fi
+' sh "$config_dir"
+
+sbx run --name "$sandbox"

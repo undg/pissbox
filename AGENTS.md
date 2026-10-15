@@ -16,51 +16,29 @@ Do not hard-code either directory location.
   general. Put repository-specific guidance here instead.
 - `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
   Do not rewrite it as part of environment setup.
-- `bin/`: reserved for host-side launch helpers; currently empty.
+- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox-start --help`.
 
 ## Image and kit
 
-`sbx-kit/spec.yaml` references `pissbox/pi-image:local`. Merely editing the
-Dockerfile does not change the image: build it before creating a new sandbox.
-The current base is `docker/sandbox-templates:shell-docker`, not Arch Linux.
-The image installs Pi from npm and fd; the base supplies Node, ripgrep, and Docker.
-Pi defaults to npm's latest release at build time; `PI_VERSION` can pin it.
-
-From this repository's root, on the host:
-
-```bash
-PISSBOX_ROOT="$(pwd -P)"
-docker build \
-  --build-arg SHARED_PI_AGENT_DIR="$PISSBOX_ROOT/pi-agent" \
-  -t pissbox/pi-image:local \
-  "$PISSBOX_ROOT/sbx-kit"
-```
-
-The required build argument creates this symlink in the image:
-
-```text
-/home/agent/.pi/agent → <absolute host repository path>/pi-agent
-```
-
-Leave `PI_CODING_AGENT_DIR` unset. No configuration or credentials should be
-copied into image layers. The link is dangling until its target is mounted.
-Moving this repository requires rebuilding with the new path and creating a
-new sandbox.
+`sbx-kit/spec.yaml` references the published `docker.io/sbx/pi-image:latest`.
+`sbx-kit/Dockerfile` describes that upstream image but is **not** built by our
+normal launch flow. Do not add a machine-specific host path or config symlink
+to the image: the host home directory varies by machine. The launcher mounts
+host configuration and makes the symlink inside the sandbox at creation time.
+Leave `PI_CODING_AGENT_DIR` unset; Pi reads the symlink at its default path.
+No configuration or credentials are copied into image layers.
 
 ## Workspaces and lifecycle
 
-From a project's worktree, in the same host shell:
-
-```bash
-sbx run --name <new-sandbox-name> \
-  --kit "$PISSBOX_ROOT/sbx-kit" \
-  pi . .. "$PISSBOX_ROOT/pi-agent"
-```
-
-- `.` is the primary workspace and Pi's starting directory.
-- `..` exposes sibling worktrees and shared Git metadata for bare-repository
-  layouts. Omit it when unnecessary. The user accepts this broader exposure.
-- The final argument separately mounts shared Pi state read-write.
+From a project's worktree, run `/path/to/pissbox/bin/pissbox-start` with
+optional workspace directories. The first is primary; the rest are additional
+mounts. With none, the current directory is primary. SBX picks the sandbox
+name. The launcher defaults to the host's `$HOME/.config/pi`;
+`PI_HOST_CONFIG_DIR` overrides that path. It mounts the workspaces and Pi
+directory, refuses to overwrite an existing sandbox Pi directory, links
+`$HOME/.pi/agent` in the sandbox, then attaches with `sbx run`. Run
+`bin/pissbox-start --help` for usage. Do not silently recreate or remove an
+existing sandbox.
 
 SBX preserves absolute host workspace paths. Additional workspaces are not
 Docker-style arbitrary source/destination mappings. A host symlink alone does
@@ -78,10 +56,11 @@ separate things; shared sessions can outlive individual sandboxes.
 
 ## Shared configuration and authentication
 
-Put `settings.json`, `auth.json`, `sessions/`, extensions, etc. directly inside
-`pi-agent/`, not a nested `agent/`. Sharing the whole directory read-write across
-sandboxed agents is intentional for now, including credentials and sessions.
-More granular permissions can come later.
+The mounted host Pi directory must contain `settings.json`, `auth.json`,
+`sessions/`, etc. directly, not in a nested `agent/`. The launcher's default is
+`$HOME/.config/pi`; `PI_HOST_CONFIG_DIR` can point to `pi-agent/` instead.
+Sharing the whole directory read-write, including credentials and sessions, is
+intentional. Do not read or print credentials to debug the mount.
 
 The user uses GitHub Copilot and authenticates through Pi's `/login` inside the
 sandbox. The kit intentionally removes upstream Anthropic credential injection:
@@ -95,29 +74,15 @@ Avoid mixing macOS and Linux package installations into the same shared tree.
 
 ## Development and verification
 
-Keep changes simple and reproducible. Read the relevant kit files before
-editing; keep `sbx-kit/README.md` and image documentation aligned with behavior.
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s sbx-kit/testdata -p 'test_*.py'
-git diff --check
-```
-
-The Python tests execute the Dockerfile's symlink shell command in temporary
-directories. They cover absolute-path validation, spaces, a dangling target,
-write-through behavior, and refusing to replace an existing directory.
-They do not build the image or validate SBX schema, image availability, network
-policy, or Copilot login.
-
-At the time this guidance was written, the shell tests passed, but a full custom
-image build, SBX startup, and authentication persistence across restarts had not
-been verified. Do not report those integration steps as proven without testing.
+Keep changes simple and reproducible. Read kit files before editing. Validate
+kit and launcher changes with `sbx kit validate ./sbx-kit`,
+`bash -n bin/pissbox-start`, and `git diff --check`. Do not claim a real sandbox run,
+authentication, or restart persistence is verified without testing it.
 
 After a real sandbox is created, check the link from the host:
 
 ```bash
-sbx exec <sandbox-name> -- sh -c \
+sbx exec <sandbox-name> sh -c \
   'readlink "$HOME/.pi/agent"; test -d "$HOME/.pi/agent"'
 ```
 
