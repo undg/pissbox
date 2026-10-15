@@ -1,57 +1,19 @@
 # Known issues
 
-## Model catalog refresh fails
+Deferred investigations; migration details are in `PLAN.md`.
 
-**Status:** Open. After the user adjusted network access, a retry of
-`pi update --models` failed with `fetch failed` for GitHub Copilot and Anthropic.
-A direct curl request to the catalog endpoint now fails certificate validation:
-
-```text
-curl: (60) SSL certificate OpenSSL verify result: unable to get local issuer certificate (20)
-```
-
-Investigate the sandbox/proxy certificate trust chain and configure the correct
-CA trust for both Node (Pi) and curl. Do not disable TLS verification.
-
-Originally, Pi's catalog host `pi.dev` was blocked with HTTP 403:
-
-```text
-Blocked by network policy: domain pi.dev:443
-  detail: no matching allow rule — blocked by default deny policy
-```
-
-### To resolve
-
-- Add `pi.dev` to `permissions.network.allow` in `sbx-kit/spec.yaml` for future
-  sandboxes.
-- If a sandbox still reports the original policy block, allow the domain from
-  the host:
-
-  ```bash
-  sbx policy allow network pi.dev
-  ```
-
-- Resolve certificate trust, then retry inside the sandbox:
-
-  ```bash
-  pi update --models
-  ```
-
-- Confirm the refresh succeeds and the models are available in Pi's `/model`
-  picker.
-
-## Custom image and sandbox integration not yet verified
-
-**Status:** Unverified, not a confirmed defect.
-
-The symlink shell tests pass, but the complete workflow has not been tested:
-
-- Build `pissbox/pi-image:local` with `SHARED_PI_AGENT_DIR`.
-- Confirm host SBX can use that local image.
-- Create a sandbox with the shared `pi-agent/` workspace mounted.
-- Verify `/home/agent/.pi/agent` resolves to the mounted directory.
-- Authenticate with GitHub Copilot through `/login`.
-- Confirm credentials and sessions remain available after a sandbox restart
-  and in a replacement sandbox using the same shared directory.
-
-See `sbx-kit/README.md` for build, launch, and test commands.
+- [ ] **Host clipboard integration:** Mouse selection/copy-paste in the host
+  terminal does not reliably put selected Pi text on the host clipboard. The
+  clipboard command (`xclip`, `pbcopy`, or equivalent) reportedly runs inside
+  the sandbox instead of on the host. Investigate shared clipboard support,
+  terminal plugins, or a host–sandbox clipboard bridge; exact mechanism unverified.
+- [ ] **Scrolling in terminal selection mode:** Scrolling up while the host
+  terminal is in selection mode does not scroll Pi's conversation pane. Investigate
+  terminal/Pi mouse and scroll-event handling; cause unknown.
+- [ ] **Model catalog refresh:** `pi update --models` first failed because
+  `pi.dev` was blocked, then with `fetch failed`; curl reported an untrusted
+  certificate chain. Add `pi.dev` to the kit allowlist and investigate CA trust
+  without disabling TLS verification.
+- [ ] **Fresh sandbox verification:** Full custom-image build, local image
+  availability in SBX, shared-config symlink, Copilot login, and persistence
+  across restart/replacement remain unverified. Shell regression tests passed.
