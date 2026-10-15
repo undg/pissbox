@@ -1,6 +1,5 @@
 {
   "lastChangelogVersion": "1.0.4",
-  "theme": "gruvbox-dark-hard",
   "hideThinkingBlock": true,
   "npmCommand": [
     "mise",
@@ -16,14 +15,7 @@
     "extensions/disable-share.ts",
     "extensions/vault/index.ts"
   ],
-  "packages": [
-    "git:https://github.com/hasit/pi-community-themes@v0.3.0",
-    "npm:pi-hermes-memory",
-    "npm:pi-ayu-themes",
-    "npm:@gotgenes/pi-subagents",
-    "npm:@gotgenes/pi-colgrep",
-    "npm:pi-btw"
-  ],
+  "packages": [],
   "terminal": {
     "showTerminalProgress": true,
     "clearOnShrink": false
@@ -50,7 +42,10 @@
     "github-copilot/gpt-5-mini",
     "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6.1-sol",
-    "github-copilot/gpt-6-luna"
+    "github-copilot/gpt-6-luna",
+    "github-copilot/claude-haiku-5.5",
+    "github-copilot/claude-opus-5.5",
+    "github-copilot/claude-sonnet-5.5"
   ],
   "tuiMode": "fullscreen"
 }
