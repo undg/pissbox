@@ -33,9 +33,10 @@ No configuration or credentials are copied into image layers.
 From a project's worktree, run `/path/to/pissbox/bin/pissbox-start` with
 optional workspace directories. The first is primary; the rest are additional
 mounts. With none, the current directory is primary. SBX picks the sandbox
-name. The launcher defaults to the host's `$HOME/.config/pi`;
-`PI_HOST_CONFIG_DIR` overrides that path. It mounts the workspaces and Pi
-directory, refuses to overwrite an existing sandbox Pi directory, links
+name. The launcher finds this checkout's `pi-agent/` relative to its script,
+independent of the host home and current directory; `PI_HOST_CONFIG_DIR`
+overrides that path. It mounts the workspaces and Pi directory, refuses to
+overwrite an existing sandbox Pi directory, links
 `$HOME/.pi/agent` in the sandbox, then attaches with `sbx run`. Run
 `bin/pissbox-start --help` for usage. Do not silently recreate or remove an
 existing sandbox.
@@ -58,7 +59,8 @@ separate things; shared sessions can outlive individual sandboxes.
 
 The mounted host Pi directory must contain `settings.json`, `auth.json`,
 `sessions/`, etc. directly, not in a nested `agent/`. The launcher's default is
-`$HOME/.config/pi`; `PI_HOST_CONFIG_DIR` can point to `pi-agent/` instead.
+this checkout's `pi-agent/`; `PI_HOST_CONFIG_DIR` can point to another shared
+directory instead.
 Sharing the whole directory read-write, including credentials and sessions, is
 intentional. Do not read or print credentials to debug the mount.
 

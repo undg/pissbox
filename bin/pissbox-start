@@ -6,7 +6,7 @@ if [[ ${1:-} == --help || ${1:-} == -h ]]; then
 	printf 'Usage: %s [WORKSPACE ...]\n' "${0##*/}"
 	printf 'First workspace is primary; additional ones are mounted read-write.\n'
 	printf 'Defaults to the current directory. SBX chooses the sandbox name.\n'
-	printf 'Pi config: $HOME/.config/pi (override with PI_HOST_CONFIG_DIR).\n'
+	printf 'Pi config: repository pi-agent/ (override with PI_HOST_CONFIG_DIR).\n'
 	exit 0
 fi
 
@@ -14,7 +14,9 @@ if (($# == 0)); then
 	set -- "$PWD"
 fi
 
-config_dir="$HOME/Code/pissbox/pi-agent/"
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+kit_dir=$(cd "$script_dir/../sbx-kit" && pwd -P)
+config_dir=${PI_HOST_CONFIG_DIR:-"$script_dir/../pi-agent"}
 if [[ ! -d $config_dir ]]; then
 	printf 'Pi config directory does not exist: %s\n' "$config_dir" >&2
 	exit 1
@@ -29,8 +31,6 @@ for workspace in "$@"; do
 	fi
 	workspaces+=("$(cd "$workspace" && pwd -P)")
 done
-script_dir=$(cd "$(dirname "$0")" && pwd -P)
-kit_dir=$(cd "$script_dir/../sbx-kit" && pwd -P)
 
 find_sandbox() {
 	sbx ls --json | python3 -c '
