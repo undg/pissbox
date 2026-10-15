@@ -1,6 +1,7 @@
 # common
 Session.vim
 .env
+.tmp/
 
 # global git ignored
 !AGENTS.md

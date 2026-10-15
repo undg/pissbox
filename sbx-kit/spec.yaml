@@ -22,18 +22,10 @@ permissions:
       # themes) and the packages named in settings, fetched on startup.
       - registry.npmjs.org
 setup:
-  # Config only -- pi itself is baked into the image, so nothing is installed
-  # here. This is the re-export pattern of SPEC-v2 §9.5, and it is idempotent,
-  # so re-running it on recreate is fine.
-  #
-  # Guarded on HTTP_PROXY being non-empty: npm rejects an empty value for a
-  # url-typed config key, so an unset or empty variable would fail the step and
-  # take sandbox creation down with it -- a proxy-less runtime is something
-  # every sibling kit tolerates, and this one should too. HTTPS_PROXY is
-  # preferred for https-proxy when the runtime provides a dedicated one, with
-  # HTTP_PROXY as the fallback. Both keys go in a single `npm config set` so
-  # sandbox creation pays for one Node startup rather than two.
   install:
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
       user: "1000"
-      description: Point npm at the sandbox proxy in ~/.npmrc so pi's runtime npm use (`pi install npm:...`, `pi update`, startup package fetches) works in exec contexts that do not inherit the proxy environment variables
+      description: Configure npm to use the sandbox proxy
+    - command: 'sh "$HOME/.pissbox/scripts/link-pi-agent.sh"'
+      user: "1000"
+      description: Link the mounted host Pi directory to Pi's default config path

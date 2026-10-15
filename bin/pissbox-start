@@ -1,82 +1,95 @@
 #!/usr/bin/env bash
-# Create a Pi sandbox with the host's Pi directory mounted, then attach.
+
 set -euo pipefail
 
-if [[ ${1:-} == --help || ${1:-} == -h ]]; then
-	printf 'Usage: %s [WORKSPACE ...]\n' "${0##*/}"
-	printf 'First workspace is primary; additional ones are mounted read-write.\n'
-	printf 'Defaults to the current directory. SBX chooses the sandbox name.\n'
-	printf 'Pi config: repository pi-agent/ (override with PI_HOST_CONFIG_DIR).\n'
-	exit 0
-fi
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
 
-if (($# == 0)); then
-	set -- "$PWD"
-fi
+Start Pi in an SBX sandbox with sandbox-only configuration.
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-kit_dir=$(cd "$script_dir/../sbx-kit" && pwd -P)
-config_dir=${PI_HOST_CONFIG_DIR:-"$script_dir/../pi-agent"}
-if [[ ! -d $config_dir ]]; then
-	printf 'Pi config directory does not exist: %s\n' "$config_dir" >&2
-	exit 1
-fi
-config_dir=$(cd "$config_dir" && pwd -P)
+Options:
+  --name NAME          Pass an explicit sandbox name to SBX
+  --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
+  -h, --help           Show this help
+  --                   Treat remaining arguments as workspaces
 
-workspaces=()
-for workspace in "$@"; do
-	if [[ ! -d $workspace ]]; then
-		printf 'Workspace does not exist: %s\n' "$workspace" >&2
-		exit 1
-	fi
-	workspaces+=("$(cd "$workspace" && pwd -P)")
-done
-
-find_sandbox() {
-	sbx ls --json | python3 -c '
-import json, sys
-wanted = sys.argv[1:]
-matches = [box["name"] for box in json.load(sys.stdin)["sandboxes"]
-           if box["agent"] == "pi" and box["workspaces"] == wanted]
-if len(matches) > 1:
-    sys.exit("Multiple sandboxes match these workspaces; refusing to guess")
-if matches:
-    print(matches[0])
-' "${workspaces[@]}" "$config_dir"
+With no workspaces, use the current directory.
+The first workspace is primary; additional ones are mounted read-write.
+SBX chooses the sandbox name unless --name is provided.
+EOF
 }
 
-# Create without attaching: the config link must exist before Pi starts.
-# Also recover a sandbox left behind by a failed earlier launch.
-sandbox=$(find_sandbox)
-if [[ -z $sandbox ]]; then
-	sbx create --kit "$kit_dir" pi "${workspaces[@]}" "$config_dir"
-	sandbox=$(find_sandbox)
-fi
-if [[ -z $sandbox ]]; then
-	echo 'Could not find the sandbox after creation' >&2
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
+SANDBOX_NAME=""
+WORKSPACES=()
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	--name)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "--name requires a sandbox name" >&2
+			exit 1
+		fi
+		SANDBOX_NAME=$2
+		shift 2
+		;;
+	--name=*)
+		SANDBOX_NAME=${1#*=}
+		if [[ -z $SANDBOX_NAME ]]; then
+			echo "--name requires a sandbox name" >&2
+			exit 1
+		fi
+		shift
+		;;
+	--pissbox-pi-dir)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "--pissbox-pi-dir requires a directory" >&2
+			exit 1
+		fi
+		PISSBOX_PI_DIR=$2
+		shift 2
+		;;
+	--pissbox-pi-dir=*)
+		PISSBOX_PI_DIR=${1#*=}
+		shift
+		;;
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	--)
+		shift
+		WORKSPACES+=("$@")
+		break
+		;;
+	-*)
+		echo "Unknown option: $1" >&2
+		echo "Use --help for usage information" >&2
+		exit 1
+		;;
+	*)
+		WORKSPACES+=("$1")
+		shift
+		;;
+	esac
+done
+
+if [[ ! -d $PISSBOX_PI_DIR ]]; then
+	echo "Pi directory does not exist: $PISSBOX_PI_DIR" >&2
 	exit 1
 fi
+PISSBOX_PI_DIR="$(cd "$PISSBOX_PI_DIR" && pwd -P)"
 
-sbx exec "$sandbox" sh -c '
-  set -eu
-  source_dir=$1
-  target="$HOME/.pi/agent"
-  if [ ! -d "$source_dir" ]; then
-    echo "Pi config mount is missing inside the sandbox: $source_dir" >&2
-    exit 1
-  fi
-  if [ -L "$target" ]; then
-    if [ "$(readlink "$target")" != "$source_dir" ]; then
-      echo "Refusing to replace existing Pi config symlink: $target" >&2
-      exit 1
-    fi
-  elif [ -e "$target" ]; then
-    echo "Refusing to replace existing Pi config directory: $target" >&2
-    exit 1
-  else
-    mkdir -p "$HOME/.pi"
-    ln -s "$source_dir" "$target"
-  fi
-' sh "$config_dir"
+if [[ ${#WORKSPACES[@]} -eq 0 ]]; then
+	WORKSPACES=("$PWD")
+fi
 
-sbx run --name "$sandbox"
+SBX_ARGS=(run --env "PISSBOX_PI_DIR=$PISSBOX_PI_DIR")
+if [[ -n $SANDBOX_NAME ]]; then
+	SBX_ARGS+=(--name "$SANDBOX_NAME")
+fi
+
+exec sbx "${SBX_ARGS[@]}" \
+	"$SCRIPT_DIR/../sbx-kit" "${WORKSPACES[@]}" "$PISSBOX_PI_DIR"

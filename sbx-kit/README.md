@@ -12,6 +12,26 @@ upstream release. The kit itself applies policy, points npm at the sandbox
 proxy, and runs `pi` as the entrypoint, so creating a sandbox no longer waits
 on an npm install.
 
+## Requirements
+
+The repository's `bin/pissbox-start` launcher requires **SBX v0.39.0 or newer**
+on the host; **v0.48.0 or newer is recommended**. The launcher uses
+`sbx run --env` to pass the mounted Pi configuration path to sandbox setup.
+SBX added this flag in v0.39.0; older versions fail with
+`ERROR: unknown flag: --env`.
+
+Check the installed version:
+
+```console
+sbx version
+```
+
+On macOS, upgrade a Homebrew installation with:
+
+```console
+brew upgrade docker/tap/sbx
+```
+
 ## Usage
 
 ```console

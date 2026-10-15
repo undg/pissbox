@@ -11,9 +11,14 @@ Do not hard-code either directory location.
 ## Layout
 
 - `sbx-kit/`: local SBX kit, Dockerfile, setup, network policy, and documentation.
-- `pi-agent/`: shared Pi agent directory. Contains user configuration and private
-  runtime state. Its `AGENTS.md` applies to every Pi session: keep it brief and
+- `sbx-kit/files/home/.pissbox/scripts/`: setup scripts bundled with the kit;
+  SBX copies them to `$HOME/.pissbox/scripts/` before running `setup.install`.
+- `pi-agent/`: sandbox-only Pi agent directory, shared across SBX instances,
+  not with native/non-sandboxed Pi. Contains configuration and private runtime
+  state. Its `AGENTS.md` applies to sandbox Pi sessions: keep it brief and
   general. Put repository-specific guidance here instead.
+- `pi-agent/skills/`: sandbox-wide skills, including `bash-cli-style` for the
+  user's Bash command-line scripting conventions.
 - `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
   Do not rewrite it as part of environment setup.
 - `bin/`: host-side Pi sandbox launcher; run `bin/pissbox-start --help`.
@@ -24,7 +29,10 @@ Do not hard-code either directory location.
 `sbx-kit/Dockerfile` describes that upstream image but is **not** built by our
 normal launch flow. Do not add a machine-specific host path or config symlink
 to the image: the host home directory varies by machine. The launcher mounts
-host configuration and makes the symlink inside the sandbox at creation time.
+the sandbox-only `pi-agent/` and passes its absolute path with
+`--env PISSBOX_PI_DIR=...`.
+The kit's `setup.install` creates the config symlink as user `1000` before Pi
+first launches. Keep `entrypoint: [pi]`; no image startup helper is needed.
 Leave `PI_CODING_AGENT_DIR` unset; Pi reads the symlink at its default path.
 No configuration or credentials are copied into image layers.
 
@@ -33,13 +41,21 @@ No configuration or credentials are copied into image layers.
 From a project's worktree, run `/path/to/pissbox/bin/pissbox-start` with
 optional workspace directories. The first is primary; the rest are additional
 mounts. With none, the current directory is primary. SBX picks the sandbox
-name. The launcher finds this checkout's `pi-agent/` relative to its script,
-independent of the host home and current directory; `PI_HOST_CONFIG_DIR`
-overrides that path. It mounts the workspaces and Pi directory, refuses to
-overwrite an existing sandbox Pi directory, links
-`$HOME/.pi/agent` in the sandbox, then attaches with `sbx run`. Run
-`bin/pissbox-start --help` for usage. Do not silently recreate or remove an
-existing sandbox.
+name unless `--name NAME` (or `--name=NAME`) is provided; the launcher forwards
+it to `sbx run` to allow multiple named sandboxes for the same workspaces.
+Repeated name options use the last value. Pi directory selection is `--pissbox-pi-dir DIR` first, then the
+sandbox-specific `PISSBOX_PI_DIR` environment variable, then this checkout's
+`pi-agent/`. Relative overrides resolve from the caller's current directory;
+the selected path is canonicalized before mounting. The launcher uses a
+`case` loop, accepts options among workspaces, and supports `--` to end option
+parsing. It does not use `PI_HOST_CONFIG_DIR` or automatically discover native
+Pi configuration. Keep overrides sandbox-only. It calls
+`sbx run --env PISSBOX_PI_DIR=...` with the local
+sandbox kit as the first positional argument, followed by workspaces and the
+Pi directory. Sandbox selection is left to SBX; no custom discovery or exec
+bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
+to replace existing data or a different symlink. Run `bin/pissbox-start --help`
+for usage. Do not silently recreate or remove an existing sandbox.
 
 SBX preserves absolute host workspace paths. Additional workspaces are not
 Docker-style arbitrary source/destination mappings. A host symlink alone does
@@ -57,12 +73,11 @@ separate things; shared sessions can outlive individual sandboxes.
 
 ## Shared configuration and authentication
 
-The mounted host Pi directory must contain `settings.json`, `auth.json`,
-`sessions/`, etc. directly, not in a nested `agent/`. The launcher's default is
-this checkout's `pi-agent/`; `PI_HOST_CONFIG_DIR` can point to another shared
-directory instead.
-Sharing the whole directory read-write, including credentials and sessions, is
-intentional. Do not read or print credentials to debug the mount.
+The mounted sandbox-only `pi-agent/` must contain `settings.json`, `auth.json`,
+`sessions/`, etc. directly, not in a nested `agent/`. Keep it separate from
+native/non-sandboxed Pi configuration; those agents have different restrictions.
+Sharing the whole directory read-write across sandboxes, including credentials
+and sessions, is intentional. Do not read or print credentials to debug the mount.
 
 The user uses GitHub Copilot and authenticates through Pi's `/login` inside the
 sandbox. The kit intentionally removes upstream Anthropic credential injection:
@@ -75,6 +90,14 @@ Do not reset shared state or change shared configuration outside the task.
 Avoid mixing macOS and Linux package installations into the same shared tree.
 
 ## Development and verification
+
+The launcher requires SBX v0.39.0 or newer: that release added `--env` and
+`--env-file` to `sbx run` and `sbx create`. If a host reports `unknown flag:
+--env`, check `sbx version` and upgrade SBX; do not remove the variable needed
+by the config-link setup script. Official release binaries downloaded for
+local CLI checks belong in ignored `.tools/`, not in commits. CLI help can be
+checked without a daemon, but v0.48.0 requires Docker sign-in even for
+`sbx kit validate`; installing the CLI alone does not verify kit validity.
 
 Keep changes simple and reproducible. Read kit files before editing. Validate
 kit and launcher changes with `sbx kit validate ./sbx-kit`,
@@ -89,4 +112,4 @@ sbx exec <sandbox-name> sh -c \
 ```
 
 Update this file as the repository evolves. Keep operational detail here rather
-than expanding the globally shared `pi-agent/AGENTS.md`.
+than expanding the sandbox-shared `pi-agent/AGENTS.md`.
