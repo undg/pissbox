@@ -11,3 +11,5 @@ Session.vim
 # pi
 pi-agent/auth.json
 pi-agent/sessions
+pi-agent/models-store.json
+
