@@ -132,15 +132,5 @@ LABEL com.docker.sandboxes.flavor="pi"
 LABEL com.docker.sandboxes.base="${BASE_IMAGE}"
 
 USER agent
-
-# SBX preserves host workspace paths. The host supplies this path at build
-# time and mounts the same directory when creating the sandbox. Do not COPY
-# configuration or credentials into the image, or set PI_CODING_AGENT_DIR.
-ARG SHARED_PI_AGENT_DIR
-RUN test -n "${SHARED_PI_AGENT_DIR}" && \
-    case "${SHARED_PI_AGENT_DIR}" in /*) ;; *) echo 'SHARED_PI_AGENT_DIR must be absolute' >&2; exit 1 ;; esac && \
-    mkdir -p /home/agent/.pi && \
-    ln -sT "${SHARED_PI_AGENT_DIR}" /home/agent/.pi/agent
-
 WORKDIR /home/agent
 CMD ["pi"]
