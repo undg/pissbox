@@ -1,4 +1,4 @@
-# sbx/pi-image
+# pissbox/pi-image:local
 
 Base image for the pi agent kit for
 [Docker Sandboxes](https://docs.docker.com/ai/sandboxes/).
@@ -10,7 +10,7 @@ chain plus a Docker engine, requesting Docker-in-Docker via
 `com.docker.sandboxes.start-docker=true`. On top of that:
 
 - [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent),
-  installed globally at the latest upstream release (rebuilt nightly),
+  installed globally at the latest upstream release at build time,
   plus a `/usr/local/bin/pi` symlink
 - `fd-find` (apt), which backs pi's `find` tool, plus a `/usr/local/bin/fd`
   symlink for the canonical name — without it pi downloads a binary from
@@ -25,6 +25,8 @@ The npm global prefix stays owned by `agent`, so `pi install` and
 
 Runs as the non-root `agent` user, with `CMD ["pi"]`.
 
-## Kit
+The required `SHARED_PI_AGENT_DIR` build argument supplies an absolute host path.
+`/home/agent/.pi/agent` is a symlink to that path, which must also be mounted as
+an SBX workspace. No shared configuration or credentials are baked into the image.
 
-[`docker.io/sbx/pi-kit`](https://hub.docker.com/r/sbx/pi-kit)
+See [README.md](README.md) for local build and sandbox creation commands.
