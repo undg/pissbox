@@ -1,0 +1,8 @@
+Session.vim
+.env
+
+# global git ignored
+!AGENTS.md
+
+# local git ignored
+!mise.toml
