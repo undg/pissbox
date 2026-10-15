@@ -1,0 +1,53 @@
+{
+  "lastChangelogVersion": "1.0.4",
+  "theme": "gruvbox-dark-hard",
+  "hideThinkingBlock": true,
+  "npmCommand": ["mise", "exec", "node@24", "--", "pnpm"],
+  "extensions": [
+    "extensions/pi-notifier/index.ts",
+    "extensions/collapse-tool-output.ts",
+    "extensions/tui-nice/index.ts",
+    "extensions/disable-share.ts",
+    "extensions/vault/index.ts"
+  ],
+  "packages": [
+    "npm:@gotgenes/pi-permission-system@20.7.3",
+    "npm:@gotgenes/pi-nocd",
+    "git:https://github.com/hasit/pi-community-themes@v0.3.0",
+    "npm:pi-hermes-memory",
+    "npm:pi-ayu-themes",
+    "npm:@gotgenes/pi-subagents",
+    "npm:@gotgenes/pi-colgrep",
+    "npm:pi-btw",
+    "npm:pi-web-access"
+  ],
+  "terminal": {
+    "showTerminalProgress": true,
+    "clearOnShrink": false
+  },
+  "showCacheMissNotices": true,
+  "collapseChangelog": true,
+  "quietStartup": true,
+  "enableInstallTelemetry": false,
+  "treeFilterMode": "user-only",
+  "warnings": {
+    "anthropicExtraUsage": true
+  },
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "enableSkillCommands": true,
+  "showHardwareCursor": true,
+  "transport": "auto",
+  "doubleEscapeAction": "tree",
+  "autocompleteMaxVisible": 20,
+  "defaultProvider": "github-copilot",
+  "defaultModel": "gpt-6-sol",
+  "defaultThinkingLevel": "high",
+  "enabledModels": [
+    "github-copilot/gpt-5-mini",
+    "github-copilot/gpt-6-astra",
+    "github-copilot/gpt-6-sol",
+    "github-copilot/gpt-6-luna"
+  ],
+  "tuiMode": "fullscreen"
+}

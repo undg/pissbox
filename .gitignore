@@ -1,3 +1,4 @@
+# common
 Session.vim
 .env
 
@@ -6,3 +7,7 @@ Session.vim
 
 # local git ignored
 !mise.toml
+
+# pi
+pi-agent/auth.json
+pi-agent/sessions
