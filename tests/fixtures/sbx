@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+print("sbx:" + json.dumps(args), flush=True)
+
+if args[:2] == ["run", "--name"]:
+    sys.exit(int(os.environ.get("TEST_SBX_ATTACH_STATUS", "0")))
+if args[:1] == ["rm"]:
+    sys.exit(int(os.environ.get("TEST_SBX_REMOVE_STATUS", "0")))
+
+if os.environ.get("TEST_SBX_REQUIRE_TTY") == "1":
+    assert sys.stdin.isatty(), "stdin is no longer a terminal"
+    assert sys.stdout.isatty(), "stdout is no longer a terminal"
+
+mode = os.environ.get("TEST_SBX_MODE", "success")
+if mode == "conflict":
+    name = os.environ.get("TEST_SBX_NAME", "pi-existing")
+    print(
+        f"error: sandbox '{name}' already exists and can't be given new workspaces",
+        file=sys.stderr,
+    )
+    print(f"  try: sbx run --name {name}", file=sys.stderr)
+    sys.exit(1)
+if mode == "error":
+    print("error: daemon unavailable", file=sys.stderr)
+    sys.exit(7)
+
+sys.exit(int(os.environ.get("TEST_SBX_RUN_STATUS", "0")))

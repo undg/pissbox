@@ -34,6 +34,28 @@ brew upgrade docker/tap/sbx
 
 ## Usage
 
+For this checkout's launcher, run `/path/to/pissbox/bin/pissbox-start` from
+any project directory (or pass workspace paths). When SBX reports that the
+sandbox already exists and cannot accept new workspaces, the launcher asks:
+
+```text
+Sandbox 'pi-project' already exists.
+Get into it? [Y/n]
+```
+
+Enter attaches using the sandbox's existing mounts. Answering no offers:
+
+```text
+Deletion loses sandbox-local data. Mounted host files remain.
+Do you want to delete it? [y/N]
+```
+
+Deletion requires an explicit yes and exits without recreating the sandbox.
+Enter leaves it untouched. Run the launcher again to create a fresh sandbox.
+Invalid answers repeat the question; EOF aborts without attaching or deleting.
+
+For the upstream kit directly:
+
 ```console
 sbx run --kit "docker.io/sbx/pi-kit:latest" pi
 ```
