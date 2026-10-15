@@ -2,7 +2,13 @@
   "lastChangelogVersion": "1.0.4",
   "theme": "gruvbox-dark-hard",
   "hideThinkingBlock": true,
-  "npmCommand": ["mise", "exec", "node@24", "--", "pnpm"],
+  "npmCommand": [
+    "mise",
+    "exec",
+    "node@24",
+    "--",
+    "pnpm"
+  ],
   "extensions": [
     "extensions/pi-notifier/index.ts",
     "extensions/collapse-tool-output.ts",
@@ -11,15 +17,12 @@
     "extensions/vault/index.ts"
   ],
   "packages": [
-    "npm:@gotgenes/pi-permission-system@20.7.3",
-    "npm:@gotgenes/pi-nocd",
     "git:https://github.com/hasit/pi-community-themes@v0.3.0",
     "npm:pi-hermes-memory",
     "npm:pi-ayu-themes",
     "npm:@gotgenes/pi-subagents",
     "npm:@gotgenes/pi-colgrep",
-    "npm:pi-btw",
-    "npm:pi-web-access"
+    "npm:pi-btw"
   ],
   "terminal": {
     "showTerminalProgress": true,
@@ -41,12 +44,12 @@
   "doubleEscapeAction": "tree",
   "autocompleteMaxVisible": 20,
   "defaultProvider": "github-copilot",
-  "defaultModel": "gpt-6-sol",
+  "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
   "enabledModels": [
     "github-copilot/gpt-5-mini",
     "github-copilot/gpt-6-astra",
-    "github-copilot/gpt-6-sol",
+    "github-copilot/gpt-6.1-sol",
     "github-copilot/gpt-6-luna"
   ],
   "tuiMode": "fullscreen"
