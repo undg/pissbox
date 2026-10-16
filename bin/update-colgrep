@@ -13,8 +13,9 @@ Options:
 
 Run on the macOS or Linux host. Requires curl, tar with XZ support, and
 sha256sum or shasum. No downloaded code is executed.
-Archives and checksums stay in shared-state/downloads/colgrep/.
-The binary goes to sbx-kit/files/usr/local/bin/colgrep, on PATH in new sandboxes.
+Archives and checksums stay in .cache/downloads/colgrep/.
+The binary goes to sbx-kit/files/home/.local/bin/colgrep, on PATH in new
+sandboxes after kit setup marks it executable.
 Run again to update. Existing sandboxes are unchanged.
 EOF
 }
@@ -65,8 +66,8 @@ if [[ $RELEASE_URL != "$REPOSITORY/releases/tag/$VERSION" || ! $VERSION =~ ^[A-Z
 fi
 
 PACKAGE="colgrep-$ARCH-unknown-linux-gnu"
-DOWNLOAD_DIR="$SCRIPT_DIR/../shared-state/downloads/colgrep/$VERSION/$ARCH"
-DESTINATION="$SCRIPT_DIR/../sbx-kit/files/usr/local/bin/colgrep"
+DOWNLOAD_DIR="$SCRIPT_DIR/../.cache/downloads/colgrep/$VERSION/$ARCH"
+DESTINATION="$SCRIPT_DIR/../sbx-kit/files/home/.local/bin/colgrep"
 mkdir -p "$DOWNLOAD_DIR"
 
 printf 'Downloading colgrep %s (%s Linux)\n' "$VERSION" "$ARCH" >&2

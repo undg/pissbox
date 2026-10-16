@@ -1,13 +1,14 @@
 # Shared sandbox directories
 
 The launcher mounts one host-owned, **sandbox-only Linux** state directory into
-all new sandboxes. The default is `shared-state/` beside `pi-agent/` in this
+all new sandboxes. The default is `.cache/` beside `pi-agent/` in this
 checkout. It is created on demand and ignored by Git. Removing a sandbox does
 not remove this mounted state.
 
-The previous `sandbox-state` name may remain as an ignored compatibility
-symlink to `shared-state` in existing checkouts. Keep it while any sandbox
-still uses the old paths. The launcher does not migrate existing sandboxes.
+The previous `shared-state` and `sandbox-state` names may remain as ignored
+compatibility symlinks to `.cache` in existing checkouts. Keep them while any
+sandbox still uses the old paths. The launcher does not migrate existing
+sandboxes.
 
 Use `--pissbox-state-dir DIR` to choose another location, or set
 `PISSBOX_STATE_DIR`. Precedence is flag > environment > checkout default.
@@ -20,7 +21,7 @@ canonicalizes the path before passing it as a workspace and through
 Edit `files/home/.pissbox/shared-directories.conf`. Each non-comment row is:
 
 ```text
-path-under-shared-state|path-under-sandbox-home
+path-under-state-root|path-under-sandbox-home
 ```
 
 Paths are literal, relative directory paths; no shell expansion, absolute
@@ -66,7 +67,8 @@ per-project indexes inside its shared data directory.
 - Sharing data does not make simultaneous colgrep writes to the same project's
   index safe. Avoid concurrent index updates until upstream locking is verified.
 - State-root overrides should be dedicated directories. Git ignores this
-  checkout's default `shared-state/` and the legacy `sandbox-state` path;
+  checkout's default `.cache/` and the legacy `shared-state` and `sandbox-state`
+  paths;
   manage ignore rules for other locations.
 
 ## Verification
@@ -79,7 +81,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 It checks launcher arguments using a stub SBX CLI, and runs the link script with
 isolated fixture homes/state directories. Generated fixtures are retained under
-ignored `shared-state/test-fixtures/`. These tests do not launch real SBX or run
+ignored `.cache/test-fixtures/`. These tests do not launch real SBX or run
 colgrep/pnpm.
 
 After creating a real sandbox, check from the host:

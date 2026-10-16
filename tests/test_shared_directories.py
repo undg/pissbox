@@ -15,7 +15,7 @@ CONFIG = PISSBOX_FILES / "shared-directories.conf"
 class SharedDirectoriesTests(unittest.TestCase):
     def setUp(self):
         # Retain generated fixtures inside the ignored sandbox-only state tree.
-        fixtures = ROOT / "shared-state" / "test-fixtures"
+        fixtures = ROOT / ".cache" / "test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
         self.directory = Path(tempfile.mkdtemp(prefix="shared-", dir=fixtures))
         self.home = self.directory / "sandbox home"

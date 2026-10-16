@@ -12,7 +12,7 @@ Options:
   --name NAME          Pass an explicit sandbox name to SBX
   --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
   --pissbox-state-dir DIR
-                       Override PISSBOX_STATE_DIR (default: this checkout's shared-state/)
+                       Override PISSBOX_STATE_DIR (default: this checkout's .cache/)
   -h, --help           Show this help
   --                   Treat remaining arguments as workspaces
 
@@ -53,7 +53,7 @@ while [[ -L $SCRIPT_PATH ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
-PISSBOX_STATE_DIR="${PISSBOX_STATE_DIR:-"$SCRIPT_DIR/../shared-state"}"
+PISSBOX_STATE_DIR="${PISSBOX_STATE_DIR:-"$SCRIPT_DIR/../.cache"}"
 SANDBOX_NAME=""
 WORKSPACES=()
 

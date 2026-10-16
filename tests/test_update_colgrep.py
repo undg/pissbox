@@ -19,7 +19,7 @@ REPOSITORY = "https://github.com/lightonai/next-plaid"
 
 class UpdateColgrepTests(unittest.TestCase):
     def setUp(self):
-        fixtures = ROOT / "shared-state" / "test-fixtures"
+        fixtures = ROOT / ".cache" / "test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
         self.directory = Path(tempfile.mkdtemp(prefix="colgrep-", dir=fixtures))
         self.checkout = self.directory / "checkout with spaces"
@@ -29,7 +29,7 @@ class UpdateColgrepTests(unittest.TestCase):
         self.assets = self.directory / "release assets"
         self.assets.mkdir()
         self.log = self.directory / "curl.jsonl"
-        self.destination = self.checkout / "sbx-kit/files/usr/local/bin/colgrep"
+        self.destination = self.checkout / "sbx-kit/files/home/.local/bin/colgrep"
         self.caller = self.directory / "caller"
         self.caller.mkdir()
         self.make_release()
@@ -100,7 +100,7 @@ class UpdateColgrepTests(unittest.TestCase):
             REPOSITORY + "/releases/download/v1.0.0/colgrep-aarch64-unknown-linux-gnu.tar.xz",
             REPOSITORY + "/releases/download/v1.0.0/colgrep-aarch64-unknown-linux-gnu.tar.xz.sha256",
         ])
-        cache = self.checkout / "shared-state/downloads/colgrep/v1.0.0/aarch64"
+        cache = self.checkout / ".cache/downloads/colgrep/v1.0.0/aarch64"
         self.assertTrue((cache / "colgrep-aarch64-unknown-linux-gnu.tar.xz").is_file())
         self.assertFalse((cache / "colgrep-aarch64-unknown-linux-gnu").exists())
         self.assertEqual(list(self.caller.iterdir()), [])
@@ -197,7 +197,7 @@ class UpdateColgrepTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("Usage:", result.stdout)
                 self.assertEqual(self.calls(), [])
-                self.assertFalse((self.checkout / "shared-state").exists())
+                self.assertFalse((self.checkout / ".cache").exists())
                 self.assertFalse(self.destination.exists())
 
     def test_symlink_finds_checkout_without_changing_caller_directory(self):

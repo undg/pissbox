@@ -10,7 +10,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "bin" / "pissbox"
 PI_DIR = ROOT / "pi-agent"
-STATE_DIR = ROOT / "shared-state"
+STATE_DIR = ROOT / ".cache"
 
 
 class LauncherTests(unittest.TestCase):

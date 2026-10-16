@@ -2,19 +2,19 @@
 Session.vim
 .env
 .tmp/
-shared-state/
-# Compatibility path for existing sandboxes.
-/sandbox-state
-sbx-kit/files/usr/local/bin/colgrep
 
-# global git ignored
-!AGENTS.md
+# sandboxes shared state
+.cache/
 
-# local git ignored
-!mise.toml
+sbx-kit/files/home/.local/bin/colgrep
 
 # pi
 pi-agent/auth.json
 pi-agent/sessions
 pi-agent/models-store.json
 
+# global git ignored
+!AGENTS.md
+
+# local git ignored
+!mise.toml

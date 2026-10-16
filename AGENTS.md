@@ -15,7 +15,7 @@ Do not hard-code either directory location.
   SBX copies them to `$HOME/.pissbox/scripts/` before running `setup.install`.
 - `sbx-kit/files/home/.pissbox/shared-directories.conf`: shared-directory mappings;
   add or modify tool state here, not in launcher branches or per-tool scripts.
-- `shared-state/`: gitignored, host-owned Linux model/index/package state shared
+- `.cache/`: gitignored, host-owned Linux model/index/package state shared
   across sandboxes. See `sbx-kit/SHARED-DIRECTORIES.md`.
 - `pi-agent/`: sandbox-only Pi agent directory, shared across SBX instances,
   not with native/non-sandboxed Pi. Contains configuration and private runtime
@@ -52,10 +52,13 @@ matching SHA-256 checksum, verifies the archive, and extracts only the binary
 without executing downloaded code.
 The target is fixed to the sandbox's ARM64 Linux architecture
 (`aarch64-unknown-linux-gnu`); do not detect the host CPU or add architecture
-options. The generated `sbx-kit/files/usr/local/bin/colgrep` is gitignored
-and copied by SBX to `/usr/local/bin/colgrep` on PATH in new sandboxes. No remote
-installer, Dockerfile install, launcher download, or image rebuild is needed.
-Archives and checksums remain in ignored `shared-state/downloads/colgrep/`.
+options. The gitignored `sbx-kit/files/home/.local/bin/colgrep` lands at
+`/home/agent/.local/bin/colgrep` (already on PATH) as a static file, and the
+kit's `setup.install` step marks it executable. SBX only copies static files
+under `files/home/` and `files/workspace/`; a `files/usr/...` path is ignored.
+No root install, remote installer, Dockerfile install, launcher download, or
+image rebuild is needed.
+Archives and checksums remain in ignored `.cache/downloads/colgrep/`.
 The updater uses the host's curl, tar with XZ support, and sha256sum (preferred)
 or shasum -a 256; no Python or sandbox-side tools are needed. On Arch Linux,
 the packages are curl, tar, xz, and coreutils. A fresh checkout needs the download
@@ -128,14 +131,14 @@ Avoid mixing macOS and Linux package installations into the same shared tree.
 
 ## Shared tool state
 
-The shared state root defaults to this checkout's gitignored `shared-state/`.
+The shared state root defaults to this checkout's gitignored `.cache/`.
 Selection is `--pissbox-state-dir DIR` first, then `PISSBOX_STATE_DIR`, then the
 checkout default. Relative overrides use the caller's directory. The launcher
 creates and canonicalizes the root before mounting it. Keep this state Linux
 sandbox-only, separate from native/macOS caches and Pi configuration. The old
-`sandbox-state` name may remain as an ignored compatibility symlink to
-`shared-state` for existing sandbox paths. Do not remove it while those paths
-are in use; the launcher does not migrate existing sandboxes.
+`shared-state` and `sandbox-state` names may remain as ignored compatibility
+symlinks to `.cache` for existing sandbox paths. Do not remove them while those
+paths are in use; the launcher does not migrate existing sandboxes.
 
 Mappings live in `sbx-kit/files/home/.pissbox/shared-directories.conf` as literal
 `state-relative-path|home-relative-path` rows. Use relative paths without dot
@@ -178,7 +181,7 @@ shasum fallback, and a missing checksum tool. A test-only Python XZ decompressor
 lets GNU tar run in the Linux test sandbox without xz; production uses macOS
 tar's built-in XZ support or Arch's xz package. A failing uname stub prevents
 host architecture detection. Generated fixtures remain under ignored
-`shared-state/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
+`.cache/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
 
 After a real sandbox is created, check the link from the host:
 

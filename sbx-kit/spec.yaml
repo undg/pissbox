@@ -26,6 +26,9 @@ permissions:
       - pi.dev
 setup:
   install:
+    - command: 'if [ -f "$HOME/.local/bin/colgrep" ]; then chmod 0755 "$HOME/.local/bin/colgrep"; else echo "colgrep not bundled; run bin/update-colgrep on the host" >&2; fi'
+      user: "1000"
+      description: Make bundled colgrep executable on PATH
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
       user: "1000"
       description: Configure npm to use the sandbox proxy

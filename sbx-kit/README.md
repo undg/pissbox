@@ -106,11 +106,14 @@ only the binary with `tar`. It never runs the upstream installer or the
 downloaded binary. The checksum detects corruption; it is not an independent signature.
 A failed download, checksum, or extraction leaves the bundled binary unchanged.
 
-The result is `sbx-kit/files/usr/local/bin/colgrep`, with executable permissions.
-SBX copies it to `/usr/local/bin/colgrep`, already on PATH, when creating a
-sandbox. No image rebuild or sandbox download permission is needed. The binary
+The result is `sbx-kit/files/home/.local/bin/colgrep`, with executable
+permissions. SBX static files only cover `files/home/` and `files/workspace/`,
+so the binary lands at `/home/agent/.local/bin/colgrep` (already on PATH) and
+the kit's `setup.install` step marks it executable when creating a sandbox. No
+root install, image rebuild, or sandbox download
+permission is needed. The binary
 is gitignored; a fresh checkout needs the download command first. Archives and
-checksums are retained under ignored `shared-state/downloads/colgrep/`.
+checksums are retained under ignored `.cache/downloads/colgrep/`.
 
 Updating the kit does not change existing sandboxes. Use a new sandbox name to
 pick up the new binary; do not delete existing sandboxes just to update it.
@@ -121,7 +124,7 @@ runtime downloads still need their hosts allowed by the sandbox network policy.
 
 ## Local shared tool state
 
-`bin/pissbox` mounts a gitignored `shared-state/` directory beside `pi-agent/`.
+`bin/pissbox` mounts a gitignored `.cache/` directory beside `pi-agent/`.
 Hugging Face models, colgrep data/runtime caches, ONNX Runtime downloads, and
 pnpm's package store and metadata cache persist there across sandbox removal.
 Keep this Linux state separate from native/macOS caches.
