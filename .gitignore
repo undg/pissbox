@@ -2,6 +2,10 @@
 Session.vim
 .env
 .tmp/
+shared-state/
+# Compatibility path for existing sandboxes.
+/sandbox-state
+sbx-kit/files/usr/local/bin/colgrep
 
 # global git ignored
 !AGENTS.md

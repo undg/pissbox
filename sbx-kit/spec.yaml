@@ -29,3 +29,6 @@ setup:
     - command: 'sh "$HOME/.pissbox/scripts/link-pi-agent.sh"'
       user: "1000"
       description: Link the mounted host Pi directory to Pi's default config path
+    - command: 'bash "$HOME/.pissbox/scripts/link-shared-directories.sh"'
+      user: "1000"
+      description: Link shared Linux model, index, and package caches

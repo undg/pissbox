@@ -21,6 +21,7 @@ ADD --chmod=644 https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/${P
 USER agent
 RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
     npm install -g "@earendil-works/pi-coding-agent@${version}" && \
+    npm install -g pnpm && \
     pi --version
 
 # Keep pi available in minimal-PATH execution contexts.

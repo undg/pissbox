@@ -13,6 +13,10 @@ Do not hard-code either directory location.
 - `sbx-kit/`: local SBX kit, Dockerfile, setup, network policy, and documentation.
 - `sbx-kit/files/home/.pissbox/scripts/`: setup scripts bundled with the kit;
   SBX copies them to `$HOME/.pissbox/scripts/` before running `setup.install`.
+- `sbx-kit/files/home/.pissbox/shared-directories.conf`: shared-directory mappings;
+  add or modify tool state here, not in launcher branches or per-tool scripts.
+- `shared-state/`: gitignored, host-owned Linux model/index/package state shared
+  across sandboxes. See `sbx-kit/SHARED-DIRECTORIES.md`.
 - `pi-agent/`: sandbox-only Pi agent directory, shared across SBX instances,
   not with native/non-sandboxed Pi. Contains configuration and private runtime
   state. Its `AGENTS.md` applies to sandbox Pi sessions: keep it brief and
@@ -21,8 +25,11 @@ Do not hard-code either directory location.
   user's Bash command-line scripting conventions.
 - `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
   Do not rewrite it as part of environment setup.
-- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox --help`.
-- `tests/`: launcher regression tests using a stub SBX CLI (Python standard library).
+- `bin/`: host-side Pi sandbox launcher and colgrep release updater; run
+  `bin/pissbox --help` or `bin/update-colgrep --help`.
+- `tests/`: launcher regression tests using a stub SBX CLI, shared-directory
+  setup tests, and colgrep updater tests with local release fixtures (Python
+  standard library).
 
 ## Image and kit
 
@@ -36,6 +43,25 @@ The kit's `setup.install` creates the config symlink as user `1000` before Pi
 first launches. Keep `entrypoint: [pi]`; no image startup helper is needed.
 Leave `PI_CODING_AGENT_DIR` unset; Pi reads the symlink at its default path.
 No configuration or credentials are copied into image layers.
+
+## Bundled colgrep
+
+Run `bin/update-colgrep` on the macOS or Arch Linux host before creating a
+sandbox; rerun it to update. It fetches the latest GitHub release archive and
+matching SHA-256 checksum, verifies the archive, and extracts only the binary
+without executing downloaded code.
+The target is fixed to the sandbox's ARM64 Linux architecture
+(`aarch64-unknown-linux-gnu`); do not detect the host CPU or add architecture
+options. The generated `sbx-kit/files/usr/local/bin/colgrep` is gitignored
+and copied by SBX to `/usr/local/bin/colgrep` on PATH in new sandboxes. No remote
+installer, Dockerfile install, launcher download, or image rebuild is needed.
+Archives and checksums remain in ignored `shared-state/downloads/colgrep/`.
+The updater uses the host's curl, tar with XZ support, and sha256sum (preferred)
+or shasum -a 256; no Python or sandbox-side tools are needed. On Arch Linux,
+the packages are curl, tar, xz, and coreutils. A fresh checkout needs the download
+step. Existing sandboxes are unchanged by updates. Model downloads, including optional
+`colgrep --install-agent`, belong inside the sandbox after shared-cache links
+exist and need their hosts allowed by network policy.
 
 ## Workspaces and lifecycle
 
@@ -54,9 +80,10 @@ the selected path is canonicalized before mounting. The launcher uses a
 parsing. It does not use `PI_HOST_CONFIG_DIR` or automatically discover native
 Pi configuration. Keep overrides sandbox-only. It calls
 `sbx run --env PISSBOX_PI_DIR=...` with the local
-sandbox kit as the first positional argument, followed by workspaces and the
-Pi directory. Sandbox selection is left to SBX; no custom discovery or exec
-bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
+sandbox kit as the first positional argument, followed by workspaces, the
+Pi directory, and the shared state directory. It also passes
+`--env PISSBOX_STATE_DIR=...`. Sandbox selection is left to SBX; no custom
+discovery or exec bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
 to replace existing data or a different symlink. Run `bin/pissbox --help`
 for usage. On SBX's existing-sandbox/workspace conflict, the launcher uses the
 name reported by SBX and asks `Get into it? [Y/n]`. Accepting runs
@@ -99,6 +126,30 @@ and `pi-agent/sessions`; review other generated/private files before staging.
 Do not reset shared state or change shared configuration outside the task.
 Avoid mixing macOS and Linux package installations into the same shared tree.
 
+## Shared tool state
+
+The shared state root defaults to this checkout's gitignored `shared-state/`.
+Selection is `--pissbox-state-dir DIR` first, then `PISSBOX_STATE_DIR`, then the
+checkout default. Relative overrides use the caller's directory. The launcher
+creates and canonicalizes the root before mounting it. Keep this state Linux
+sandbox-only, separate from native/macOS caches and Pi configuration. The old
+`sandbox-state` name may remain as an ignored compatibility symlink to
+`shared-state` for existing sandbox paths. Do not remove it while those paths
+are in use; the launcher does not migrate existing sandboxes.
+
+Mappings live in `sbx-kit/files/home/.pissbox/shared-directories.conf` as literal
+`state-relative-path|home-relative-path` rows. Use relative paths without dot
+segments or shell expansion. The kit's `link-shared-directories.sh` creates
+sources on the mounted root and links default tool locations as user `1000`.
+It accepts matching links but refuses existing data or different links. No
+per-tool launcher code or Dockerfile changes are needed to add another mapping.
+The default mappings include the HF hub (not tokens), colgrep data/config/cache,
+ONNX Runtime, and both pnpm's content-addressable store and metadata cache.
+Custom tool/XDG paths can bypass these default-location links. This setup does
+not install tools or change network policy. New mappings/mounts require a new
+sandbox; attaching never updates them. Avoid concurrent colgrep index writers
+until upstream locking is verified. See `sbx-kit/SHARED-DIRECTORIES.md`.
+
 ## Development and verification
 
 The launcher requires SBX v0.39.0 or newer: that release added `--env` and
@@ -111,13 +162,23 @@ checked without a daemon, but v0.48.0 requires Docker sign-in even for
 
 Keep changes simple and reproducible. Read kit files before editing. Validate
 kit and launcher changes with `sbx kit validate ./sbx-kit`,
-`bash -n bin/pissbox`, and `git diff --check`. Do not claim a real sandbox run,
+`bash -n bin/pissbox bin/update-colgrep sbx-kit/files/home/.pissbox/scripts/link-shared-directories.sh`,
+and `git diff --check`. Do not claim a real sandbox run,
 authentication, or restart persistence is verified without testing it.
 Run launcher regression tests with
 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
 These cover symlink launches from another directory, caller-relative overrides,
 confirmation defaults, deletion consent, EOF, argument forwarding, exit statuses,
-and terminal stdin/stdout preservation; they do not run real SBX.
+and terminal stdin/stdout preservation. Shared-directory tests check real links,
+retained data across isolated homes, refusal to replace data, and adding a
+mapping without script edits. Updater tests use stub curl and real
+SHA-256/tar commands to check the fixed Linux target, updates, executable modes,
+and preserving the binary on failure. Isolated PATH tests cover sha256sum,
+shasum fallback, and a missing checksum tool. A test-only Python XZ decompressor
+lets GNU tar run in the Linux test sandbox without xz; production uses macOS
+tar's built-in XZ support or Arch's xz package. A failing uname stub prevents
+host architecture detection. Generated fixtures remain under ignored
+`shared-state/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
 
 After a real sandbox is created, check the link from the host:
 

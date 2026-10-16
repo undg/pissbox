@@ -3,12 +3,14 @@ import os
 from pathlib import Path
 import pty
 import subprocess
+import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / "bin" / "pissbox"
 PI_DIR = ROOT / "pi-agent"
+STATE_DIR = ROOT / "shared-state"
 
 
 class LauncherTests(unittest.TestCase):
@@ -16,7 +18,8 @@ class LauncherTests(unittest.TestCase):
         env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith("TEST_SBX_") and key != "PISSBOX_PI_DIR"
+            if not key.startswith("TEST_SBX_")
+            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR")
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
         env.update(overrides)
@@ -47,7 +50,8 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [[
             "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
-            str(ROOT / "bin" / "../sbx-kit"), str(ROOT), str(PI_DIR),
+            "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+            str(ROOT / "bin" / "../sbx-kit"), str(ROOT), str(PI_DIR), str(STATE_DIR),
         ]])
         self.assertEqual(result.stderr, "")
 
@@ -60,7 +64,8 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(result.stderr, "")
                 self.assertEqual(calls, [[
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
-                    str(ROOT / "bin" / "../sbx-kit"), str(cwd), str(PI_DIR),
+                    "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                    str(ROOT / "bin" / "../sbx-kit"), str(cwd), str(PI_DIR), str(STATE_DIR),
                 ]])
 
     def test_symlink_keeps_overrides_relative_to_caller(self):
@@ -74,8 +79,71 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(calls, [[
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
-                    str(ROOT / "bin" / "../sbx-kit"), ".", str(PI_DIR),
+                    "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                    str(ROOT / "bin" / "../sbx-kit"), ".", str(PI_DIR), str(STATE_DIR),
                 ]])
+
+    def test_state_directory_overrides_are_relative_to_caller(self):
+        cwd = ROOT / "tests" / "fixtures"
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="launcher-", dir=fixtures))
+        for index, option in enumerate(("environment", "separate", "equals", "repeated")):
+            with self.subTest(option=option):
+                state = directory / f"new state {index}"
+                relative = os.path.relpath(state, cwd)
+                env = {"PISSBOX_STATE_DIR": str(LAUNCHER)}
+                if option == "environment":
+                    args = ()
+                    env["PISSBOX_STATE_DIR"] = relative
+                elif option == "separate":
+                    args = ("--pissbox-state-dir", relative)
+                elif option == "equals":
+                    args = (f"--pissbox-state-dir={relative}",)
+                else:
+                    args = ("--pissbox-state-dir", "unused", f"--pissbox-state-dir={relative}")
+                result, calls = self.launch(*args, launcher="pissbox", cwd=cwd, **env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue(state.is_dir())
+                self.assertIn(f"PISSBOX_STATE_DIR={state}", calls[0])
+                self.assertEqual(calls[0][-3:], [str(cwd), str(PI_DIR), str(state)])
+
+    def test_state_directory_symlink_is_canonicalized_before_mounting(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="launcher-", dir=fixtures))
+        target = directory / "state"
+        target.mkdir()
+        link = directory / "link"
+        link.symlink_to(target)
+        result, calls = self.launch(PISSBOX_STATE_DIR=str(link))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"PISSBOX_STATE_DIR={target}", calls[0])
+        self.assertEqual(calls[0][-1], str(target))
+
+    def test_invalid_state_directory_never_launches_sbx(self):
+        for args in (
+            ("--pissbox-state-dir",), ("--pissbox-state-dir=",),
+            ("--pissbox-state-dir", ""), ("--pissbox-state-dir", "--name=foo"),
+            ("--pissbox-state-dir", str(LAUNCHER)),
+        ):
+            with self.subTest(args=args):
+                result, calls = self.launch(*args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
+                self.assertNotEqual(result.stderr, "")
+
+    def test_state_options_can_appear_among_workspaces(self):
+        for args in (
+            ("one", "--pissbox-state-dir", str(STATE_DIR), "two", "--name=box"),
+            ("--name=box", "--pissbox-state-dir", str(STATE_DIR), "one", "two"),
+        ):
+            with self.subTest(args=args):
+                result, calls = self.launch(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls[0][-4:], ["one", "two", str(PI_DIR), str(STATE_DIR)])
+                self.assertIn("PISSBOX_STATE_DIR=" + str(STATE_DIR), calls[0])
+                self.assertIn("box", calls[0])
 
     def test_attach_defaults_to_yes(self):
         result, calls = self.conflict("\n")
@@ -174,7 +242,9 @@ class LauncherTests(unittest.TestCase):
     def test_help_does_not_launch_sbx_or_validate_pi_directory(self):
         for args in (("-h",), ("--help",), (".", "--help")):
             with self.subTest(args=args):
-                result, calls = self.launch(*args, PISSBOX_PI_DIR="missing")
+                result, calls = self.launch(
+                    *args, PISSBOX_PI_DIR="missing", PISSBOX_STATE_DIR=str(LAUNCHER / "missing"),
+                )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("[Y/n]", result.stdout)
                 self.assertEqual(calls, [])
@@ -188,8 +258,10 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [[
             "run", "--env", f"PISSBOX_PI_DIR={ROOT / 'sbx-kit'}",
+            "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
             "--name", "last", str(ROOT / "bin" / "../sbx-kit"),
             "workspace with spaces", "second workspace", "--path", str(ROOT / "sbx-kit"),
+            str(STATE_DIR),
         ]])
 
 

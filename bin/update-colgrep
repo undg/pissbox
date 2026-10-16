@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [OPTIONS]
+
+Download or update the latest colgrep ARM64 Linux binary bundled with this checkout's kit.
+
+Options:
+  -h, --help  Show this help
+
+Run on the macOS or Linux host. Requires curl, tar with XZ support, and
+sha256sum or shasum. No downloaded code is executed.
+Archives and checksums stay in shared-state/downloads/colgrep/.
+The binary goes to sbx-kit/files/usr/local/bin/colgrep, on PATH in new sandboxes.
+Run again to update. Existing sandboxes are unchanged.
+EOF
+}
+
+ARCH=aarch64
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	*)
+		echo "Unknown argument: $1" >&2
+		echo "Use --help for usage information" >&2
+		exit 1
+		;;
+	esac
+done
+
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+REPOSITORY=https://github.com/lightonai/next-plaid
+CURL=(curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location --silent --show-error)
+
+if command -v sha256sum >/dev/null 2>&1; then
+	SHA256=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+	SHA256=(shasum -a 256)
+else
+	echo "Requires sha256sum (Linux coreutils) or shasum (macOS)" >&2
+	exit 1
+fi
+
+# Resolve latest once so the archive and checksum come from the same release.
+RELEASE_URL="$("${CURL[@]}" --head --output /dev/null --write-out '%{url_effective}' "$REPOSITORY/releases/latest")"
+VERSION=${RELEASE_URL##*/}
+if [[ $RELEASE_URL != "$REPOSITORY/releases/tag/$VERSION" || ! $VERSION =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+	echo "Unexpected release URL: $RELEASE_URL" >&2
+	exit 1
+fi
+
+PACKAGE="colgrep-$ARCH-unknown-linux-gnu"
+DOWNLOAD_DIR="$SCRIPT_DIR/../shared-state/downloads/colgrep/$VERSION/$ARCH"
+DESTINATION="$SCRIPT_DIR/../sbx-kit/files/usr/local/bin/colgrep"
+mkdir -p "$DOWNLOAD_DIR"
+
+printf 'Downloading colgrep %s (%s Linux)\n' "$VERSION" "$ARCH" >&2
+"${CURL[@]}" --output "$DOWNLOAD_DIR/$PACKAGE.tar.xz" "$REPOSITORY/releases/download/$VERSION/$PACKAGE.tar.xz"
+"${CURL[@]}" --output "$DOWNLOAD_DIR/$PACKAGE.tar.xz.sha256" "$REPOSITORY/releases/download/$VERSION/$PACKAGE.tar.xz.sha256"
+
+(
+	cd "$DOWNLOAD_DIR"
+	"${SHA256[@]}" -c "$PACKAGE.tar.xz.sha256"
+	tar -xJOf "$PACKAGE.tar.xz" "$PACKAGE/colgrep" > colgrep
+	if [[ ! -s colgrep ]]; then
+		echo "Release contains no binary data; bundled colgrep left unchanged" >&2
+		exit 1
+	fi
+)
+
+mkdir -p "$(dirname "$DESTINATION")"
+install -m 755 "$DOWNLOAD_DIR/colgrep" "$DESTINATION"
+printf 'Bundled colgrep %s (%s Linux) at %s\n' "$VERSION" "$ARCH" "$DESTINATION"

@@ -12,6 +12,7 @@ chain plus a Docker engine, requesting Docker-in-Docker via
 - [`@earendil-works/pi-coding-agent`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent),
   installed globally at the latest upstream release (rebuilt nightly),
   plus a `/usr/local/bin/pi` symlink
+- `pnpm`, installed globally through npm as `agent`
 - `fd-find` (apt), which backs pi's `find` tool, plus a `/usr/local/bin/fd`
   symlink for the canonical name — without it pi downloads a binary from
   GitHub releases on first use, which a locked-down sandbox blocks
@@ -24,6 +25,9 @@ The npm global prefix stays owned by `agent`, so `pi install` and
 `pi update --self` work inside the sandbox.
 
 Runs as the non-root `agent` user, with `CMD ["pi"]`.
+
+Colgrep is bundled separately through the local kit's files, not installed by
+this image. See [Bundled colgrep](README.md#bundled-colgrep).
 
 ## Kit
 
