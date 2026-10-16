@@ -21,6 +21,9 @@ permissions:
       # pi's runtime package installs (extensions, skills, prompt templates,
       # themes) and the packages named in settings, fetched on startup.
       - registry.npmjs.org
+      - opencode.ai
+      - github.com
+      - pi.dev
 setup:
   install:
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
