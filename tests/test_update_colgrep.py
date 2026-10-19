@@ -34,8 +34,8 @@ class UpdateColgrepTests(unittest.TestCase):
         self.caller.mkdir()
         self.make_release()
 
-    def make_release(self, *, payload=b"colgrep version one", member_kind=None):
-        package = "colgrep-aarch64-unknown-linux-gnu"
+    def make_release(self, *, payload=b"colgrep version one", member_kind=None, arch="aarch64"):
+        package = f"colgrep-{arch}-unknown-linux-gnu"
         archive = self.assets / (package + ".tar.xz")
         with tarfile.open(archive, "w:xz") as release:
             for name, data in (("LICENSE", b"license"), ("colgrep", payload)):
@@ -89,7 +89,7 @@ class UpdateColgrepTests(unittest.TestCase):
         self.destination.write_bytes(b"keep existing binary")
         self.destination.chmod(0o755)
 
-    def test_downloads_fixed_sandbox_target_without_host_detection(self):
+    def test_downloads_binary_for_detected_sandbox_architecture(self):
         result = self.update()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.destination.read_bytes(), b"colgrep version one")
@@ -104,6 +104,25 @@ class UpdateColgrepTests(unittest.TestCase):
         self.assertTrue((cache / "colgrep-aarch64-unknown-linux-gnu.tar.xz").is_file())
         self.assertFalse((cache / "colgrep-aarch64-unknown-linux-gnu").exists())
         self.assertEqual(list(self.caller.iterdir()), [])
+
+    def test_selects_binary_for_host_architecture(self):
+        for machine, arch in (("arm64", "aarch64"), ("aarch64", "aarch64"),
+                              ("x86_64", "x86_64"), ("amd64", "x86_64")):
+            with self.subTest(machine=machine):
+                self.make_release(arch=arch)
+                result = self.update(TEST_COLGREP_UNAME=machine)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.destination.read_bytes(), b"colgrep version one")
+                self.assertIn(f"v1.0.0 ({arch} Linux)", result.stdout)
+                self.assertIn(f"/colgrep-{arch}-unknown-linux-gnu.tar.xz", self.calls()[-1][-1])
+
+    def test_unsupported_host_architecture_fails_before_downloading(self):
+        self.seed_binary()
+        result = self.update(TEST_COLGREP_UNAME="riscv64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unsupported host architecture", result.stderr)
+        self.assertEqual(self.calls(), [])
+        self.assertEqual(self.destination.read_bytes(), b"keep existing binary")
 
     def test_supported_checksum_tools(self):
         for tool in ("sha256sum", "shasum"):

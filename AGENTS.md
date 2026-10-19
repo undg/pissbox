@@ -50,9 +50,11 @@ Run `bin/update-colgrep` on the macOS or Arch Linux host before creating a
 sandbox; rerun it to update. It fetches the latest GitHub release archive and
 matching SHA-256 checksum, verifies the archive, and extracts only the binary
 without executing downloaded code.
-The target is fixed to the sandbox's ARM64 Linux architecture
-(`aarch64-unknown-linux-gnu`); do not detect the host CPU or add architecture
-options. The gitignored `sbx-kit/files/home/.local/bin/colgrep` lands at
+The target follows the host architecture with `uname -m`: `arm64`/`aarch64`
+selects `aarch64-unknown-linux-gnu`, `x86_64`/`amd64` selects
+`x86_64-unknown-linux-gnu`. The image is multi-arch, so the sandbox
+architecture matches the host. Other architectures fail before downloading;
+there is no architecture option. The gitignored `sbx-kit/files/home/.local/bin/colgrep` lands at
 `/home/agent/.local/bin/colgrep` (already on PATH) as a static file, and the
 kit's `setup.install` step marks it executable. SBX only copies static files
 under `files/home/` and `files/workspace/`; a `files/usr/...` path is ignored.
@@ -175,12 +177,13 @@ confirmation defaults, deletion consent, EOF, argument forwarding, exit statuses
 and terminal stdin/stdout preservation. Shared-directory tests check real links,
 retained data across isolated homes, refusal to replace data, and adding a
 mapping without script edits. Updater tests use stub curl and real
-SHA-256/tar commands to check the fixed Linux target, updates, executable modes,
-and preserving the binary on failure. Isolated PATH tests cover sha256sum,
-shasum fallback, and a missing checksum tool. A test-only Python XZ decompressor
-lets GNU tar run in the Linux test sandbox without xz; production uses macOS
-tar's built-in XZ support or Arch's xz package. A failing uname stub prevents
-host architecture detection. Generated fixtures remain under ignored
+SHA-256/tar commands to check the detected Linux target, updates, executable
+modes, architecture selection, and preserving the binary on failure. Isolated
+PATH tests cover sha256sum, shasum fallback, and a missing checksum tool. A
+test-only Python XZ decompressor lets GNU tar run in the Linux test sandbox
+without xz; production uses macOS tar's built-in XZ support or Arch's xz
+package. A stub uname supplies the host architecture. Generated fixtures
+remain under ignored
 `.cache/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
 
 After a real sandbox is created, check the link from the host:

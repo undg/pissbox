@@ -96,9 +96,11 @@ setup. It uses `curl`, `tar` with XZ support, and `sha256sum` (preferred) or
 `shasum -a 256`. Python is not required. macOS provides the needed tools; on
 Arch Linux, the packages are `curl`, `tar`, `xz`, and `coreutils`.
 
-The target is fixed to the sandbox's **ARM64 Linux** architecture
-(`aarch64-unknown-linux-gnu`). There is no host architecture detection or
-architecture option.
+The Linux target follows the host architecture with `uname -m`:
+`arm64`/`aarch64` selects `aarch64-unknown-linux-gnu`, and `x86_64`/`amd64`
+selects `x86_64-unknown-linux-gnu`. The image is multi-arch, so the sandbox
+architecture matches the host. Other architectures fail before downloading;
+there is no architecture option.
 
 The script resolves the latest release once, downloads its archive and SHA-256
 checksum, verifies the archive with the available SHA-256 utility, and extracts

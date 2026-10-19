@@ -6,21 +6,22 @@ show_help() {
 	cat <<EOF
 Usage: ${0##*/} [OPTIONS]
 
-Download or update the latest colgrep ARM64 Linux binary bundled with this checkout's kit.
+Download or update the latest colgrep Linux binary for this host's
+architecture, bundled with this checkout's kit.
 
 Options:
   -h, --help  Show this help
 
 Run on the macOS or Linux host. Requires curl, tar with XZ support, and
 sha256sum or shasum. No downloaded code is executed.
+Selects the Linux binary from uname -m: arm64/aarch64 or x86_64/amd64.
+The sandbox runs the same architecture as this host.
 Archives and checksums stay in .cache/downloads/colgrep/.
 The binary goes to sbx-kit/files/home/.local/bin/colgrep, on PATH in new
 sandboxes after kit setup marks it executable.
 Run again to update. Existing sandboxes are unchanged.
 EOF
 }
-
-ARCH=aarch64
 
 while [[ $# -gt 0 ]]; do
 	case $1 in
@@ -35,6 +36,19 @@ while [[ $# -gt 0 ]]; do
 		;;
 	esac
 done
+
+case "$(uname -m)" in
+arm64 | aarch64)
+	ARCH=aarch64
+	;;
+x86_64 | amd64)
+	ARCH=x86_64
+	;;
+*)
+	echo "Unsupported host architecture: $(uname -m)" >&2
+	exit 1
+	;;
+esac
 
 SCRIPT_PATH=${BASH_SOURCE[0]}
 while [[ -L $SCRIPT_PATH ]]; do
