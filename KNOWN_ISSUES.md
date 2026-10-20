@@ -2,12 +2,13 @@
 
 ## Bundling / packaging
 
-- [ ] **AMD64 / Apple Silicon image distribution:** Split image building/export
-      from SBX import. Use Buildx to build `linux/amd64` and `linux/arm64` on one
-      machine; first verify base-image and dependency support for both. Keep the
-      same `pissbox:local` tag but export separate `pissbox-linux-amd64.tar` and
-      `pissbox-linux-arm64.tar` archives, then import the matching archive on each
-      host. Emulation may slow cross-builds, not runtime; matching images run natively.
+- [ ] **AMD64 / Apple Silicon image distribution:** `bin/build-image` now builds
+      and registers the host architecture (`--amd64` / `--arm64` / `--register`)
+      and keeps one archive per architecture. Still open: one host emitting both
+      architectures (Buildx cross-build or emulated build), verifying image and
+      dependency support for both, and verifying that an archive copied to
+      another host of the same architecture loads and runs. Nothing tests real
+      SBX imports on either architecture yet.
 - [ ] **Bundled plugins and portable distribution:** Explore baking plugins and
       their dependencies into the image to avoid runtime npm/Git downloads.
       Package the image, launcher, kit, and configuration for other machines

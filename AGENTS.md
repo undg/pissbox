@@ -18,8 +18,12 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Image and kit constraints
 
-- `spec.yaml` uses `pissbox:local`. `bin/build-image` builds, saves to
-  `.cache/images/pissbox-local.tar`, and imports into SBX's separate image store.
+- `spec.yaml` uses `pissbox:local`. `bin/build-image` builds the host
+  architecture (or `--amd64` / `--arm64`), saves
+  `.cache/images/pissbox-local-<arch>.tar`, points the `pissbox-local.tar`
+  symlink at it, and imports into SBX's separate image store unless flags say
+  otherwise. `--register [arch]` imports an existing archive. Builds are native
+  per host; cross-architecture builds stay manual.
   It resolves symlinks and forwards Docker options after `--`. The launcher
   does not build images. Existing sandboxes are never updated automatically.
 - The optional public PEM CA at `sbx-kit/ca.crt` is passed by the build wrapper

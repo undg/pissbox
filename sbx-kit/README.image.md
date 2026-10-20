@@ -14,12 +14,30 @@ bin/build-image
 ```
 
 The wrapper resolves its checkout even through symlinks or from another working
-directory. It builds `pissbox:local`, saves
-`.cache/images/pissbox-local.tar` (replacing the old archive), and runs
-`sbx template load`. Failures stop the pipeline. Existing sandboxes are untouched.
-Host Docker and SBX have separate image stores, so importing is required.
+directory. By default it detects this host's architecture from the Docker
+daemon, builds `pissbox:local` for it, saves
+`.cache/images/pissbox-local-<arch>.tar`, and runs `sbx template load`.
+Failures stop the pipeline. Existing sandboxes are untouched. Host Docker and
+SBX have separate image stores, so importing is required.
 
-Pass Docker build options after `--`:
+| Option | Effect |
+| --- | --- |
+| *(none)* | Detect the host architecture, build it, register it |
+| `--amd64` | Build `linux/amd64` only; no registration |
+| `--arm64` | Build `linux/arm64` only; no registration |
+| `--register [ARCH]` | Load an existing archive into SBX; `ARCH` defaults to the host |
+| `--help` | Show usage |
+
+Builds are native by default: x86_64 hosts build amd64, Apple Silicon builds arm64.
+Building the other architecture works but runs every `RUN` step under emulation, so
+it is slow. Before such a build the wrapper registers the needed binfmt handlers
+by running the privileged `tonistiigi/binfmt` image, which needs network access
+the first time and pulls an image. Each architecture keeps its own archive, and
+`.cache/images/pissbox-local.tar` is a generated symlink to the archive built or
+registered last, so older notes and habits keep working. A real file at that path
+is replaced.
+
+Pass Docker build options after `--`; they reach every build in that run:
 
 ```bash
 bin/build-image -- --build-arg PI_VERSION=latest --no-cache
@@ -33,7 +51,18 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 | `COLGREP_MODEL_REVISION` | Hugging Face model commit |
 
 Pins/defaults live in the Dockerfile. These do not pin apt packages or pnpm.
-Use a builder compatible with the target SBX host's architecture.
+
+Registering without a rebuild, for example after copying an archive from
+another host of the same architecture:
+
+```bash
+bin/build-image --register arm64
+```
+
+Preparing an archive for a different machine is the cross-build case: build
+`--arm64` and `--amd64` on one host, copy both archives, and register the
+matching one on each machine. Emulation is needed only for the build, not for
+running the imported image.
 
 ## Optional public CA
 
@@ -56,14 +85,15 @@ bin/build-image -- --no-cache
 From the checkout root, without an additional CA:
 
 ```bash
-docker build -t pissbox:local sbx-kit
+docker buildx build --platform linux/amd64 --load -t pissbox:local sbx-kit
 mkdir -p .cache/images
-docker image save pissbox:local -o .cache/images/pissbox-local.tar
-sbx template load .cache/images/pissbox-local.tar
+docker image save pissbox:local -o .cache/images/pissbox-local-amd64.tar
+sbx template load .cache/images/pissbox-local-amd64.tar
 ```
 
+Adjust `linux/amd64` and the archive name for the host architecture.
 For a manual build with a CA, add
-`--secret id=custom_ca,src=sbx-kit/ca.crt` to `docker build`.
+`--secret id=custom_ca,src=sbx-kit/ca.crt` to `docker buildx build`.
 The saved archive can be loaded on another architecture-compatible host; it
 contains the image, not workspaces, Pi configuration, or shared caches.
 

@@ -4,14 +4,23 @@ set -euo pipefail
 
 show_help() {
 	cat <<EOF
-Usage: ${0##*/} [-- DOCKER_BUILD_OPTION ...]
+Usage: ${0##*/} [--amd64 | --arm64] [--register [amd64|arm64]] [-- DOCKER_BUILD_OPTION ...]
 
-Build pissbox:local, save its archive, and load it into SBX.
+Build pissbox:local for this host, save its archive, and load it into SBX.
 Run on the host with Docker running and the sbx CLI installed.
 
 Options:
-  -h, --help  Show this help
-  --          Forward remaining arguments to docker build
+  --amd64            Build the linux/amd64 image without registering it
+  --arm64            Build the linux/arm64 image without registering it
+  --register [ARCH]  Load an existing archive into SBX; ARCH is amd64 or arm64,
+                     defaulting to this host's architecture
+  -h, --help         Show this help
+  --                 Forward remaining arguments to docker buildx build
+
+Without --amd64, --arm64, or --register, this detects the host architecture,
+builds it, and registers it. Custom images still need a new sandbox.
+Building the other architecture registers binfmt handlers with
+`tonistiigi/binfmt` and runs under emulation, so it needs network and is slow.
 
 Example:
   ${0##*/} -- --build-arg PI_VERSION=latest --no-cache
@@ -19,7 +28,8 @@ Example:
 Uses this checkout's sbx-kit/ regardless of your working directory.
 Passes sbx-kit/ca.crt as an optional public CA when present.
 Use -- --no-cache when adding, changing, or removing the CA after a build.
-Saves to this checkout's .cache/images/pissbox-local.tar, replacing any old archive.
+Saves .cache/images/pissbox-local-<arch>.tar and repoints the
+.cache/images/pissbox-local.tar symlink at the newest archive.
 Existing sandboxes are not updated or removed.
 EOF
 }
@@ -41,14 +51,102 @@ require_buildkit() {
 	exit 1
 }
 
+detect_arch() {
+	local machine
+	if [[ -n $HOST_ARCH ]]; then
+		return
+	fi
+	if ! machine=$(docker info --format '{{.Architecture}}'); then
+		echo "Error: cannot read the Docker daemon architecture." >&2
+		exit 1
+	fi
+	case $machine in
+	x86_64 | amd64) HOST_ARCH=amd64 ;;
+	aarch64 | arm64) HOST_ARCH=arm64 ;;
+	*)
+		echo "Error: unsupported Docker architecture: $machine" >&2
+		exit 1
+		;;
+	esac
+}
+
+link_archive() {
+	ln -sfn "$(basename "$1")" "$ARCHIVE_LINK"
+}
+
+# Cross-arch RUN steps execute foreign binaries, so register emulation first.
+ensure_emulation() {
+	local arch=$1
+	if [[ $arch == "$HOST_ARCH" ]]; then
+		return
+	fi
+	echo "Info: registering $arch binfmt handlers for an emulated build; this is slow." >&2
+	if ! docker run --privileged --rm tonistiigi/binfmt --install "$arch"; then
+		echo "Error: could not register $arch emulation on the Docker host." >&2
+		echo "Install binfmt handlers manually and rerun:" >&2
+		echo "  docker run --privileged --rm tonistiigi/binfmt --install $arch" >&2
+		exit 1
+	fi
+}
+
+build_arch() {
+	local arch=$1
+	local archive="$ARCHIVE_DIR/pissbox-local-$arch.tar"
+	echo "Building $IMAGE for linux/$arch" >&2
+	docker buildx build --platform "linux/$arch" --load -t "$IMAGE" \
+		"${CA_ARGS[@]}" "${BUILD_ARGS[@]}" "$ROOT_DIR/sbx-kit"
+	docker image save "$IMAGE" -o "$archive"
+	link_archive "$archive"
+}
+
+register_arch() {
+	local arch=$1
+	local archive="$ARCHIVE_DIR/pissbox-local-$arch.tar"
+	if [[ ! -f $archive ]]; then
+		echo "Error: archive not found: $archive" >&2
+		echo "Build it first with ${0##*/} --$arch" >&2
+		exit 1
+	fi
+	link_archive "$archive"
+	sbx template load "$archive"
+}
+
+BUILD_AMD64=0
+BUILD_ARM64=0
+REGISTER=0
+REGISTER_ARCH=""
+HOST_ARCH=""
+BUILD_ARGS=()
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	-h | --help)
 		show_help
 		exit 0
 		;;
+	--amd64)
+		BUILD_AMD64=1
+		;;
+	--arm64)
+		BUILD_ARM64=1
+		;;
+	--register)
+		REGISTER=1
+		case ${2:-} in
+		amd64 | arm64)
+			REGISTER_ARCH=$2
+			shift
+			;;
+		"" | -*) ;;
+		*)
+			echo "Unknown architecture for --register: $2. Use amd64 or arm64." >&2
+			exit 1
+			;;
+		esac
+		;;
 	--)
 		shift
+		BUILD_ARGS=("$@")
 		break
 		;;
 	*)
@@ -56,6 +154,7 @@ while [[ $# -gt 0 ]]; do
 		exit 1
 		;;
 	esac
+	shift
 done
 
 # Follow symlinks without readlink -f for macOS compatibility.
@@ -70,7 +169,8 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 IMAGE=pissbox:local
-ARCHIVE="$ROOT_DIR/.cache/images/pissbox-local.tar"
+ARCHIVE_DIR="$ROOT_DIR/.cache/images"
+ARCHIVE_LINK="$ARCHIVE_DIR/pissbox-local.tar"
 CA_FILE="$ROOT_DIR/sbx-kit/ca.crt"
 CA_ARGS=()
 if [[ -f $CA_FILE ]]; then
@@ -88,7 +188,34 @@ done
 
 require_buildkit
 
-docker build -t "$IMAGE" "${CA_ARGS[@]}" "$@" "$ROOT_DIR/sbx-kit"
-mkdir -p "$(dirname "$ARCHIVE")"
-docker image save "$IMAGE" -o "$ARCHIVE"
-exec sbx template load "$ARCHIVE"
+BUILD_ARCHES=()
+if [[ $BUILD_AMD64 -eq 1 ]]; then
+	BUILD_ARCHES+=(amd64)
+fi
+if [[ $BUILD_ARM64 -eq 1 ]]; then
+	BUILD_ARCHES+=(arm64)
+fi
+
+mkdir -p "$ARCHIVE_DIR"
+
+# No request at all means the old behavior: own architecture, build and register.
+if [[ ${#BUILD_ARCHES[@]} -eq 0 && $REGISTER -eq 0 ]]; then
+	detect_arch
+	build_arch "$HOST_ARCH"
+	register_arch "$HOST_ARCH"
+	exit
+fi
+
+for ARCH in "${BUILD_ARCHES[@]}"; do
+	detect_arch
+	ensure_emulation "$ARCH"
+	build_arch "$ARCH"
+done
+
+if [[ $REGISTER -eq 1 ]]; then
+	if [[ -z $REGISTER_ARCH ]]; then
+		detect_arch
+		REGISTER_ARCH=$HOST_ARCH
+	fi
+	register_arch "$REGISTER_ARCH"
+fi
