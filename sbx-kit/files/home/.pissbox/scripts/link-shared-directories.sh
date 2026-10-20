@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# Link sandbox tool directories to shared Linux state under PISSBOX_STATE_DIR.
+# ../shared-directories.conf maps state-relative|home-relative paths, one per row;
+# blank lines and # comments are ignored. Paths are literal, without expansion.
+# Create missing source directories; accept matching links, refuse existing data.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"

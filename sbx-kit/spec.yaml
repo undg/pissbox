@@ -33,7 +33,7 @@ setup:
       description: Make bundled colgrep executable on PATH
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
       user: "1000"
-      description: Configure npm to use the sandbox proxy
+      description: Set npm proxy options from HTTP_PROXY and HTTPS_PROXY
     - command: 'sh "$HOME/.pissbox/scripts/link-pi-agent.sh"'
       user: "1000"
       description: Link the mounted host Pi directory to Pi's default config path
