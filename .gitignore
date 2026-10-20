@@ -6,8 +6,6 @@ Session.vim
 # sandboxes shared state
 .cache/
 
-sbx-kit/files/home/.local/bin/colgrep
-
 # pi
 pi-agent/auth.json
 pi-agent/sessions
@@ -20,3 +18,9 @@ pi-agent/settings.json.replaced*
 
 # local git ignored
 !mise.toml
+
+# openssl x509 -inform DER \
+#   -in "$HOME/Documents/Zscaler Root CA.cer" \
+#   -outform PEM \
+#   -out sbx-kit/ca.crt
+sbx-kit/ca.crt

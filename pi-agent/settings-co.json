@@ -38,7 +38,6 @@
     "github-copilot/gpt-6.1-sol",
     "github-copilot/gpt-6-luna"
   ],
-  "tuiMode": "fullscreen",
   "sessionShareDestination": "gist",
   "markdown": {
     "mermaid": "streaming"
@@ -47,5 +46,6 @@
   "fullscreenScrollbar": "auto",
   "fullscreenCopyOnSelect": true,
   "fullscreenWheelScrollLines": "auto",
-  "theme": "system"
+  "theme": "system",
+  "tuiMode": "regular"
 }

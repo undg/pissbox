@@ -10,7 +10,11 @@ sandbox:
   # same as openclaw/kiro/copilot. Creating a sandbox no longer waits on an
   # npm install; the pipeline's nightly rebuild keeps pi current (rolling
   # updates, no deliberate version bump -- see the Dockerfile).
-  image: docker.io/sbx/pi-image:latest
+  # If you didn't build your image locally, the bellow one have only pi and it's official
+  # image: docker.io/sbx/pi-image:latest
+
+  # You should build your own image and store it locally.
+  image: pissbox:local
   entrypoint:
     - pi
     - --offline
@@ -28,9 +32,6 @@ permissions:
       - huggingface.co
 setup:
   install:
-    # - command: 'if [ -f "$HOME/.local/bin/colgrep" ]; then chmod 0755 "$HOME/.local/bin/colgrep"; else echo "colgrep not bundled; run bin/update-colgrep on the host" >&2; fi'
-    #   user: "1000"
-    #   description: Make bundled colgrep executable on PATH
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
       user: "1000"
       description: Set npm proxy options from HTTP_PROXY and HTTPS_PROXY
@@ -40,6 +41,9 @@ setup:
     - command: 'bash "$HOME/.pissbox/scripts/link-shared-directories.sh"'
       user: "1000"
       description: Link shared Linux model, index, and package caches
+    - command: 'config="$HOME/.local/share/colgrep/config.json"; if [ ! -e "$config" ] && [ ! -L "$config" ]; then cp /opt/pissbox/colgrep-config.json "$config"; fi'
+      user: "1000"
+      description: Seed the bundled search model default without replacing shared settings
     - command: 'npm config set cache "$HOME/.cache/npm" --location=user'
       user: "1000"
       description: Use the shared npm cache without replacing image cache data

@@ -25,48 +25,61 @@ Do not hard-code either directory location.
   user's Bash command-line scripting conventions.
 - `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
   Do not rewrite it as part of environment setup.
-- `bin/`: host-side Pi sandbox launcher and colgrep release updater; run
-  `bin/pissbox --help` or `bin/update-colgrep --help`.
-- `tests/`: launcher regression tests using a stub SBX CLI, shared-directory
-  setup tests, and colgrep updater tests with local release fixtures (Python
-  standard library).
+- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox --help`.
+- `tests/`: launcher regression tests using a stub SBX CLI and shared-directory
+  setup tests (Python standard library).
 
 ## Image and kit
 
-`sbx-kit/spec.yaml` references the published `docker.io/sbx/pi-image:latest`.
-`sbx-kit/Dockerfile` describes that upstream image but is **not** built by our
-normal launch flow. Do not add a machine-specific host path or config symlink
-to the image: the host home directory varies by machine. The launcher mounts
+`sbx-kit/spec.yaml` references the locally built `pissbox:local` image.
+Build it explicitly with `docker build -t pissbox:local sbx-kit`, export it with
+`docker image save`, and import it into SBX's separate image store with
+`sbx template load`. The launcher does not build or import images. See
+`sbx-kit/README.image.md` for build, archive, reuse, and update commands.
+The current Dockerfile requires an approved public PEM CA at `sbx-kit/ca.crt`;
+never use a private key or credentials as build input. Do not add a
+machine-specific host path or config symlink to the image: the host home
+directory varies by machine. The launcher mounts
 the sandbox-only `pi-agent/` and passes its absolute path with
 `--env PISSBOX_PI_DIR=...`.
 The kit's `setup.install` creates the config symlink as user `1000` before Pi
-first launches. Keep `entrypoint: [pi]`; no image startup helper is needed.
+first launches. Keep `entrypoint: [pi, --offline]`; no image startup helper is needed.
 Leave `PI_CODING_AGENT_DIR` unset; Pi reads the symlink at its default path.
 No configuration or credentials are copied into image layers.
 
-## Bundled colgrep
+## Image-installed colgrep
 
-Run `bin/update-colgrep` on the macOS or Arch Linux host before creating a
-sandbox; rerun it to update. It fetches the latest GitHub release archive and
-matching SHA-256 checksum, verifies the archive, and extracts only the binary
-without executing downloaded code.
-The target follows the host architecture with `uname -m`: `arm64`/`aarch64`
-selects `aarch64-unknown-linux-gnu`, `x86_64`/`amd64` selects
-`x86_64-unknown-linux-gnu`. The image is multi-arch, so the sandbox
-architecture matches the host. Other architectures fail before downloading;
-there is no architecture option. The gitignored `sbx-kit/files/home/.local/bin/colgrep` lands at
-`/home/agent/.local/bin/colgrep` (already on PATH) as a static file, and the
-kit's `setup.install` step marks it executable. SBX only copies static files
-under `files/home/` and `files/workspace/`; a `files/usr/...` path is ignored.
-No root install, remote installer, Dockerfile install, launcher download, or
-image rebuild is needed.
-Archives and checksums remain in ignored `.cache/downloads/colgrep/`.
-The updater uses the host's curl, tar with XZ support, and sha256sum (preferred)
-or shasum -a 256; no Python or sandbox-side tools are needed. On Arch Linux,
-the packages are curl, tar, xz, and coreutils. A fresh checkout needs the download
-step. Existing sandboxes are unchanged by updates. Model downloads, including optional
-`colgrep --install-agent`, belong inside the sandbox after shared-cache links
-exist and need their hosts allowed by network policy.
+Colgrep is installed in `sbx-kit/Dockerfile` as `agent`, using the upstream
+installer with `COLGREP_UNMANAGED_INSTALL` to avoid modifying shell profiles or
+creating configuration that would conflict with shared-directory links.
+`COLGREP_VERSION` pins the release. A `/usr/local/bin/colgrep` symlink makes it
+available in minimal-PATH contexts. The installer selects the image's Linux
+architecture; use a compatible builder for the target SBX host.
+
+Do not put the colgrep binary back under `sbx-kit/files/`: copying roughly
+143 MiB through the kit increased sandbox creation from about 3 seconds to
+30–40 seconds. Keep only small setup scripts and mappings there. SBX only copies
+static files under `files/home/` and `files/workspace/`.
+
+The Dockerfile also downloads the OS-independent `lightonai/LateOn-Code-edge`
+search model with TLS-verified curl, pinned by `COLGREP_MODEL_REVISION`. Both
+INT8 and FP32 weights live at `/opt/pissbox/models/LateOn-Code-edge`, outside
+shared-cache mounts. The image includes `/opt/pissbox/colgrep-config.json`
+with the local model as default. After linking shared state, kit setup seeds
+`$HOME/.local/share/colgrep/config.json` only when no file or symlink exists;
+it never replaces settings or clears indexes. For existing shared configuration,
+select the bundled model once with
+`colgrep set-model /opt/pissbox/models/LateOn-Code-edge` inside an updated
+sandbox. This clears existing indexes; do not run it automatically during
+setup. The choice persists in shared state, so sandboxes sharing that default
+must have the bundled files. Use `--model` for a per-command override.
+When changing `COLGREP_MODEL_REVISION`, rebuild affected indexes: the local
+path is stable, so Colgrep cannot detect different weights at that path.
+
+Updating colgrep or the bundled model requires an explicit image build, save,
+and SBX import; existing sandboxes remain unchanged. Selecting the bundled
+search model by local path avoids runtime Hugging Face access for that model. ONNX Runtime and optional/custom models
+are not bundled and still need network access to their download hosts.
 
 ## Workspaces and lifecycle
 
@@ -188,7 +201,7 @@ checked without a daemon, but v0.48.0 requires Docker sign-in even for
 
 Keep changes simple and reproducible. Read kit files before editing. Validate
 kit and launcher changes with `sbx kit validate ./sbx-kit`,
-`bash -n bin/pissbox bin/update-colgrep sbx-kit/files/home/.pissbox/scripts/link-shared-directories.sh`,
+`bash -n bin/pissbox sbx-kit/files/home/.pissbox/scripts/link-shared-directories.sh`,
 and `git diff --check`. Do not claim a real sandbox run,
 authentication, or restart persistence is verified without testing it.
 Run launcher regression tests with
@@ -198,14 +211,7 @@ menu choices/defaults, deletion consent, EOF, argument forwarding, exit statuses
 terminal stdin/stdout preservation, and host-to-settings-profile selection with
 a stub `hostname`. Shared-directory tests check real links,
 retained data across isolated homes, refusal to replace data, and adding a
-mapping without script edits. Updater tests use stub curl and real
-SHA-256/tar commands to check the detected Linux target, updates, executable
-modes, architecture selection, and preserving the binary on failure. Isolated
-PATH tests cover sha256sum, shasum fallback, and a missing checksum tool. A
-test-only Python XZ decompressor lets GNU tar run in the Linux test sandbox
-without xz; production uses macOS tar's built-in XZ support or Arch's xz
-package. A stub uname supplies the host architecture. Generated fixtures
-remain under ignored
+mapping without script edits. Generated fixtures remain under ignored
 `.cache/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
 
 After a real sandbox is created, check the links from the host:

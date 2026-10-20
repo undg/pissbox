@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-# The updater maps the host architecture from uname; tests set the value.
-echo "${TEST_COLGREP_UNAME:-aarch64}"

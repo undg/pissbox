@@ -92,48 +92,6 @@ npm proxy and links mounted Pi configuration and shared tool state. The kit also
 copies locally bundled tools into the sandbox; setup does not download tools.
 The image itself still has to be pulled the first time, if it isn't cached locally.
 
-## Bundled colgrep
-
-On the **macOS or Arch Linux host**, before creating a sandbox, download or
-update the colgrep binary from the latest [upstream release](https://github.com/lightonai/next-plaid/releases):
-
-```console
-bin/update-colgrep
-```
-
-Run the same command again to update. This is a host-side script, not sandbox
-setup. It uses `curl`, `tar` with XZ support, and `sha256sum` (preferred) or
-`shasum -a 256`. Python is not required. macOS provides the needed tools; on
-Arch Linux, the packages are `curl`, `tar`, `xz`, and `coreutils`.
-
-The Linux target follows the host architecture with `uname -m`:
-`arm64`/`aarch64` selects `aarch64-unknown-linux-gnu`, and `x86_64`/`amd64`
-selects `x86_64-unknown-linux-gnu`. The image is multi-arch, so the sandbox
-architecture matches the host. Other architectures fail before downloading;
-there is no architecture option.
-
-The script resolves the latest release once, downloads its archive and SHA-256
-checksum, verifies the archive with the available SHA-256 utility, and extracts
-only the binary with `tar`. It never runs the upstream installer or the
-downloaded binary. The checksum detects corruption; it is not an independent signature.
-A failed download, checksum, or extraction leaves the bundled binary unchanged.
-
-The result is `sbx-kit/files/home/.local/bin/colgrep`, with executable
-permissions. SBX static files only cover `files/home/` and `files/workspace/`,
-so the binary lands at `/home/agent/.local/bin/colgrep` (already on PATH) and
-the kit's `setup.install` step marks it executable when creating a sandbox. No
-root install, image rebuild, or sandbox download
-permission is needed. The binary
-is gitignored; a fresh checkout needs the download command first. Archives and
-checksums are retained under ignored `.cache/downloads/colgrep/`.
-
-Updating the kit does not change existing sandboxes. Use a new sandbox name to
-pick up the new binary; do not delete existing sandboxes just to update it.
-
-Models are not bundled. Optional `colgrep --install-agent` downloads a ~2.5 GB
-local agent model inside the sandbox, after shared caches are linked. Model and
-runtime downloads still need their hosts allowed by the sandbox network policy.
-
 ## Local shared tool state
 
 `bin/pissbox` mounts a gitignored `.cache/` directory beside `pi-agent/`.
