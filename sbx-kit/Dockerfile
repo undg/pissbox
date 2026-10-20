@@ -22,6 +22,14 @@ RUN apt-get update && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
 
+# ######################################################################
+# # Uncomment this block if you need to install your own ca-certificate
+# ######################################################################
+# USER root
+# COPY ca.crt /usr/local/share/ca-certificates/ca.crt
+# RUN update-ca-certificates
+
+
 ######################################################################
 # Install pi-coding-agent
 ######################################################################
@@ -41,12 +49,6 @@ RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
 ######################################################################
 # Install Colgrep
 ######################################################################
-
-# Uncomment this block if you need to install your own ca-certificate
-# USER root
-# COPY .cache/ca.crt /usr/local/share/ca-certificates/ca.crt
-# RUN update-ca-certificates
-
 
 
 USER root
