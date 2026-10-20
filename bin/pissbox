@@ -2,6 +2,55 @@
 
 set -euo pipefail
 
+# --- Settings selection -----------------------------------------------------
+# One tracked settings profile is active per host. Update this map when adding
+# a workstation. Unknown hosts, or hosts without a usable name, use the fallback.
+SETTINGS_FALLBACK_PROFILE=settings-co.json
+
+settings_profile_for_host() {
+	case ${1:-} in
+	cm | di-7415) printf '%s\n' settings-go.json ;;
+	*) printf '%s\n' "$SETTINGS_FALLBACK_PROFILE" ;;
+	esac
+}
+
+detect_hostname() {
+	local name
+	name=$(hostname -s 2>/dev/null || true)
+	if [[ -z $name ]]; then
+		name=$(hostname 2>/dev/null || true)
+	fi
+	printf '%s\n' "$name"
+}
+
+link_settings_profile() {
+	local pi_dir=$1 profile=$2 source target
+	source="$pi_dir/$profile"
+	target="$pi_dir/settings.json"
+
+	if [[ ! -f $source ]]; then
+		echo "Settings profile does not exist: $source" >&2
+		exit 1
+	fi
+	if [[ -L $target ]]; then
+		if [[ $(readlink "$target") == "$profile" ]]; then
+			return 0
+		fi
+		ln -sfn "$profile" "$target"
+	elif [[ -e $target ]]; then
+		local backup="$target.replaced"
+		if [[ -e $backup || -L $backup ]]; then
+			backup="$target.replaced.$(date +%Y%m%d%H%M%S)"
+		fi
+		echo "Backing up existing Pi settings file: $target -> $backup" >&2
+		mv "$target" "$backup"
+		ln -s "$profile" "$target"
+	else
+		ln -s "$profile" "$target"
+	fi
+}
+
+# --- Help -------------------------------------------------------------------
 show_help() {
 	cat <<EOF
 Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
@@ -20,12 +69,14 @@ With no workspaces, use the current directory.
 The first workspace is primary; additional ones are mounted read-write.
 Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
+Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
 If it already exists, attach to it [Y/n] or offer to delete it [y/N].
 Deletion removes sandbox-local data and exits; mounted host files remain.
 EOF
 }
 
+# --- Terminal confirmation --------------------------------------------------
 confirm() {
 	local answer
 	while true; do
@@ -42,6 +93,7 @@ confirm() {
 	done
 }
 
+# --- Launcher paths ---------------------------------------------------------
 # Follow launcher symlinks without readlink -f (unavailable on older macOS).
 SCRIPT_PATH=${BASH_SOURCE[0]}
 while [[ -L $SCRIPT_PATH ]]; do
@@ -54,6 +106,8 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
 PISSBOX_STATE_DIR="${PISSBOX_STATE_DIR:-"$SCRIPT_DIR/../.cache"}"
+
+# --- Argument parsing -------------------------------------------------------
 SANDBOX_NAME=""
 WORKSPACES=()
 
@@ -120,12 +174,17 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
+# --- Pi directory and settings ----------------------------------------------
 if [[ ! -d $PISSBOX_PI_DIR ]]; then
 	echo "Pi directory does not exist: $PISSBOX_PI_DIR" >&2
 	exit 1
 fi
 PISSBOX_PI_DIR="$(cd "$PISSBOX_PI_DIR" && pwd -P)"
+HOST_NAME=$(detect_hostname)
+SETTINGS_PROFILE=$(settings_profile_for_host "$HOST_NAME")
+link_settings_profile "$PISSBOX_PI_DIR" "$SETTINGS_PROFILE"
 
+# --- Shared state -----------------------------------------------------------
 if [[ -z $PISSBOX_STATE_DIR ]]; then
 	echo "--pissbox-state-dir requires a directory" >&2
 	exit 1
@@ -133,10 +192,12 @@ fi
 mkdir -p "$PISSBOX_STATE_DIR"
 PISSBOX_STATE_DIR="$(cd "$PISSBOX_STATE_DIR" && pwd -P)"
 
+# --- Workspaces -------------------------------------------------------------
 if [[ ${#WORKSPACES[@]} -eq 0 ]]; then
 	WORKSPACES=("$PWD")
 fi
 
+# --- SBX invocation ---------------------------------------------------------
 SBX_ARGS=(run --env "PISSBOX_PI_DIR=$PISSBOX_PI_DIR"
 	--env "PISSBOX_STATE_DIR=$PISSBOX_STATE_DIR")
 if [[ -n $SANDBOX_NAME ]]; then
@@ -154,6 +215,7 @@ else
 fi
 exec 3>&-
 
+# --- Existing sandbox handling ----------------------------------------------
 CONFLICT_PATTERN="sandbox '([^']+)' already exists and can't be given new workspaces"
 if [[ ! $SBX_ERROR =~ $CONFLICT_PATTERN ]]; then
 	exit "$SBX_STATUS"

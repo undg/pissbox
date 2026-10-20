@@ -1,2 +1,0 @@
-Agents write their findings here as `.plan/results/<same-name>.md`, one file per prompt.
-This `.gitkeep` only keeps the directory.

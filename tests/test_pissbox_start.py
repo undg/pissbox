@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -44,6 +45,14 @@ class LauncherTests(unittest.TestCase):
 
     def conflict(self, answers, **env):
         return self.launch(answers=answers, TEST_SBX_MODE="conflict", **env)
+
+    def pi_directory(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="pi-", dir=fixtures))
+        for name in ("settings-co.json", "settings-go.json"):
+            shutil.copyfile(PI_DIR / name, directory / name)
+        return directory
 
     def test_new_sandbox_keeps_original_arguments(self):
         result, calls = self.launch()
@@ -144,6 +153,62 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls[0][-4:], ["one", "two", str(PI_DIR), str(STATE_DIR)])
                 self.assertIn("PISSBOX_STATE_DIR=" + str(STATE_DIR), calls[0])
                 self.assertIn("box", calls[0])
+
+    def test_settings_profile_follows_hostname(self):
+        for host, profile in (
+            ("cm", "settings-go.json"),
+            ("di-7415", "settings-go.json"),
+            ("other-host", "settings-co.json"),
+            ("", "settings-co.json"),
+        ):
+            with self.subTest(host=host):
+                pi = self.pi_directory()
+                result, calls = self.launch(
+                    "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST=host,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertTrue((pi / "settings.json").is_symlink())
+                self.assertEqual(os.readlink(pi / "settings.json"), profile)
+                self.assertIn(f"PISSBOX_PI_DIR={pi}", calls[0])
+
+    def test_switching_host_relinks_settings_profile(self):
+        pi = self.pi_directory()
+        for host, profile in (
+            ("cm", "settings-go.json"),
+            ("other-host", "settings-co.json"),
+            ("di-7415", "settings-go.json"),
+        ):
+            with self.subTest(host=host):
+                result, _ = self.launch(
+                    "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST=host,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(os.readlink(pi / "settings.json"), profile)
+
+    def test_settings_profile_backs_up_a_regular_file(self):
+        pi = self.pi_directory()
+        settings = pi / "settings.json"
+        settings.write_text("{}\n")
+        result, calls = self.launch(
+            "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST="cm",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Backing up existing Pi settings file", result.stderr)
+        self.assertEqual((pi / "settings.json.replaced").read_text(), "{}\n")
+        self.assertEqual(os.readlink(settings), "settings-go.json")
+        self.assertEqual(len(calls), 1)
+
+    def test_missing_settings_profile_never_launches_sbx(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        pi = Path(tempfile.mkdtemp(prefix="pi-missing-", dir=fixtures))
+        shutil.copyfile(PI_DIR / "settings-co.json", pi / "settings-co.json")
+        result, calls = self.launch(
+            "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST="cm",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Settings profile does not exist", result.stderr)
+        self.assertEqual(calls, [])
 
     def test_attach_defaults_to_yes(self):
         result, calls = self.conflict("\n")
@@ -250,17 +315,18 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls, [])
 
     def test_workspace_and_option_forwarding(self):
+        pi = self.pi_directory()
         result, calls = self.launch(
             "workspace with spaces", "--name=first", "second workspace",
-            "--name", "last", "--pissbox-pi-dir", "sbx-kit", "--", "--path",
-            PISSBOX_PI_DIR="missing",
+            "--name", "last", "--pissbox-pi-dir", str(pi), "--", "--path",
+            PISSBOX_PI_DIR="missing", TEST_PISSBOX_HOST="cm",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [[
-            "run", "--env", f"PISSBOX_PI_DIR={ROOT / 'sbx-kit'}",
+            "run", "--env", f"PISSBOX_PI_DIR={pi}",
             "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
             "--name", "last", str(ROOT / "bin" / "../sbx-kit"),
-            "workspace with spaces", "second workspace", "--path", str(ROOT / "sbx-kit"),
+            "workspace with spaces", "second workspace", "--path", str(pi),
             str(STATE_DIR),
         ]])
 

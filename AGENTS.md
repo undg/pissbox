@@ -115,7 +115,7 @@ separate things; shared sessions can outlive individual sandboxes.
 
 ## Shared configuration and authentication
 
-The mounted sandbox-only `pi-agent/` must contain `settings.json`, `auth.json`,
+The mounted sandbox-only `pi-agent/` must contain its profile files, `auth.json`,
 `sessions/`, etc. directly, not in a nested `agent/`. Keep it separate from
 native/non-sandboxed Pi configuration; those agents have different restrictions.
 Sharing the whole directory read-write across sandboxes, including credentials
@@ -130,6 +130,22 @@ Never print or commit credentials. `.gitignore` excludes `pi-agent/auth.json`
 and `pi-agent/sessions`; review other generated/private files before staging.
 Do not reset shared state or change shared configuration outside the task.
 Avoid mixing macOS and Linux package installations into the same shared tree.
+
+## Settings profiles
+
+`pi-agent/settings.json` is an ignored, generated symlink to one tracked
+profile. `bin/pissbox` chooses the profile from the host name before every
+`sbx run`, so existing sandboxes pick up switches too. The host map lives at the
+top of `bin/pissbox` in `settings_profile_for_host`; `cm` and `di-7415` use
+`settings-go.json`, and unknown or unavailable host names fall back to
+`settings-co.json` (GitHub Copilot).
+
+Add a workstation by editing that map. Add a new profile by tracking another
+`pi-agent/settings-*.json` file. Do not track or edit `settings.json` directly.
+If a stale regular `settings.json` exists, the launcher moves it to an ignored
+`settings.json.replaced*` backup before creating the link. Pi writes through the
+link, so runtime changes such as `lastChangelogVersion` and model defaults land
+in the active tracked profile.
 
 ## Shared tool state
 
@@ -174,7 +190,8 @@ Run launcher regression tests with
 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
 These cover symlink launches from another directory, caller-relative overrides,
 confirmation defaults, deletion consent, EOF, argument forwarding, exit statuses,
-and terminal stdin/stdout preservation. Shared-directory tests check real links,
+terminal stdin/stdout preservation, and host-to-settings-profile selection with
+a stub `hostname`. Shared-directory tests check real links,
 retained data across isolated homes, refusal to replace data, and adding a
 mapping without script edits. Updater tests use stub curl and real
 SHA-256/tar commands to check the detected Linux target, updates, executable
@@ -186,11 +203,12 @@ package. A stub uname supplies the host architecture. Generated fixtures
 remain under ignored
 `.cache/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
 
-After a real sandbox is created, check the link from the host:
+After a real sandbox is created, check the links from the host:
 
 ```bash
 sbx exec <sandbox-name> sh -c \
   'readlink "$HOME/.pi/agent"; test -d "$HOME/.pi/agent"'
+readlink pi-agent/settings.json
 ```
 
 Update this file as the repository evolves. Keep operational detail here rather
