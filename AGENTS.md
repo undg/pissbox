@@ -34,7 +34,11 @@ Do not hard-code either directory location.
 `sbx-kit/spec.yaml` references the locally built `pissbox:local` image.
 Build it explicitly with `docker build -t pissbox:local sbx-kit`, export it with
 `docker image save`, and import it into SBX's separate image store with
-`sbx template load`. The launcher does not build or import images. See
+`sbx template load`. Alternatively, host-side `bin/build-image` runs all three
+steps, saving to `.cache/images/pissbox-local.tar`; it resolves symlinks, accepts
+Docker build options after `--`, and stops on failure without changing existing
+sandboxes. Tests use stub Docker/SBX commands, not a real image build.
+The launcher does not build or import images. See
 `sbx-kit/README.image.md` for build, archive, reuse, and update commands.
 The current Dockerfile requires an approved public PEM CA at `sbx-kit/ca.crt`;
 never use a private key or credentials as build input. Do not add a

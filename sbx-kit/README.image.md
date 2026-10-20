@@ -36,6 +36,25 @@ Colgrep's optional agent model is not included in the image.
 
 ## Build on your host
 
+To build, save, and load the image into SBX in one command, run on your host:
+
+```bash
+bin/build-image
+```
+
+The script locates this checkout even through a symlink or from another working
+directory. It builds `pissbox:local`, saves it to
+`.cache/images/pissbox-local.tar` (replacing the previous archive), and runs
+`sbx template load`. It stops on failure and does not update or remove existing
+sandboxes. Docker must be running and both `docker` and `sbx` must be on PATH.
+Forward Docker build options after `--`, for example:
+
+```bash
+bin/build-image -- --build-arg PI_VERSION=latest --no-cache
+```
+
+The individual commands are documented below.
+
 Run these commands on the **macOS or Linux host**, from this repository's root,
 not inside an existing sandbox. Docker must be running and SBX must be installed.
 The image architecture follows the Docker builder; build for the architecture
