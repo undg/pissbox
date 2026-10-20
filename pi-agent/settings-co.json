@@ -34,13 +34,9 @@
   "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
   "enabledModels": [
-    "github-copilot/gpt-5-mini",
     "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6.1-sol",
-    "github-copilot/gpt-6-luna",
-    "github-copilot/claude-haiku-5.5",
-    "github-copilot/claude-opus-5.5",
-    "github-copilot/claude-sonnet-5.5"
+    "github-copilot/gpt-6-luna"
   ],
   "tuiMode": "fullscreen",
   "sessionShareDestination": "gist",
