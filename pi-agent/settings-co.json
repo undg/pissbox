@@ -34,18 +34,14 @@
   "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "medium",
   "enabledModels": [
-    "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6.1-sol",
+    "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6-luna"
   ],
   "sessionShareDestination": "gist",
   "markdown": {
     "mermaid": "streaming"
   },
-  "fullscreenExitOutput": "transcript",
-  "fullscreenScrollbar": "auto",
-  "fullscreenCopyOnSelect": true,
-  "fullscreenWheelScrollLines": "auto",
   "theme": "system",
   "tuiMode": "regular"
 }

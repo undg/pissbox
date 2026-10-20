@@ -31,19 +31,16 @@
   "doubleEscapeAction": "tree",
   "autocompleteMaxVisible": 20,
   "defaultProvider": "opencode-go",
+  "defaultModel": "deepseek-v4.1-flash",
   "defaultThinkingLevel": "high",
   "enabledModels": [
     "opencode-go/deepseek-v4.1-flash",
     "opencode-go/gpt-6-luna"
   ],
-  "tuiMode": "fullscreen",
   "sessionShareDestination": "gist",
   "markdown": {
     "mermaid": "streaming"
   },
-  "fullscreenExitOutput": "transcript",
-  "fullscreenScrollbar": "auto",
-  "fullscreenCopyOnSelect": true,
-  "fullscreenWheelScrollLines": "auto",
-  "theme": "system"
+  "theme": "system",
+  "tuiMode": "regular"
 }
