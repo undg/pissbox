@@ -54,7 +54,7 @@ RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
 ######################################################################
 
 
-USER root
+USER agent
 # Unmanaged installation avoids shell-profile edits and shared config data.
 RUN curl --proto '=https' --tlsv1.2 -LsSf \
         "https://github.com/lightonai/next-plaid/releases/download/v${COLGREP_VERSION}/colgrep-installer.sh" \
