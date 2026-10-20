@@ -1,4 +1,5 @@
 # syntax=docker/dockerfile:1.7
+# from: https://github.com/docker/sbx-kits-contrib/blob/main/pi/Dockerfile
 ARG BASE_IMAGE=docker/sandbox-templates:shell-docker
 FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
@@ -22,7 +23,7 @@ USER agent
 RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
     npm install -g "@earendil-works/pi-coding-agent@${version}" && \
     npm install -g pnpm && \
-    pi --version
+    pi --offline --version
 
 # Keep pi available in minimal-PATH execution contexts.
 USER root
@@ -34,4 +35,4 @@ LABEL com.docker.sandboxes.base="${BASE_IMAGE}"
 
 USER agent
 WORKDIR /home/agent
-CMD ["pi"]
+CMD ["pi --offline"]
