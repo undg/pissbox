@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -15,6 +16,11 @@ class BuildImageTests(unittest.TestCase):
         fixtures = ROOT / ".cache/test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
         self.directory = Path(tempfile.mkdtemp(prefix="image build-", dir=fixtures))
+        self.root = self.directory / "checkout"
+        (self.root / "bin").mkdir(parents=True)
+        (self.root / "sbx-kit").mkdir()
+        self.script = self.root / "bin/build-image"
+        shutil.copy2(SCRIPT, self.script)
         self.bin = self.directory / "bin"
         self.bin.mkdir()
         self.log = self.directory / "calls.jsonl"
@@ -35,9 +41,9 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
             tool.write_text(stub)
             tool.chmod(0o755)
 
-    def launch(self, *args, script=SCRIPT, fail=""):
+    def launch(self, *args, script=None, fail=""):
         result = subprocess.run(
-            [str(script), *args], cwd=self.directory, text=True,
+            [str(script or self.script), *args], cwd=self.directory, text=True,
             capture_output=True, timeout=5,
             env={**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
                  "BUILD_TEST_LOG": str(self.log), "BUILD_TEST_FAIL": fail},
@@ -46,9 +52,9 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
         return result, calls
 
     def expected_calls(self, *build_args):
-        archive = str(ROOT / ".cache/images/pissbox-local.tar")
+        archive = str(self.root / ".cache/images/pissbox-local.tar")
         return [
-            ["docker", "build", "-t", "pissbox:local", *build_args, str(ROOT / "sbx-kit")],
+            ["docker", "build", "-t", "pissbox:local", *build_args, str(self.root / "sbx-kit")],
             ["docker", "image", "save", "pissbox:local", "-o", archive],
             ["sbx", "template", "load", archive],
         ]
@@ -65,11 +71,40 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
 
     def test_symlink_launch_and_build_arguments(self):
         link = self.directory / "build-image"
-        link.symlink_to(os.path.relpath(SCRIPT, link.parent))
+        link.symlink_to(os.path.relpath(self.script, link.parent))
         args = ("--build-arg", "PI_VERSION=1.2.3", "--label", "description=two words")
         result, calls = self.launch("--", *args, script=link)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, self.expected_calls(*args))
+
+    def test_optional_ca_is_forwarded_with_build_arguments(self):
+        ca = self.root / "sbx-kit/ca.crt"
+        ca.write_text("public CA fixture; Docker is stubbed\n")
+        result, calls = self.launch("--", "--no-cache")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, self.expected_calls(
+            "--secret", f"id=custom_ca,src={ca}", "--no-cache"))
+        self.assertNotIn("Info:", result.stderr)
+
+    def test_optional_ca_through_symlink(self):
+        ca = self.root / "sbx-kit/ca.crt"
+        ca.write_text("public CA fixture; Docker is stubbed\n")
+        link = self.directory / "build-image-with-ca"
+        link.symlink_to(os.path.relpath(self.script, link.parent))
+        result, calls = self.launch(script=link)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, self.expected_calls(
+            "--secret", f"id=custom_ca,src={ca}"))
+
+    def test_ca_in_callers_directory_is_not_used(self):
+        (self.directory / "ca.crt").write_text("not the checkout CA\n")
+        result, calls = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, self.expected_calls())
+        self.assertFalse((self.root / "sbx-kit/ca.crt").exists())
+        self.assertIn("Info:", result.stderr)
+        self.assertIn("ca.crt not found", result.stderr)
+        self.assertIn("base image's trust store", result.stderr)
 
     def test_help_never_runs_tools(self):
         for flag in ("-h", "--help"):

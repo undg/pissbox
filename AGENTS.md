@@ -40,8 +40,11 @@ Docker build options after `--`, and stops on failure without changing existing
 sandboxes. Tests use stub Docker/SBX commands, not a real image build.
 The launcher does not build or import images. See
 `sbx-kit/README.image.md` for build, archive, reuse, and update commands.
-The current Dockerfile requires an approved public PEM CA at `sbx-kit/ca.crt`;
-never use a private key or credentials as build input. Do not add a
+The Dockerfile optionally installs an approved public PEM CA before npm/curl.
+`bin/build-image` passes `sbx-kit/ca.crt` as BuildKit secret `custom_ca` only when
+that file exists. The public CA remains in the image. Secret presence/contents do not invalidate BuildKit cache:
+use `bin/build-image -- --no-cache` after adding, changing, or removing the CA.
+Never use a private key or credentials as build input. Do not add a
 machine-specific host path or config symlink to the image: the host home
 directory varies by machine. The launcher mounts
 the sandbox-only `pi-agent/` and passes its absolute path with

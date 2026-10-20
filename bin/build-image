@@ -17,6 +17,8 @@ Example:
   ${0##*/} -- --build-arg PI_VERSION=latest --no-cache
 
 Uses this checkout's sbx-kit/ regardless of your working directory.
+Passes sbx-kit/ca.crt as an optional public CA when present.
+Use -- --no-cache when adding, changing, or removing the CA after a build.
 Saves to this checkout's .cache/images/pissbox-local.tar, replacing any old archive.
 Existing sandboxes are not updated or removed.
 EOF
@@ -52,6 +54,13 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 IMAGE=pissbox:local
 ARCHIVE="$ROOT_DIR/.cache/images/pissbox-local.tar"
+CA_FILE="$ROOT_DIR/sbx-kit/ca.crt"
+CA_ARGS=()
+if [[ -f $CA_FILE ]]; then
+	CA_ARGS=(--secret "id=custom_ca,src=$CA_FILE")
+else
+	echo "Info: $CA_FILE not found; using the base image's trust store without an additional CA." >&2
+fi
 
 for TOOL in docker sbx; do
 	if ! command -v "$TOOL" >/dev/null 2>&1; then
@@ -60,7 +69,7 @@ for TOOL in docker sbx; do
 	fi
 done
 
-docker build -t "$IMAGE" "$@" "$ROOT_DIR/sbx-kit"
+docker build -t "$IMAGE" "${CA_ARGS[@]}" "$@" "$ROOT_DIR/sbx-kit"
 mkdir -p "$(dirname "$ARCHIVE")"
 docker image save "$IMAGE" -o "$ARCHIVE"
 exec sbx template load "$ARCHIVE"

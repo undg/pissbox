@@ -60,15 +60,29 @@ not inside an existing sandbox. Docker must be running and SBX must be installed
 The image architecture follows the Docker builder; build for the architecture
 of the machine where SBX will run it.
 
-The current Dockerfile requires an approved public CA certificate in PEM format
-at `sbx-kit/ca.crt`. It installs that certificate into the image's system trust
-store and enables `NODE_USE_SYSTEM_CA=1` for Node. The certificate becomes part
-of the image; do not supply a private key or credentials. If no additional CA is
-needed, remove the certificate `COPY` and its `RUN update-ca-certificates` step
-before building.
+An additional CA is optional. If your network requires one, put an approved
+public CA certificate in PEM format at the gitignored `sbx-kit/ca.crt`.
+`bin/build-image` automatically passes it through a BuildKit secret mount.
+The Dockerfile installs it into the system trust store before npm/curl run and
+enables `NODE_USE_SYSTEM_CA=1` for Node. Without that file, the wrapper passes
+no CA and the Dockerfile keeps the base image's trust store unchanged.
+The public certificate becomes part of the image; never supply a private key
+or credentials.
+
+BuildKit does not include secret contents or their presence in its cache key.
+After adding, changing, or removing the CA, rebuild with
+`bin/build-image -- --no-cache` to avoid reusing an old trust-store layer.
+
+For a direct build without an additional CA:
 
 ```bash
 docker build -t pissbox:local sbx-kit
+```
+
+For a direct build with your public CA:
+
+```bash
+docker build --secret id=custom_ca,src=sbx-kit/ca.crt -t pissbox:local sbx-kit
 ```
 
 The first build downloads the base image and installs tools. Later builds reuse

@@ -22,12 +22,15 @@ RUN apt-get update && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
 
-# ######################################################################
-# # Uncomment this block if you need to install your own ca-certificate
-# ######################################################################
-# USER root
-# COPY ca.crt /usr/local/share/ca-certificates/ca.crt
-# RUN update-ca-certificates
+######################################################################
+# Optional public CA supplied by bin/build-image; Used by npm/curl
+######################################################################
+RUN --mount=type=secret,id=custom_ca \
+    if [ -f /run/secrets/custom_ca ]; then \
+        install -m 0644 /run/secrets/custom_ca \
+            /usr/local/share/ca-certificates/custom-ca.crt && \
+        update-ca-certificates; \
+    fi
 
 
 ######################################################################

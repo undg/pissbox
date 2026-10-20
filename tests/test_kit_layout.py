@@ -33,11 +33,22 @@ class KitLayoutTests(unittest.TestCase):
         self.assertIn("/opt/pissbox/models/LateOn-Code-edge", dockerfile)
         self.assertIn("/resolve/${COLGREP_MODEL_REVISION}/${file}", dockerfile)
         self.assertIn("--proto-redir '=https'", dockerfile)
-        self.assertLess(dockerfile.index("RUN update-ca-certificates"),
+        self.assertLess(dockerfile.index("update-ca-certificates;"),
                         dockerfile.index("RUN model_dir="))
         for name in ("tokenizer.json", "config_sentence_transformers.json", "config.json",
                      "onnx_config.json", "model_int8.onnx", "model.onnx"):
             self.assertIn(name, dockerfile)
+
+    def test_optional_ca_is_installed_as_root_before_npm(self):
+        dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
+        ca_step = dockerfile.index("RUN --mount=type=secret,id=custom_ca")
+        self.assertEqual(dockerfile[:ca_step].rsplit("USER ", 1)[1].splitlines()[0], "root")
+        self.assertIn("if [ -f /run/secrets/custom_ca ]; then", dockerfile)
+        self.assertIn("install -m 0644 /run/secrets/custom_ca", dockerfile)
+        self.assertLess(ca_step, dockerfile.index("update-ca-certificates;"))
+        self.assertLess(dockerfile.index("update-ca-certificates;"),
+                        dockerfile.index("npm install -g pnpm"))
+        self.assertNotIn("COPY ca.crt", dockerfile)
 
     def test_bundled_model_default_is_seeded_after_shared_links(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
