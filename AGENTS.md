@@ -1,233 +1,116 @@
-# pissbox
+# pissbox development
 
-Personal Pi coding-agent environment for Docker Sandboxes (`sbx`). The goal is
-disposable sandboxes with a reproducible, customizable Linux toolset and shared
-host-owned Pi state. Start simple; an Arch-like environment is a longer-term
-idea, not the current base image.
-
-The repository is named **pissbox**; its directory may still be named `pisbx`.
-Do not hard-code either directory location.
+Personal Pi environment for Docker Sandboxes (`sbx`), using a locally built
+Linux image and host-owned Pi/tool state. Do not hard-code the checkout's path
+or directory name. User guides start at [README.md](README.md).
 
 ## Layout
 
-- `sbx-kit/`: local SBX kit, Dockerfile, setup, network policy, and documentation.
-- `sbx-kit/files/home/.pissbox/scripts/`: setup scripts bundled with the kit;
-  SBX copies them to `$HOME/.pissbox/scripts/` before running `setup.install`.
-- `sbx-kit/files/home/.pissbox/shared-directories.conf`: shared-directory mappings;
-  add or modify tool state here, not in launcher branches or per-tool scripts.
-- `.cache/`: gitignored, host-owned Linux model/index/package state shared
-  across sandboxes. See `sbx-kit/SHARED-DIRECTORIES.md`.
-- `pi-agent/`: sandbox-only Pi agent directory, shared across SBX instances,
-  not with native/non-sandboxed Pi. Contains configuration and private runtime
-  state. Its `AGENTS.md` applies to sandbox Pi sessions: keep it brief and
-  general. Put repository-specific guidance here instead.
-- `pi-agent/skills/`: sandbox-wide skills, including `bash-cli-style` for the
-  user's Bash command-line scripting conventions.
-- `pi-agent/APPEND_SYSTEM.md`: existing user-authored behavior/personality prompt.
-  Do not rewrite it as part of environment setup.
-- `bin/`: host-side Pi sandbox launcher; run `bin/pissbox --help`.
-- `tests/`: launcher regression tests using a stub SBX CLI and shared-directory
-  setup tests (Python standard library).
+- `bin/pissbox`: host launcher; `bin/build-image`: build, save, and SBX import.
+- `sbx-kit/`: Dockerfile, kit spec, and operational guides.
+- `sbx-kit/files/home/.pissbox/`: small setup scripts and shared-directory mappings.
+- `pi-agent/`: shared sandbox-only configuration, credentials, and sessions.
+  Keep its `AGENTS.md` brief and general; repository rules belong here.
+- `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
+  during environment work. Use the `bash-cli-style` skill for Bash changes.
+- `.cache/`: gitignored, host-owned Linux tool state and test fixtures.
+- `tests/`: Python-standard-library regression tests.
 
-## Image and kit
+## Image and kit constraints
 
-`sbx-kit/spec.yaml` references the locally built `pissbox:local` image.
-Build it explicitly with `docker build -t pissbox:local sbx-kit`, export it with
-`docker image save`, and import it into SBX's separate image store with
-`sbx template load`. Alternatively, host-side `bin/build-image` runs all three
-steps, saving to `.cache/images/pissbox-local.tar`; it resolves symlinks, accepts
-Docker build options after `--`, and stops on failure without changing existing
-sandboxes. Tests use stub Docker/SBX commands, not a real image build.
-The launcher does not build or import images. See
-`sbx-kit/README.image.md` for build, archive, reuse, and update commands.
-The Dockerfile optionally installs an approved public PEM CA before npm/curl.
-`bin/build-image` passes `sbx-kit/ca.crt` as BuildKit secret `custom_ca` only when
-that file exists. The public CA remains in the image. Secret presence/contents do not invalidate BuildKit cache:
-use `bin/build-image -- --no-cache` after adding, changing, or removing the CA.
-Never use a private key or credentials as build input. Do not add a
-machine-specific host path or config symlink to the image: the host home
-directory varies by machine. The launcher mounts
-the sandbox-only `pi-agent/` and passes its absolute path with
-`--env PISSBOX_PI_DIR=...`.
-The kit's `setup.install` creates the config symlink as user `1000` before Pi
-first launches. Keep `entrypoint: [pi, --offline]`; no image startup helper is needed.
-Leave `PI_CODING_AGENT_DIR` unset; Pi reads the symlink at its default path.
-No configuration or credentials are copied into image layers.
+- `spec.yaml` uses `pissbox:local`. `bin/build-image` builds, saves to
+  `.cache/images/pissbox-local.tar`, and imports into SBX's separate image store.
+  It resolves symlinks and forwards Docker options after `--`. The launcher
+  does not build images. Existing sandboxes are never updated automatically.
+- The optional public PEM CA at `sbx-kit/ca.crt` is passed by the build wrapper
+  as BuildKit secret `custom_ca` and installed before npm/curl. It remains in
+  the image. Secret changes do not invalidate build cache: use `-- --no-cache`
+  after adding, changing, or removing it. Never use private keys or credentials.
+- Do not bake machine-specific config paths or symlinks into the image.
+  Kit setup links `$HOME/.pi/agent` as user `1000` before Pi starts.
+  Keep `entrypoint: [pi, --offline]` and leave `PI_CODING_AGENT_DIR` unset.
+- Install tool binaries in the image, not `files/`: bundling the large colgrep
+  binary there previously made sandbox creation much slower. SBX only copies
+  static kit files under `files/home/` and `files/workspace/`.
+- Colgrep uses the upstream unmanaged installer, pinned by `COLGREP_VERSION`.
+  Keep its `/usr/local/bin` symlink usable in minimal-PATH contexts and avoid
+  installer-created profiles/config that conflict with shared links.
+- Search weights are pinned by `COLGREP_MODEL_REVISION` and kept at
+  `/opt/pissbox/models/LateOn-Code-edge`, outside shared mounts. Setup seeds
+  colgrep's local-model default only if no config file or symlink exists.
+  Never reset settings or indexes during setup. `colgrep set-model` clears
+  indexes; changing weights at the stable path also requires index rebuilds.
+  Sandboxes sharing this default must contain the model. ONNX Runtime and
+  optional/custom models still need network downloads.
 
-## Image-installed colgrep
+## Launcher and lifecycle contracts
 
-Colgrep is installed in `sbx-kit/Dockerfile` as `agent`, using the upstream
-installer with `COLGREP_UNMANAGED_INSTALL` to avoid modifying shell profiles or
-creating configuration that would conflict with shared-directory links.
-`COLGREP_VERSION` pins the release. A `/usr/local/bin/colgrep` symlink makes it
-available in minimal-PATH contexts. The installer selects the image's Linux
-architecture; use a compatible builder for the target SBX host.
+- Resolve launcher symlinks before locating resources; preserve the caller's
+  working directory. First workspace is primary; with none, use the current
+  directory. Extra workspaces retain host absolute paths, not arbitrary Docker
+  source/destination mappings. Mount symlink targets explicitly.
+- Keep the `case` parser: options may appear among workspaces; `--` ends parsing.
+  Repeated settings use the last value. Directory precedence is CLI flag >
+  `PISSBOX_PI_DIR` / `PISSBOX_STATE_DIR` > checkout defaults. Canonicalize before
+  mounting; relative overrides use the caller's directory. Do not discover
+  native Pi configuration or use `PI_HOST_CONFIG_DIR`.
+- Pass the local kit, workspaces, Pi directory, and state root to `sbx run`, with
+  `--env PISSBOX_PI_DIR=...` and `--env PISSBOX_STATE_DIR=...`. SBX selects the
+  sandbox unless `--name` is supplied; do not add custom discovery/bootstrap.
+- On the known existing-sandbox conflict, use the name reported by SBX. Enter
+  or `p` runs `sbx run --name NAME`; `s` runs `sbx exec -it NAME bash`; `q` exits.
+  Choices are case-insensitive. `d` warns about local data loss, requires a
+  separate explicit yes, then runs `sbx rm --force NAME` without recreating.
+  Invalid input retries; EOF aborts. Other errors preserve output and status.
+- Workspaces are live host mounts. New mounts, mappings, kit files, or images
+  require a new sandbox name. Never silently remove/recreate a sandbox.
+  Sandbox-local data survives restart, not removal; mounted state survives both.
 
-Do not put the colgrep binary back under `sbx-kit/files/`: copying roughly
-143 MiB through the kit increased sandbox creation from about 3 seconds to
-30–40 seconds. Keep only small setup scripts and mappings there. SBX only copies
-static files under `files/home/` and `files/workspace/`.
+## Shared configuration and state
 
-The Dockerfile also downloads the OS-independent `lightonai/LateOn-Code-edge`
-search model with TLS-verified curl, pinned by `COLGREP_MODEL_REVISION`. Both
-INT8 and FP32 weights live at `/opt/pissbox/models/LateOn-Code-edge`, outside
-shared-cache mounts. The image includes `/opt/pissbox/colgrep-config.json`
-with the local model as default. After linking shared state, kit setup seeds
-`$HOME/.local/share/colgrep/config.json` only when no file or symlink exists;
-it never replaces settings or clears indexes. For existing shared configuration,
-select the bundled model once with
-`colgrep set-model /opt/pissbox/models/LateOn-Code-edge` inside an updated
-sandbox. This clears existing indexes; do not run it automatically during
-setup. The choice persists in shared state, so sandboxes sharing that default
-must have the bundled files. Use `--model` for a per-command override.
-When changing `COLGREP_MODEL_REVISION`, rebuild affected indexes: the local
-path is stable, so Colgrep cannot detect different weights at that path.
+- Mount the sandbox-only `pi-agent/` directly, not a nested `agent/`. Sharing
+  credentials and sessions read-write across sandboxes is intentional. Keep it
+  separate from native Pi. Do not read/print credentials to debug mounts.
+- GitHub Copilot login uses Pi's `/login` inside the sandbox. Do not restore
+  upstream Anthropic credential injection: it can overwrite the shared auth
+  store at startup. Never print/commit credentials or reset shared state outside
+  the task; review generated/private files before staging.
+- `pi-agent/settings.json` is an ignored generated link. The host-name map in
+  `settings_profile_for_host` selects `settings-go.json` for `cm`/`di-7415`,
+  otherwise `settings-co.json`, before every launch. Add hosts there and track
+  new `settings-*.json` profiles rather than editing the generated link.
+  Regular settings files are backed up as `settings.json.replaced*`. Pi writes
+  through the link into the tracked profile, including runtime defaults.
+- Shared Linux state defaults to `.cache/`. Keep it separate from native/macOS
+  caches. Add tool mappings in
+  `sbx-kit/files/home/.pissbox/shared-directories.conf`, not per-tool launcher
+  code. Rows are literal `state-relative|home-relative` paths without dot
+  segments or expansion. Setup accepts matching links and refuses existing
+  data/different links; never delete or migrate data silently.
+- Custom tool/XDG paths may bypass shared links. Avoid concurrent colgrep index
+  writers until upstream locking is verified. Preserve old state-path links
+  while existing sandboxes depend on them. See
+  [shared directories](sbx-kit/SHARED-DIRECTORIES.md) for current mappings and
+  [known issues](KNOWN_ISSUES.md) for the missing npm cache mapping.
 
-Updating colgrep or the bundled model requires an explicit image build, save,
-and SBX import; existing sandboxes remain unchanged. Selecting the bundled
-search model by local path avoids runtime Hugging Face access for that model. ONNX Runtime and optional/custom models
-are not bundled and still need network access to their download hosts.
+## Verification
 
-## Workspaces and lifecycle
-
-From a project's worktree, run `/path/to/pissbox/bin/pissbox` (or a symlink
-to it on PATH) with optional workspace directories. Resolve launcher symlinks
-before locating the checkout's kit and default Pi directory; preserve the caller's
-working directory. The first workspace is primary; the rest are additional
-mounts. With none, the current directory is primary. SBX picks the sandbox
-name unless `--name NAME` (or `--name=NAME`) is provided; the launcher forwards
-it to `sbx run` to allow multiple named sandboxes for the same workspaces.
-Repeated name options use the last value. Pi directory selection is `--pissbox-pi-dir DIR` first, then the
-sandbox-specific `PISSBOX_PI_DIR` environment variable, then this checkout's
-`pi-agent/`. Relative overrides resolve from the caller's current directory;
-the selected path is canonicalized before mounting. The launcher uses a
-`case` loop, accepts options among workspaces, and supports `--` to end option
-parsing. It does not use `PI_HOST_CONFIG_DIR` or automatically discover native
-Pi configuration. Keep overrides sandbox-only. It calls
-`sbx run --env PISSBOX_PI_DIR=...` with the local
-sandbox kit as the first positional argument, followed by workspaces, the
-Pi directory, and the shared state directory. It also passes
-`--env PISSBOX_STATE_DIR=...`. Sandbox selection is left to SBX; no custom
-discovery or exec bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
-to replace existing data or a different symlink. Run `bin/pissbox --help`
-for usage. On SBX's existing-sandbox/workspace conflict, the launcher uses the
-name reported by SBX and offers `Choose [P/s/d/q]:`. Enter or `p` opens Pi with
-`sbx run --name NAME` without new mounts; `s` opens an interactive Bash shell with
-`sbx exec -it NAME bash`; `q` exits without changes. Menu letters are case-insensitive.
-Choosing `d` warns about sandbox-local data loss and separately asks
-`Do you want to delete it? [y/N]`. Only an explicit yes runs
-`sbx rm --force NAME`; deletion exits without recreating, and declining exits
-without changes. Invalid answers retry, and EOF aborts without opening Pi,
-opening a shell, or deleting. Other SBX
-errors retain their output and exit status. Do not silently recreate or remove
-an existing sandbox.
-
-SBX preserves absolute host workspace paths. Additional workspaces are not
-Docker-style arbitrary source/destination mappings. A host symlink alone does
-not expose its target; mount the actual target directory.
-
-Normal workspaces are live mounts, not copies. Writes immediately affect host
-files. `sbx cp` makes an independent copy, not a synchronized mount. Workspaces
-are selected at creation and cannot be added to an existing sandbox. Use a new
-name for changed mounts; do not delete existing sandboxes without permission.
-Kit/image changes generally require a new sandbox too.
-
-Sandbox-local state survives stops/restarts but not sandbox removal. Mounted
-host state survives removal. A Pi conversation session and an SBX instance are
-separate things; shared sessions can outlive individual sandboxes.
-
-## Shared configuration and authentication
-
-The mounted sandbox-only `pi-agent/` must contain its profile files, `auth.json`,
-`sessions/`, etc. directly, not in a nested `agent/`. Keep it separate from
-native/non-sandboxed Pi configuration; those agents have different restrictions.
-Sharing the whole directory read-write across sandboxes, including credentials
-and sessions, is intentional. Do not read or print credentials to debug the mount.
-
-The user uses GitHub Copilot and authenticates through Pi's `/login` inside the
-sandbox. The kit intentionally removes upstream Anthropic credential injection:
-that integration can materialize `auth.json` at startup and overwrite entries
-for other providers. Do not restore it over the shared auth store.
-
-Never print or commit credentials. `.gitignore` excludes `pi-agent/auth.json`
-and `pi-agent/sessions`; review other generated/private files before staging.
-Do not reset shared state or change shared configuration outside the task.
-Avoid mixing macOS and Linux package installations into the same shared tree.
-
-## Settings profiles
-
-`pi-agent/settings.json` is an ignored, generated symlink to one tracked
-profile. `bin/pissbox` chooses the profile from the host name before every
-`sbx run`, so existing sandboxes pick up switches too. The host map lives at the
-top of `bin/pissbox` in `settings_profile_for_host`; `cm` and `di-7415` use
-`settings-go.json`, and unknown or unavailable host names fall back to
-`settings-co.json` (GitHub Copilot).
-
-Add a workstation by editing that map. Add a new profile by tracking another
-`pi-agent/settings-*.json` file. Do not track or edit `settings.json` directly.
-If a stale regular `settings.json` exists, the launcher moves it to an ignored
-`settings.json.replaced*` backup before creating the link. Pi writes through the
-link, so runtime changes such as `lastChangelogVersion` and model defaults land
-in the active tracked profile.
-
-## Shared tool state
-
-The shared state root defaults to this checkout's gitignored `.cache/`.
-Selection is `--pissbox-state-dir DIR` first, then `PISSBOX_STATE_DIR`, then the
-checkout default. Relative overrides use the caller's directory. The launcher
-creates and canonicalizes the root before mounting it. Keep this state Linux
-sandbox-only, separate from native/macOS caches and Pi configuration. The old
-`shared-state` and `sandbox-state` names may remain as ignored compatibility
-symlinks to `.cache` for existing sandbox paths. Do not remove them while those
-paths are in use; the launcher does not migrate existing sandboxes.
-
-Mappings live in `sbx-kit/files/home/.pissbox/shared-directories.conf` as literal
-`state-relative-path|home-relative-path` rows. Use relative paths without dot
-segments or shell expansion. The kit's `link-shared-directories.sh` creates
-sources on the mounted root and links default tool locations as user `1000`.
-It accepts matching links but refuses existing data or different links. No
-per-tool launcher code or Dockerfile changes are needed to add another mapping.
-The default mappings include the HF hub (not tokens), colgrep data/config/cache,
-ONNX Runtime, npm's package cache, and both pnpm's content-addressable store and
-metadata cache. Kit setup configures npm's user-level cache as `$HOME/.cache/npm`,
-linked to `npm` under the state root, without replacing the image's `$HOME/.npm`.
-Custom tool/XDG paths can bypass these links. This setup does
-not install tools or change network policy. New mappings/mounts require a new
-sandbox; attaching never updates them. Avoid concurrent colgrep index writers
-until upstream locking is verified. See `sbx-kit/SHARED-DIRECTORIES.md`.
-
-## Development and verification
-
-The launcher requires SBX v0.39.0 or newer: that release added `--env` and
-`--env-file` to `sbx run` and `sbx create`. If a host reports `unknown flag:
---env`, check `sbx version` and upgrade SBX; do not remove the variable needed
-by the config-link setup script. Official release binaries downloaded for
-local CLI checks belong in ignored `.tools/`, not in commits. CLI help can be
-checked without a daemon, but v0.48.0 requires Docker sign-in even for
-`sbx kit validate`; installing the CLI alone does not verify kit validity.
-
-Keep changes simple and reproducible. Read kit files before editing. Validate
-kit and launcher changes with `sbx kit validate ./sbx-kit`,
-`bash -n bin/pissbox sbx-kit/files/home/.pissbox/scripts/link-shared-directories.sh`,
-and `git diff --check`. Do not claim a real sandbox run,
-authentication, or restart persistence is verified without testing it.
-Run launcher regression tests with
-`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
-These cover symlink launches from another directory, caller-relative overrides,
-menu choices/defaults, deletion consent, EOF, argument forwarding, exit statuses,
-terminal stdin/stdout preservation, and host-to-settings-profile selection with
-a stub `hostname`. Shared-directory tests check real links,
-retained data across isolated homes, refusal to replace data, and adding a
-mapping without script edits. Generated fixtures remain under ignored
-`.cache/test-fixtures/`. Tests do not run real SBX or colgrep/pnpm.
-
-After a real sandbox is created, check the links from the host:
+Read affected kit files before editing. Run:
 
 ```bash
-sbx exec <sandbox-name> sh -c \
-  'readlink "$HOME/.pi/agent"; test -d "$HOME/.pi/agent"'
-readlink pi-agent/settings.json
+bash -n bin/pissbox bin/build-image sbx-kit/files/home/.pissbox/scripts/*.sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+git diff --check
+sbx kit validate ./sbx-kit
 ```
 
-Update this file as the repository evolves. Keep operational detail here rather
-than expanding the sandbox-shared `pi-agent/AGENTS.md`.
+The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
+removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
+validation; installing the CLI or reading help is not validation.
+
+Tests stub Docker/SBX and use isolated homes for link scripts. Fixtures stay
+under ignored `.cache/test-fixtures/`. They cover argument forwarding, symlink
+launches, menu/deletion/EOF behavior, terminal handling, settings profiles,
+shared links, and refusal to replace data. Do not claim a real image build,
+sandbox launch, authentication, or persistence check without running it.
+Keep operational details in repository docs, not `pi-agent/AGENTS.md`.

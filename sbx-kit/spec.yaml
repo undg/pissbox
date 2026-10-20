@@ -4,16 +4,7 @@ name: pi
 displayName: Pi
 description: Minimal terminal coding agent with extensible tools, skills, and TUI
 sandbox:
-  # Pre-baked image: pi at the latest upstream release, on the shell-docker
-  # template. Built and published by build-and-publish-kits.yml, the shared
-  # kit-image pipeline (see ../PUBLISHING.md) -- no bespoke workflow needed,
-  # same as openclaw/kiro/copilot. Creating a sandbox no longer waits on an
-  # npm install; the pipeline's nightly rebuild keeps pi current (rolling
-  # updates, no deliberate version bump -- see the Dockerfile).
-  # If you didn't build your image locally, the bellow one have only pi and it's official
-  # image: docker.io/sbx/pi-image:latest
-
-  # You should build your own image and store it locally.
+  # Build and import with bin/build-image; see README.image.md.
   image: pissbox:local
   entrypoint:
     - pi

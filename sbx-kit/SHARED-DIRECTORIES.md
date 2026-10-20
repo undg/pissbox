@@ -1,100 +1,59 @@
-# Shared sandbox directories
+# Shared Linux tool state
 
-The launcher mounts one host-owned, **sandbox-only Linux** state directory into
-all new sandboxes. The default is `.cache/` beside `pi-agent/` in this
-checkout. It is created on demand and ignored by Git. Removing a sandbox does
-not remove this mounted state.
+The launcher mounts a host-owned Linux state directory, defaulting to this
+checkout's gitignored `.cache/`. It survives sandbox removal. Override it with
+`--pissbox-state-dir DIR` or `PISSBOX_STATE_DIR`; the flag wins and relative
+paths use the caller's directory. Keep it separate from native/macOS caches
+and Pi configuration.
 
-The previous `shared-state` and `sandbox-state` names may remain as ignored
-compatibility symlinks to `.cache` in existing checkouts. Keep them while any
-sandbox still uses the old paths. The launcher does not migrate existing
-sandboxes.
+## Mappings
 
-Use `--pissbox-state-dir DIR` to choose another location, or set
-`PISSBOX_STATE_DIR`. Precedence is flag > environment > checkout default.
-Relative paths resolve from the caller's working directory. The launcher
-canonicalizes the path before passing it as a workspace and through
-`--env PISSBOX_STATE_DIR=...`.
-
-## Add or change a shared directory
-
-Edit `files/home/.pissbox/shared-directories.conf`. Each non-comment row is:
+Edit `files/home/.pissbox/shared-directories.conf` to add or change a mapping:
 
 ```text
-path-under-state-root|path-under-sandbox-home
-```
-
-Paths are literal, relative directory paths; no shell expansion, absolute
-paths, or `..` segments. Spaces are supported; `|` is the separator. For example:
-
-```text
+# state-relative-path|sandbox-home-relative-path
 another-tool/cache|.cache/another-tool
 ```
 
-No launcher, Dockerfile, or per-tool setup changes are needed. The kit copies
-this file and `scripts/link-shared-directories.sh` into `$HOME/.pissbox/`.
-`setup.install` runs the script as the agent user, creating the source directories
-on the mounted state tree and symlinks at the default Linux locations.
+Paths are literal and relative: no shell expansion, dot segments, or absolute
+paths. Spaces are supported. No launcher, Dockerfile, or per-tool script edits
+are needed. Kit setup creates source directories on the mounted root and links
+tool locations as user `1000`.
 
-| Shared-state directory | Sandbox home directory | Purpose |
+| State directory | Sandbox home location | Contents |
 | --- | --- | --- |
-| `huggingface/hub` | `.cache/huggingface/hub` | Downloaded model weights/tokenizers; not the HF token file |
-| `colgrep/data` | `.local/share/colgrep` | Indexes and data; current upstream also stores config here |
-| `colgrep/config` | `.config/colgrep` | Configuration for versions using this separate location |
-| `colgrep/cache` | `.cache/colgrep` | Colgrep runtime cache |
-| `onnxruntime` | `.cache/onnxruntime` | Downloaded Linux ONNX Runtime libraries |
-| `npm` | `.cache/npm` | npm package cache (configured by kit setup) |
-| `pnpm/store` | `.local/share/pnpm/store` | pnpm's content-addressable package store |
-| `pnpm/cache` | `.cache/pnpm` | pnpm metadata cache |
+| `huggingface/hub` | `.cache/huggingface/hub` | Models/tokenizers, not HF tokens |
+| `colgrep/data` | `.local/share/colgrep` | Indexes, data, current upstream config |
+| `colgrep/config` | `.config/colgrep` | Config for versions using this location |
+| `colgrep/cache` | `.cache/colgrep` | Runtime cache |
+| `onnxruntime` | `.cache/onnxruntime` | Linux runtime libraries |
+| `pnpm/store` | `.local/share/pnpm/store` | Content-addressable packages |
+| `pnpm/cache` | `.cache/pnpm` | Package metadata |
 
-pnpm's store and metadata cache are both shared; project `node_modules` stays
-in the project. Model files are shared across all projects, while colgrep keeps
-per-project indexes inside its shared data directory.
-
-npm uses `$HOME/.cache/npm`, linked to `.cache/npm` under the default host state
-root. Kit setup sets npm's user-level `cache` option after creating the links.
-The image's existing `$HOME/.npm` is left untouched; it is not migrated.
-The first runtime install warms the shared cache for later sandboxes. This can
-reduce repeated downloads, but does not eliminate installs or registry checks.
+Project `node_modules` stays in the project. Kit setup points npm at
+`$HOME/.cache/npm`, but that directory currently has **no shared mapping**;
+its cache does not persist across sandbox removal. See [known issues](../KNOWN_ISSUES.md).
+The image's `$HOME/.npm` is left untouched.
 
 ## Boundaries
 
-- This only persists directories. It does not install colgrep or pnpm, download
-  models in advance, or grant network access to download hosts.
-- The links use tools' default Linux locations except for npm, configured above.
-  Custom `HF_HOME`, `XDG_*`, npm `cache`/`NPM_CONFIG_CACHE`, or pnpm
-  `store-dir`/`cache-dir` settings may bypass them.
-- Do not point this at macOS/native caches. Runtime libraries and some generated
-  caches are platform-specific. Keep Linux sandbox state separate.
-- Setup accepts an existing matching symlink. It refuses to replace existing
-  files, directories (even empty ones), or different symlinks. Move existing
-  data deliberately; setup never deletes or silently migrates it.
-- An existing sandbox keeps its original mounts and copied kit files. Use a new
-  sandbox name to pick up changed definitions or a different state root. The
-  launcher's attach path does not add mounts or rerun this setup.
-- Sharing data does not make simultaneous colgrep writes to the same project's
-  index safe. Avoid concurrent index updates until upstream locking is verified.
-- State-root overrides should be dedicated directories. Git ignores this
-  checkout's default `.cache/` and the legacy `shared-state` and `sandbox-state`
-  paths;
-  manage ignore rules for other locations.
+- Setup accepts matching symlinks but refuses existing files, directories, or
+  different links. It never deletes or migrates existing data.
+- New mappings or a different state root require a new sandbox name. Attaching
+  does not change mounts or rerun setup. Keep any old state-path symlinks while
+  existing sandboxes still depend on them.
+- Custom `HF_HOME`, `XDG_*`, npm cache, or pnpm store/cache settings may bypass
+  these locations. Sharing directories does not install tools or grant network access.
+- Avoid simultaneous colgrep writes to the same project's index until upstream
+  locking is verified. Use dedicated state roots and manage ignore rules for
+  locations outside this checkout's `.cache/`.
 
-## Verification
+## Verify from the host
 
-Run the local regression suite:
-
-```console
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-```
-
-It checks launcher arguments using a stub SBX CLI, and runs the link script with
-isolated fixture homes/state directories. Generated fixtures are retained under
-ignored `.cache/test-fixtures/`. These tests do not launch real SBX or run
-colgrep/pnpm.
-
-After creating a real sandbox, check from the host:
-
-```console
+```bash
 sbx exec <sandbox-name> sh -c 'readlink "$HOME/.cache/huggingface/hub"; readlink "$HOME/.local/share/colgrep"; readlink "$HOME/.local/share/pnpm/store"'
 sbx exec <sandbox-name> pnpm store path
 ```
+
+The [regression suite](../AGENTS.md#verification) checks real links in isolated
+fixture homes; it does not run real SBX, colgrep, or pnpm.
