@@ -32,7 +32,7 @@
   "autocompleteMaxVisible": 20,
   "defaultProvider": "github-copilot",
   "defaultModel": "gpt-6.1-sol",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "medium",
   "enabledModels": [
     "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6.1-sol",

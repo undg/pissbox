@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# from: https://github.com/docker/sbx-kits-contrib/blob/main/pi/Dockerfile
+# Based on https://github.com/docker/sbx-kits-contrib/blob/main/pi/Dockerfile
 ARG BASE_IMAGE=docker/sandbox-templates:shell-docker
 FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
 
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fd-find ripgrep neovim && \
+    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
@@ -21,13 +21,24 @@ ADD --chmod=644 https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/${P
 # Install as agent so self-updates retain write access.
 USER agent
 RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
+	npm install -g pnpm && \
     npm install -g "@earendil-works/pi-coding-agent@${version}" && \
-    npm install -g pnpm && \
     pi --offline --version
 
-# Keep pi available in minimal-PATH execution contexts.
+ARG COLGREP_VERSION=1.8.5
+
+# Unmanaged installation avoids shell-profile edits and shared config data.
+RUN curl --proto '=https' --tlsv1.2 -LsSf \
+        "https://github.com/lightonai/next-plaid/releases/download/v${COLGREP_VERSION}/colgrep-installer.sh" \
+        -o "$HOME/colgrep-installer.sh" && \
+    COLGREP_UNMANAGED_INSTALL="$HOME/.local/bin" sh "$HOME/colgrep-installer.sh" && \
+    rm "$HOME/colgrep-installer.sh" && \
+    "$HOME/.local/bin/colgrep" --version
+
+# Keep tools available in minimal-PATH execution contexts.
 USER root
-RUN ln -sf "$(npm prefix -g)/bin/pi" /usr/local/bin/pi
+RUN ln -sf "$(npm prefix -g)/bin/pi" /usr/local/bin/pi && \
+    ln -sf /home/agent/.local/bin/colgrep /usr/local/bin/colgrep
 
 LABEL com.docker.sandboxes.start-docker="true"
 LABEL com.docker.sandboxes.flavor="pi"
