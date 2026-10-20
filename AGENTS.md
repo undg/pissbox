@@ -91,11 +91,14 @@ Pi directory, and the shared state directory. It also passes
 discovery or exec bootstrap is needed. The kit links `$HOME/.pi/agent` at creation and refuses
 to replace existing data or a different symlink. Run `bin/pissbox --help`
 for usage. On SBX's existing-sandbox/workspace conflict, the launcher uses the
-name reported by SBX and asks `Get into it? [Y/n]`. Accepting runs
-`sbx run --name NAME` without new mounts. Declining offers deletion with
-`Do you want to delete it? [y/N]`, after warning about sandbox-local data loss.
-Only an explicit yes runs `sbx rm --force NAME`; deletion exits without recreating.
-Invalid answers retry, and EOF aborts without attaching or deleting. Other SBX
+name reported by SBX and offers `Choose [P/s/d/q]:`. Enter or `p` opens Pi with
+`sbx run --name NAME` without new mounts; `s` opens an interactive Bash shell with
+`sbx exec -it NAME bash`; `q` exits without changes. Menu letters are case-insensitive.
+Choosing `d` warns about sandbox-local data loss and separately asks
+`Do you want to delete it? [y/N]`. Only an explicit yes runs
+`sbx rm --force NAME`; deletion exits without recreating, and declining exits
+without changes. Invalid answers retry, and EOF aborts without opening Pi,
+opening a shell, or deleting. Other SBX
 errors retain their output and exit status. Do not silently recreate or remove
 an existing sandbox.
 
@@ -189,7 +192,7 @@ authentication, or restart persistence is verified without testing it.
 Run launcher regression tests with
 `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v`.
 These cover symlink launches from another directory, caller-relative overrides,
-confirmation defaults, deletion consent, EOF, argument forwarding, exit statuses,
+menu choices/defaults, deletion consent, EOF, argument forwarding, exit statuses,
 terminal stdin/stdout preservation, and host-to-settings-profile selection with
 a stub `hostname`. Shared-directory tests check real links,
 retained data across isolated homes, refusal to replace data, and adding a

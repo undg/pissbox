@@ -45,10 +45,19 @@ workspaces, the launcher asks:
 
 ```text
 Sandbox 'pi-project' already exists.
-Get into it? [Y/n]
+
+  p) Open Pi [default]
+  s) Open shell
+  d) Delete sandbox
+  q) Quit
+
+Choose [P/s/d/q]:
 ```
 
-Enter attaches using the sandbox's existing mounts. Answering no offers:
+Enter or `p` opens Pi using the sandbox's existing mounts (`sbx run --name NAME`).
+`s` opens an interactive Bash shell without starting Pi
+(`sbx exec -it NAME bash`). `q` exits without changes. Letters are case-insensitive.
+Choosing `d` asks for a separate confirmation:
 
 ```text
 Deletion loses sandbox-local data. Mounted host files remain.
@@ -56,8 +65,9 @@ Do you want to delete it? [y/N]
 ```
 
 Deletion requires an explicit yes and exits without recreating the sandbox.
-Enter leaves it untouched. Run the launcher again to create a fresh sandbox.
-Invalid answers repeat the question; EOF aborts without attaching or deleting.
+Enter at the deletion confirmation leaves it untouched. Run the launcher again
+to create a fresh sandbox. Invalid answers repeat the prompt; EOF aborts without
+opening Pi, opening a shell, or deleting.
 
 For the upstream kit directly:
 

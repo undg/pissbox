@@ -7,14 +7,16 @@ import sys
 args = sys.argv[1:]
 print("sbx:" + json.dumps(args), flush=True)
 
-if args[:2] == ["run", "--name"]:
-    sys.exit(int(os.environ.get("TEST_SBX_ATTACH_STATUS", "0")))
-if args[:1] == ["rm"]:
-    sys.exit(int(os.environ.get("TEST_SBX_REMOVE_STATUS", "0")))
-
 if os.environ.get("TEST_SBX_REQUIRE_TTY") == "1":
     assert sys.stdin.isatty(), "stdin is no longer a terminal"
     assert sys.stdout.isatty(), "stdout is no longer a terminal"
+
+if args[:2] == ["run", "--name"]:
+    sys.exit(int(os.environ.get("TEST_SBX_ATTACH_STATUS", "0")))
+if args[:1] == ["exec"]:
+    sys.exit(int(os.environ.get("TEST_SBX_EXEC_STATUS", "0")))
+if args[:1] == ["rm"]:
+    sys.exit(int(os.environ.get("TEST_SBX_REMOVE_STATUS", "0")))
 
 mode = os.environ.get("TEST_SBX_MODE", "success")
 if mode == "conflict":
