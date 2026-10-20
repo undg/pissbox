@@ -52,19 +52,27 @@ class SharedDirectoriesTests(unittest.TestCase):
             (self.home / ".local/share/pnpm/store").resolve(),
             self.state / "pnpm/store",
         )
+        self.assertEqual(
+            (self.home / ".cache/npm").resolve(),
+            self.state / "npm",
+        )
         # Share model files, not the Hugging Face token file.
         self.assertFalse((self.home / ".cache/huggingface").is_symlink())
 
     def test_data_survives_repeated_setup_and_another_sandbox(self):
         result = self.setup_links()
         self.assertEqual(result.returncode, 0, result.stderr)
-        cache = self.home / ".cache/pnpm" / "cached-package"
-        cache.write_text("retained")
+        for tool in ("npm", "pnpm"):
+            cache = self.home / ".cache" / tool / "cached-package"
+            cache.write_text("retained")
         for home in (self.home, self.directory / "another home"):
             home.mkdir(exist_ok=True)
             result = self.setup_links(home=home)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((home / ".cache/pnpm/cached-package").read_text(), "retained")
+            for tool in ("npm", "pnpm"):
+                self.assertEqual(
+                    (home / ".cache" / tool / "cached-package").read_text(), "retained",
+                )
 
     def test_refuses_existing_directory_file_or_different_symlink(self):
         for kind in ("directory", "file", "symlink", "dangling symlink"):
@@ -91,6 +99,17 @@ class SharedDirectoriesTests(unittest.TestCase):
                     self.assertEqual(target.read_text(), "retained")
                 else:
                     self.assertEqual(target.readlink(), other)
+
+    def test_npm_cache_does_not_replace_image_cache(self):
+        image_cache = self.home / ".npm"
+        image_cache.mkdir()
+        cached_package = image_cache / "image-package"
+        cached_package.write_text("retained")
+        result = self.setup_links()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(image_cache.is_symlink())
+        self.assertEqual(cached_package.read_text(), "retained")
+        self.assertEqual((self.home / ".cache/npm").resolve(), self.state / "npm")
 
     def test_requires_absolute_existing_mount(self):
         for state in ("", "relative", self.directory / "missing"):

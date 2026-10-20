@@ -24,6 +24,12 @@ class KitLayoutTests(unittest.TestCase):
             "SBX ignores static files outside files/home/ and files/workspace/",
         )
 
+    def test_npm_uses_shared_cache_after_links_are_created(self):
+        spec = SPEC.read_text()
+        cache_command = 'npm config set cache "$HOME/.cache/npm" --location=user'
+        self.assertIn(cache_command, spec)
+        self.assertLess(spec.index("link-shared-directories.sh"), spec.index(cache_command))
+
     def test_colgrep_is_marked_executable_on_path(self):
         spec = SPEC.read_text()
         self.assertIn("$HOME/.local/bin/colgrep", spec)

@@ -168,8 +168,10 @@ sources on the mounted root and links default tool locations as user `1000`.
 It accepts matching links but refuses existing data or different links. No
 per-tool launcher code or Dockerfile changes are needed to add another mapping.
 The default mappings include the HF hub (not tokens), colgrep data/config/cache,
-ONNX Runtime, and both pnpm's content-addressable store and metadata cache.
-Custom tool/XDG paths can bypass these default-location links. This setup does
+ONNX Runtime, npm's package cache, and both pnpm's content-addressable store and
+metadata cache. Kit setup configures npm's user-level cache as `$HOME/.cache/npm`,
+linked to `npm` under the state root, without replacing the image's `$HOME/.npm`.
+Custom tool/XDG paths can bypass these links. This setup does
 not install tools or change network policy. New mappings/mounts require a new
 sandbox; attaching never updates them. Avoid concurrent colgrep index writers
 until upstream locking is verified. See `sbx-kit/SHARED-DIRECTORIES.md`.

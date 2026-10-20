@@ -138,7 +138,9 @@ runtime downloads still need their hosts allowed by the sandbox network policy.
 
 `bin/pissbox` mounts a gitignored `.cache/` directory beside `pi-agent/`.
 Hugging Face models, colgrep data/runtime caches, ONNX Runtime downloads, and
-pnpm's package store and metadata cache persist there across sandbox removal.
+npm's package cache and pnpm's package store and metadata cache persist there
+across sandbox removal. Kit setup points npm at `$HOME/.cache/npm`, backed by
+`.cache/npm` on the host by default; existing image cache data is left untouched.
 Keep this Linux state separate from native/macOS caches.
 
 Override the location with `--pissbox-state-dir DIR` or `PISSBOX_STATE_DIR`;

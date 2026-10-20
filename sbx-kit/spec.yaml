@@ -28,9 +28,9 @@ permissions:
       - huggingface.co
 setup:
   install:
-    - command: 'if [ -f "$HOME/.local/bin/colgrep" ]; then chmod 0755 "$HOME/.local/bin/colgrep"; else echo "colgrep not bundled; run bin/update-colgrep on the host" >&2; fi'
-      user: "1000"
-      description: Make bundled colgrep executable on PATH
+    # - command: 'if [ -f "$HOME/.local/bin/colgrep" ]; then chmod 0755 "$HOME/.local/bin/colgrep"; else echo "colgrep not bundled; run bin/update-colgrep on the host" >&2; fi'
+    #   user: "1000"
+    #   description: Make bundled colgrep executable on PATH
     - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
       user: "1000"
       description: Set npm proxy options from HTTP_PROXY and HTTPS_PROXY
@@ -40,3 +40,6 @@ setup:
     - command: 'bash "$HOME/.pissbox/scripts/link-shared-directories.sh"'
       user: "1000"
       description: Link shared Linux model, index, and package caches
+    - command: 'npm config set cache "$HOME/.cache/npm" --location=user'
+      user: "1000"
+      description: Use the shared npm cache without replacing image cache data

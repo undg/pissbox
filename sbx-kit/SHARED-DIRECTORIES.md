@@ -43,6 +43,7 @@ on the mounted state tree and symlinks at the default Linux locations.
 | `colgrep/config` | `.config/colgrep` | Configuration for versions using this separate location |
 | `colgrep/cache` | `.cache/colgrep` | Colgrep runtime cache |
 | `onnxruntime` | `.cache/onnxruntime` | Downloaded Linux ONNX Runtime libraries |
+| `npm` | `.cache/npm` | npm package cache (configured by kit setup) |
 | `pnpm/store` | `.local/share/pnpm/store` | pnpm's content-addressable package store |
 | `pnpm/cache` | `.cache/pnpm` | pnpm metadata cache |
 
@@ -50,12 +51,19 @@ pnpm's store and metadata cache are both shared; project `node_modules` stays
 in the project. Model files are shared across all projects, while colgrep keeps
 per-project indexes inside its shared data directory.
 
+npm uses `$HOME/.cache/npm`, linked to `.cache/npm` under the default host state
+root. Kit setup sets npm's user-level `cache` option after creating the links.
+The image's existing `$HOME/.npm` is left untouched; it is not migrated.
+The first runtime install warms the shared cache for later sandboxes. This can
+reduce repeated downloads, but does not eliminate installs or registry checks.
+
 ## Boundaries
 
 - This only persists directories. It does not install colgrep or pnpm, download
   models in advance, or grant network access to download hosts.
-- The links use tools' default Linux locations. Custom `HF_HOME`, `XDG_*`, or
-  pnpm `store-dir`/`cache-dir` settings may bypass them.
+- The links use tools' default Linux locations except for npm, configured above.
+  Custom `HF_HOME`, `XDG_*`, npm `cache`/`NPM_CONFIG_CACHE`, or pnpm
+  `store-dir`/`cache-dir` settings may bypass them.
 - Do not point this at macOS/native caches. Runtime libraries and some generated
   caches are platform-specific. Keep Linux sandbox state separate.
 - Setup accepts an existing matching symlink. It refuses to replace existing
