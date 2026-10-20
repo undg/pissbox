@@ -24,6 +24,23 @@ Existing sandboxes are not updated or removed.
 EOF
 }
 
+require_buildkit() {
+	if docker buildx version >/dev/null 2>&1; then
+		return
+	fi
+	echo "Error: the docker buildx plugin is missing; the Dockerfile requires BuildKit." >&2
+	echo "Docs: https://docs.docker.com/go/buildx/" >&2
+	if [[ $(uname -s) == Darwin ]]; then
+		echo "macOS: Docker Desktop ships buildx, Colima and Homebrew do not. Every step here is a survival test." >&2
+		echo "  brew install docker-buildx" >&2
+		echo "  ln -sfn \"\$(brew --prefix)/lib/docker/cli-plugins/docker-buildx\" ~/.docker/cli-plugins/docker-buildx" >&2
+	else
+		echo "Install it with your package manager and rerun, for example:" >&2
+		echo "sudo pacman -S docker-buildx  # Arch Linux" >&2
+	fi
+	exit 1
+}
+
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	-h | --help)
@@ -68,6 +85,8 @@ for TOOL in docker sbx; do
 		exit 1
 	fi
 done
+
+require_buildkit
 
 docker build -t "$IMAGE" "${CA_ARGS[@]}" "$@" "$ROOT_DIR/sbx-kit"
 mkdir -p "$(dirname "$ARCHIVE")"

@@ -40,13 +40,16 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
             tool = self.bin / name
             tool.write_text(stub)
             tool.chmod(0o755)
+        uname = self.bin / "uname"
+        uname.write_text('#!/bin/sh\necho "${BUILD_TEST_UNAME:-Linux}"\n')
+        uname.chmod(0o755)
 
-    def launch(self, *args, script=None, fail=""):
+    def launch(self, *args, script=None, fail="", env=None):
         result = subprocess.run(
             [str(script or self.script), *args], cwd=self.directory, text=True,
             capture_output=True, timeout=5,
             env={**os.environ, "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
-                 "BUILD_TEST_LOG": str(self.log), "BUILD_TEST_FAIL": fail},
+                 "BUILD_TEST_LOG": str(self.log), "BUILD_TEST_FAIL": fail, **(env or {})},
         )
         calls = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         return result, calls
@@ -54,6 +57,7 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
     def expected_calls(self, *build_args):
         archive = str(self.root / ".cache/images/pissbox-local.tar")
         return [
+            ["docker", "buildx", "version"],
             ["docker", "build", "-t", "pissbox:local", *build_args, str(self.root / "sbx-kit")],
             ["docker", "image", "save", "pissbox:local", "-o", archive],
             ["sbx", "template", "load", archive],
@@ -114,6 +118,23 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
                 self.assertIn("Usage:", result.stdout)
                 self.assertEqual(calls, [])
 
+    def test_missing_buildx_fails_before_building(self):
+        cases = (
+            ("Darwin", "brew install docker-buildx", "pacman"),
+            ("Linux", "pacman -S docker-buildx", "brew install"),
+        )
+        for system, hint, absent in cases:
+            with self.subTest(system=system):
+                self.log.write_text("")
+                result, calls = self.launch(
+                    fail="docker buildx", env={"BUILD_TEST_UNAME": system})
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("docker buildx plugin is missing", result.stderr)
+                self.assertIn("https://docs.docker.com/go/buildx/", result.stderr)
+                self.assertIn(hint, result.stderr)
+                self.assertNotIn(absent, result.stderr)
+                self.assertEqual(calls, [["docker", "buildx", "version"]])
+
     def test_unexpected_arguments_never_run_tools(self):
         for arg in ("--unknown", "workspace"):
             with self.subTest(arg=arg):
@@ -123,7 +144,7 @@ if os.environ.get("BUILD_TEST_FAIL") == name + " " + sys.argv[1]:
                 self.assertEqual(calls, [])
 
     def test_failures_stop_the_pipeline_and_preserve_exit_status(self):
-        for step, count in (("docker build", 1), ("docker image", 2), ("sbx template", 3)):
+        for step, count in (("docker build", 2), ("docker image", 3), ("sbx template", 4)):
             with self.subTest(step=step):
                 self.log.write_text("")
                 result, calls = self.launch(fail=step)
