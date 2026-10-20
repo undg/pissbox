@@ -13,6 +13,7 @@ sandbox:
   image: docker.io/sbx/pi-image:latest
   entrypoint:
     - pi
+    - --offline
 agentInstructions:
   filename: AGENTS.md
 permissions:
