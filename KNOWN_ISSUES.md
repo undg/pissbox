@@ -26,8 +26,38 @@
       `shared-directories.conf` lacks `npm|.cache/npm`. Three shared-directory
       regression tests fail; the cache is not shared across sandbox removal.
 
-## Host terminal / Herd
+## Host ↔ pissbox bridge / Herd
+
+Agent discovery, review feedback, session visibility, and completion notifications
+are related parts of the host/sandbox bridge gap. The transport and exact failure
+mechanisms remain unresolved.
 
 - [ ] Herd's sidebar does not detect sandbox agents; bridge mechanism unknown.
+- [ ] **Finished-job notifications:** the user reports missing host notifications
+      when sandbox Pi finishes a job. The bridge needs to expose completion to
+      the host and associate it with the correct workspace/session. Notification
+      transport and completion-event detection have not been investigated.
+- [ ] **herdr-reviewr → sandbox Pi comments:**
+      [herdr-reviewr](https://github.com/persiyanov/herdr-reviewr) collects
+      line/range comments and sends them together to the workspace agent's input.
+      The user reports this host-to-pissbox workflow is blocked. Shared source
+      files alone do not make sandbox Pi a registered host Herd agent; bridge
+      discovery and delivery to the correct sandbox session need investigation.
+      This is local review feedback, not GitHub PR comment posting.
+- [ ] **herdr-nvim → sandbox Pi annotations and references:**
+      [herdr-nvim](https://github.com/ChmaraX/herdr-nvim) can paste annotated
+      file/line selections, submit them, or insert inline references into an
+      agent's input. The user reports the same host/sandbox integration gap.
+      Bridge work must preserve target-session selection, file/range context,
+      and the distinction between paste-only and auto-submit. Host-side editing
+      through live mounts does not establish an agent messaging channel.
+- [ ] **Host review tools need sandbox session/turn visibility:** reviewr's
+      last-turn scope depends on agent turn tracking; herdr-nvim's recent-file
+      picker reads agent session logs, with pane-output scraping as a fallback.
+      Investigate whether these work for sandbox Pi alongside agent discovery
+      and comment delivery. Upstream READMEs establish these dependencies; these
+      additional symptoms and the exact failure mechanism have not been tested.
+## Host terminal
+
 - [x] **Selection-mode scrolling and copy/paste:** caused by full-screen mode,
       not the sandbox. Fix: set `"tuiMode": "regular"` in Pi settings.
