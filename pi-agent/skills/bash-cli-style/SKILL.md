@@ -36,7 +36,9 @@ handling in the final execution section—not coupling behavior to argument orde
 - Use `#!/usr/bin/env bash`, a blank line, then `set -euo pipefail` for new standalone Bash scripts. Handle optional values and expected failures explicitly.
 - Use tabs for indentation and ordinary `function_name() { ...; }` function declarations.
 - Use uppercase script-level variables, such as `SCRIPT_DIR`, `CONFIG_DIR`, and `WORKSPACES`. Use lowercase `local` variables inside functions.
-- Put help and other function definitions first, then defaults, argument parsing, validation, and execution.
+- Prefer this order: configuration defaults; help and any parser helpers; argument parsing; operational helper functions; validation and derived configuration; execution.
+- Define functions before their first call: Bash does not hoist function definitions. Keep parser helpers above the argument loop and operational helpers together below it.
+- Keep literal configuration defaults near the top. Derive values that require parsed options, filesystem checks, or external commands after parsing, so `--help` does not depend on the runtime environment.
 - Give distinct operations small, named functions. A short wrapper does not need a function around its single final command.
 - Keep execution flow visible. Avoid generic parsing frameworks, unnecessary abstractions, and clever one-liners.
 - Keep comments short. Explain a surprising decision or constraint, not what every command does. No historical essays or speculative infrastructure claims.

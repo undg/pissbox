@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+BUILD_AMD64=0
+BUILD_ARM64=0
+REGISTER=0
+REGISTER_ARCH=""
+HOST_ARCH=""
+BUILD_ARGS=()
+
 show_help() {
 	cat <<EOF
 Usage: ${0##*/} [--amd64 | --arm64] [--register [amd64|arm64]] [-- DOCKER_BUILD_OPTION ...]
@@ -20,7 +27,7 @@ Options:
 Without --amd64, --arm64, or --register, this detects the host architecture,
 builds it, and registers it. Custom images still need a new sandbox.
 Building the other architecture registers binfmt handlers with
-`tonistiigi/binfmt` and runs under emulation, so it needs network and is slow.
+\`tonistiigi/binfmt\` and runs under emulation, so it needs network and is slow.
 
 Example:
   ${0##*/} -- --build-arg PI_VERSION=latest --no-cache
@@ -33,6 +40,45 @@ Saves .cache/images/pissbox-local-<arch>.tar and repoints the
 Existing sandboxes are not updated or removed.
 EOF
 }
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	--amd64)
+		BUILD_AMD64=1
+		;;
+	--arm64)
+		BUILD_ARM64=1
+		;;
+	--register)
+		REGISTER=1
+		case ${2:-} in
+		amd64 | arm64)
+			REGISTER_ARCH=$2
+			shift
+			;;
+		"" | -*) ;;
+		*)
+			echo "Unknown architecture for --register: $2. Use amd64 or arm64." >&2
+			exit 1
+			;;
+		esac
+		;;
+	--)
+		shift
+		BUILD_ARGS=("$@")
+		break
+		;;
+	*)
+		echo "Unexpected argument: $1. Use --help for usage." >&2
+		exit 1
+		;;
+	esac
+	shift
+done
 
 require_buildkit() {
 	if docker buildx version >/dev/null 2>&1; then
@@ -111,52 +157,6 @@ register_arch() {
 	link_archive "$archive"
 	sbx template load "$archive"
 }
-
-BUILD_AMD64=0
-BUILD_ARM64=0
-REGISTER=0
-REGISTER_ARCH=""
-HOST_ARCH=""
-BUILD_ARGS=()
-
-while [[ $# -gt 0 ]]; do
-	case $1 in
-	-h | --help)
-		show_help
-		exit 0
-		;;
-	--amd64)
-		BUILD_AMD64=1
-		;;
-	--arm64)
-		BUILD_ARM64=1
-		;;
-	--register)
-		REGISTER=1
-		case ${2:-} in
-		amd64 | arm64)
-			REGISTER_ARCH=$2
-			shift
-			;;
-		"" | -*) ;;
-		*)
-			echo "Unknown architecture for --register: $2. Use amd64 or arm64." >&2
-			exit 1
-			;;
-		esac
-		;;
-	--)
-		shift
-		BUILD_ARGS=("$@")
-		break
-		;;
-	*)
-		echo "Unexpected argument: $1. Use --help for usage." >&2
-		exit 1
-		;;
-	esac
-	shift
-done
 
 # Follow symlinks without readlink -f for macOS compatibility.
 SCRIPT_PATH=${BASH_SOURCE[0]}
