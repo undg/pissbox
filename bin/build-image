@@ -93,8 +93,9 @@ build_arch() {
 	local arch=$1
 	local archive="$ARCHIVE_DIR/pissbox-local-$arch.tar"
 	echo "Building $IMAGE for linux/$arch" >&2
+	# Bash 3.2 treats empty arrays as unset under nounset; expand only when populated.
 	docker buildx build --platform "linux/$arch" --load -t "$IMAGE" \
-		"${CA_ARGS[@]}" "${BUILD_ARGS[@]}" "$ROOT_DIR/sbx-kit"
+		${CA_ARGS[@]+"${CA_ARGS[@]}"} ${BUILD_ARGS[@]+"${BUILD_ARGS[@]}"} "$ROOT_DIR/sbx-kit"
 	docker image save "$IMAGE" -o "$archive"
 	link_archive "$archive"
 }
@@ -206,7 +207,7 @@ if [[ ${#BUILD_ARCHES[@]} -eq 0 && $REGISTER -eq 0 ]]; then
 	exit
 fi
 
-for ARCH in "${BUILD_ARCHES[@]}"; do
+for ARCH in ${BUILD_ARCHES[@]+"${BUILD_ARCHES[@]}"}; do
 	detect_arch
 	ensure_emulation "$ARCH"
 	build_arch "$ARCH"

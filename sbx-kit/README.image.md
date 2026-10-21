@@ -7,7 +7,8 @@ as `agent`; Pi's global npm installation stays writable for self-updates.
 
 ## Build and import
 
-On the **host**, with Docker running and `docker`/`sbx` on PATH:
+On the **host**, with Docker running and `docker`/`sbx` on PATH.
+The wrapper supports macOS's bundled Bash 3.2 and newer Bash on Linux:
 
 ```bash
 bin/build-image

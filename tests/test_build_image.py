@@ -95,8 +95,8 @@ if name == "docker" and sys.argv[1:3] == ["image", "save"]:
     def test_default_run_follows_an_arm_daemon(self):
         result, calls = self.launch(arch="aarch64")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls[-1], ["sbx", "template", "load",
-                                     str(self.archive("arm64"))])
+        self.assertEqual(calls, [["docker", "buildx", "version"], *self.detected_calls(),
+                                 *self.build_calls("arm64"), *self.register_calls("arm64")])
         self.assertEqual(os.readlink(self.link), "pissbox-local-arm64.tar")
 
     def test_explicit_architecture_builds_without_registering(self):
@@ -226,6 +226,24 @@ if name == "docker" and sys.argv[1:3] == ["image", "save"]:
                                  *self.build_calls("amd64", "--no-cache"),
                                  *self.register_calls("amd64")])
         self.assertNotIn("Info:", result.stderr)
+
+    def test_optional_ca_and_build_options_preserve_empty_and_spaced_arguments(self):
+        ca = self.root / "sbx-kit/ca.crt"
+        for with_ca in (False, True):
+            for args in ((), ("--",), ("--", "--label", "description=two words", "")):
+                with self.subTest(with_ca=with_ca, args=args):
+                    self.log.unlink(missing_ok=True)
+                    if with_ca:
+                        ca.write_text("public CA fixture; Docker is stubbed\n")
+                    else:
+                        ca.unlink(missing_ok=True)
+                    result, calls = self.launch(*args, arch="aarch64")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls, [
+                        ["docker", "buildx", "version"], *self.detected_calls(),
+                        *self.build_calls("arm64", *args[1:]),
+                        *self.register_calls("arm64"),
+                    ])
 
     def test_optional_ca_through_symlink(self):
         ca = self.root / "sbx-kit/ca.crt"
