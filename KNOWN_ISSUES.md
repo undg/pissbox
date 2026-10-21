@@ -2,7 +2,7 @@
 
 ## Bundling / packaging
 
-- [ ] **AMD64 / Apple Silicon image distribution:** `bin/build-image` now builds
+- [x] **AMD64 / Apple Silicon image distribution:** `bin/build-image` now builds
       and registers the host architecture (`--amd64` / `--arm64` / `--register`)
       and keeps one archive per architecture. Still open: one host emitting both
       architectures (Buildx cross-build or emulated build), verifying image and
@@ -14,6 +14,7 @@
       Package the image, launcher, kit, and configuration for other machines
       requiring only Docker/SBX, without relying on Pi's npm/Git caches.
       Exclude credentials and sessions; implementation deferred.
+
 ## General
 
 - [ ] **Model catalog refresh — very low priority:** `pi update --models`
