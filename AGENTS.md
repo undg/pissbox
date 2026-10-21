@@ -79,6 +79,9 @@ or directory name. User guides start at [README.md](README.md).
   upstream Anthropic credential injection: it can overwrite the shared auth
   store at startup. Never print/commit credentials or reset shared state outside
   the task; review generated/private files before staging.
+- If suspicious untracked or unstaged files could expose credentials, sessions,
+  or other private data, alert the user before staging. Report paths, never
+  secret contents. Do not delete files or change ignore rules without asking.
 - `pi-agent/settings.json` is an ignored generated link. The host-name map in
   `settings_profile_for_host` selects `settings-go.json` for `cm`/`di-7415`,
   otherwise `settings-co.json`, before every launch. Add hosts there and track

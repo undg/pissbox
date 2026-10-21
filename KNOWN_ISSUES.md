@@ -15,6 +15,15 @@
       requiring only Docker/SBX, without relying on Pi's npm/Git caches.
       Exclude credentials and sessions; implementation deferred.
 
+## Shared-state security
+
+- [ ] **Read-only and disposable state:** Sandboxes currently share writable Pi
+      configuration, credentials, sessions, and tool state. Separate state that
+      should be read-only to pissbox from writable data, and make regenerable
+      caches and npm/Git tool state easy to erase and recreate frequently.
+      Do not treat credentials, sessions, or all of `.cache/` as disposable.
+      Design and implementation deferred; no cleanup is authorized by this item.
+
 ## General
 
 - [ ] **Model catalog refresh — very low priority:** `pi update --models`
