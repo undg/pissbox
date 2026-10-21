@@ -360,6 +360,43 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("[P/s/d/q]", result.stdout)
                 self.assertEqual(calls, [])
 
+    def test_help_only_needs_cat_not_runtime_commands(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        commands = Path(tempfile.mkdtemp(prefix="help-path-", dir=fixtures))
+        (commands / "cat").symlink_to(shutil.which("cat"))
+        for args in (("-h",), ("workspace", "--help")):
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    [shutil.which("bash"), str(LAUNCHER), *args],
+                    cwd=ROOT,
+                    env=self.environment(PATH=str(commands)),
+                    text=True,
+                    capture_output=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Usage:", result.stdout)
+                self.assertEqual(result.stderr, "")
+
+    def test_empty_directory_options_fail_before_changing_settings(self):
+        for option in ("--pissbox-pi-dir", "--pissbox-state-dir"):
+            with self.subTest(option=option):
+                pi = self.pi_directory()
+                result, calls = self.launch(
+                    f"{option}=", PISSBOX_PI_DIR=str(pi),
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"{option} requires a directory", result.stderr)
+                self.assertFalse((pi / "settings.json").is_symlink())
+                self.assertEqual(calls, [])
+
+    def test_empty_environment_directories_use_checkout_defaults(self):
+        result, calls = self.launch(PISSBOX_PI_DIR="", PISSBOX_STATE_DIR="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"PISSBOX_PI_DIR={PI_DIR}", calls[0])
+        self.assertIn(f"PISSBOX_STATE_DIR={STATE_DIR}", calls[0])
+
     def test_workspace_and_option_forwarding(self):
         pi = self.pi_directory()
         result, calls = self.launch(

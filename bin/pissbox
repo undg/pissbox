@@ -2,11 +2,114 @@
 
 set -euo pipefail
 
-# --- Settings selection -----------------------------------------------------
-# One tracked settings profile is active per host. Update this map when adding
-# a workstation. Unknown hosts, or hosts without a usable name, use the fallback.
+# --- Defaults ---------------------------------------------------------------
 SETTINGS_FALLBACK_PROFILE=settings-co.json
+PISSBOX_PI_DIR=${PISSBOX_PI_DIR:-}
+PISSBOX_STATE_DIR=${PISSBOX_STATE_DIR:-}
+SANDBOX_NAME=""
+WORKSPACES=()
 
+# --- Help -------------------------------------------------------------------
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
+
+Start Pi in an SBX sandbox with sandbox-only configuration.
+
+Options:
+  --name NAME          Pass an explicit sandbox name to SBX
+  --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
+  --pissbox-state-dir DIR
+                       Override PISSBOX_STATE_DIR (default: this checkout's .cache/)
+  -h, --help           Show this help
+  --                   Treat remaining arguments as workspaces
+
+With no workspaces, use the current directory.
+The first workspace is primary; additional ones are mounted read-write.
+Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
+Directory flags override environment variables; relative paths use the caller's directory.
+Settings profile follows the host name; unknown hosts use settings-co.json.
+SBX chooses the sandbox name unless --name is provided.
+If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
+Deletion requires a separate confirmation [y/N].
+Deletion removes sandbox-local data and exits; mounted host files remain.
+EOF
+}
+
+# --- Argument parsing -------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	--name)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "--name requires a sandbox name" >&2
+			exit 1
+		fi
+		SANDBOX_NAME=$2
+		shift 2
+		;;
+	--name=*)
+		SANDBOX_NAME=${1#*=}
+		if [[ -z $SANDBOX_NAME ]]; then
+			echo "--name requires a sandbox name" >&2
+			exit 1
+		fi
+		shift
+		;;
+	--pissbox-pi-dir)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "--pissbox-pi-dir requires a directory" >&2
+			exit 1
+		fi
+		PISSBOX_PI_DIR=$2
+		shift 2
+		;;
+	--pissbox-pi-dir=*)
+		PISSBOX_PI_DIR=${1#*=}
+		if [[ -z $PISSBOX_PI_DIR ]]; then
+			echo "--pissbox-pi-dir requires a directory" >&2
+			exit 1
+		fi
+		shift
+		;;
+	--pissbox-state-dir)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "--pissbox-state-dir requires a directory" >&2
+			exit 1
+		fi
+		PISSBOX_STATE_DIR=$2
+		shift 2
+		;;
+	--pissbox-state-dir=*)
+		PISSBOX_STATE_DIR=${1#*=}
+		if [[ -z $PISSBOX_STATE_DIR ]]; then
+			echo "--pissbox-state-dir requires a directory" >&2
+			exit 1
+		fi
+		shift
+		;;
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	--)
+		shift
+		WORKSPACES+=("$@")
+		break
+		;;
+	-*)
+		echo "Unknown option: $1" >&2
+		echo "Use --help for usage information" >&2
+		exit 1
+		;;
+	*)
+		WORKSPACES+=("$1")
+		shift
+		;;
+	esac
+done
+
+# --- Settings selection -----------------------------------------------------
+# Unknown hosts, or hosts without a usable name, use the fallback.
 settings_profile_for_host() {
 	case ${1:-} in
 	cm | di-7415) printf '%s\n' settings-go.json ;;
@@ -50,33 +153,6 @@ link_settings_profile() {
 	fi
 }
 
-# --- Help -------------------------------------------------------------------
-show_help() {
-	cat <<EOF
-Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
-
-Start Pi in an SBX sandbox with sandbox-only configuration.
-
-Options:
-  --name NAME          Pass an explicit sandbox name to SBX
-  --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
-  --pissbox-state-dir DIR
-                       Override PISSBOX_STATE_DIR (default: this checkout's .cache/)
-  -h, --help           Show this help
-  --                   Treat remaining arguments as workspaces
-
-With no workspaces, use the current directory.
-The first workspace is primary; additional ones are mounted read-write.
-Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
-Directory flags override environment variables; relative paths use the caller's directory.
-Settings profile follows the host name; unknown hosts use settings-co.json.
-SBX chooses the sandbox name unless --name is provided.
-If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
-Deletion requires a separate confirmation [y/N].
-Deletion removes sandbox-local data and exits; mounted host files remain.
-EOF
-}
-
 # --- Terminal confirmation --------------------------------------------------
 confirm() {
 	local answer
@@ -108,73 +184,6 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
 PISSBOX_STATE_DIR="${PISSBOX_STATE_DIR:-"$SCRIPT_DIR/../.cache"}"
 
-# --- Argument parsing -------------------------------------------------------
-SANDBOX_NAME=""
-WORKSPACES=()
-
-while [[ $# -gt 0 ]]; do
-	case $1 in
-	--name)
-		if [[ -z ${2:-} || ${2:-} == -* ]]; then
-			echo "--name requires a sandbox name" >&2
-			exit 1
-		fi
-		SANDBOX_NAME=$2
-		shift 2
-		;;
-	--name=*)
-		SANDBOX_NAME=${1#*=}
-		if [[ -z $SANDBOX_NAME ]]; then
-			echo "--name requires a sandbox name" >&2
-			exit 1
-		fi
-		shift
-		;;
-	--pissbox-pi-dir)
-		if [[ -z ${2:-} || ${2:-} == -* ]]; then
-			echo "--pissbox-pi-dir requires a directory" >&2
-			exit 1
-		fi
-		PISSBOX_PI_DIR=$2
-		shift 2
-		;;
-	--pissbox-pi-dir=*)
-		PISSBOX_PI_DIR=${1#*=}
-		shift
-		;;
-	--pissbox-state-dir)
-		if [[ -z ${2:-} || ${2:-} == -* ]]; then
-			echo "--pissbox-state-dir requires a directory" >&2
-			exit 1
-		fi
-		PISSBOX_STATE_DIR=$2
-		shift 2
-		;;
-	--pissbox-state-dir=*)
-		PISSBOX_STATE_DIR=${1#*=}
-		shift
-		;;
-	-h | --help)
-		show_help
-		exit 0
-		;;
-	--)
-		shift
-		WORKSPACES+=("$@")
-		break
-		;;
-	-*)
-		echo "Unknown option: $1" >&2
-		echo "Use --help for usage information" >&2
-		exit 1
-		;;
-	*)
-		WORKSPACES+=("$1")
-		shift
-		;;
-	esac
-done
-
 # --- Pi directory and settings ----------------------------------------------
 if [[ ! -d $PISSBOX_PI_DIR ]]; then
 	echo "Pi directory does not exist: $PISSBOX_PI_DIR" >&2
@@ -186,10 +195,6 @@ SETTINGS_PROFILE=$(settings_profile_for_host "$HOST_NAME")
 link_settings_profile "$PISSBOX_PI_DIR" "$SETTINGS_PROFILE"
 
 # --- Shared state -----------------------------------------------------------
-if [[ -z $PISSBOX_STATE_DIR ]]; then
-	echo "--pissbox-state-dir requires a directory" >&2
-	exit 1
-fi
 mkdir -p "$PISSBOX_STATE_DIR"
 PISSBOX_STATE_DIR="$(cd "$PISSBOX_STATE_DIR" && pwd -P)"
 
