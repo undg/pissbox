@@ -1,5 +1,9 @@
 # pissbox
 
+<img width="512" height="279" alt="image" src="https://github.com/user-attachments/assets/2153ea65-a15d-49c3-970e-e1a6b3bb937e" />
+
+
+
 Personal [Pi coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
 environment for Docker Sandboxes (`sbx`): a local Linux image, disposable
 sandboxes, and shared host-owned Pi configuration and tool state.
