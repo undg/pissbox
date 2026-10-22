@@ -5,7 +5,18 @@ import os
 import sys
 
 args = sys.argv[1:]
-print("sbx:" + json.dumps(args), flush=True)
+if os.environ.get("TEST_SBX_CALL_LOG"):
+    with open(os.environ["TEST_SBX_CALL_LOG"], "a") as log:
+        log.write(json.dumps(args) + "\n")
+else:
+    print("sbx:" + json.dumps(args), flush=True)
+
+if args[:1] == ["ls"]:
+    if os.environ.get("TEST_SBX_LIST_STATUS"):
+        print("error: listing unavailable", file=sys.stderr)
+        sys.exit(int(os.environ["TEST_SBX_LIST_STATUS"]))
+    print(os.environ.get("TEST_SBX_LISTING", "[]"))
+    sys.exit(0)
 
 if os.environ.get("TEST_SBX_REQUIRE_TTY") == "1":
     assert sys.stdin.isatty(), "stdin is no longer a terminal"

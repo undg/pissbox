@@ -55,7 +55,36 @@ profile. A pre-existing regular `settings.json` is backed up as
 
 ## Existing sandboxes
 
-On an existing-sandbox/workspace conflict, the launcher offers:
+List or delete sandboxes directly from the host:
+
+```bash
+pissbox -l              # or --ls
+pissbox -d .            # or --delete .
+pissbox --delete /path/to/project
+```
+
+Both operations require `jq` on the host (`brew install jq` on macOS). They
+read SBX's JSON listing without launching a sandbox or changing Pi settings
+or shared state.
+
+Listing shows two groups: **Current directory** first, then **Other sandboxes**.
+Each entry includes its name, status, agent, and workspace paths. Empty groups
+show `(none)`. Headers use bold cyan and muted paths on terminals; redirected
+output, `TERM=dumb`, or a set `NO_COLOR` disables color.
+
+Deletion requires an explicit existing directory. Relative paths use the caller's
+working directory; symlinks in that argument resolve to their physical path.
+A sandbox matches when any workspace equals that absolute path, including a
+secondary workspace. Parent and child paths do not match automatically. This
+also means deleting by a shared Pi or cache directory can match many sandboxes.
+
+The launcher shows every matching sandbox and asks once `[y/N]` before removing
+all of them. No matches, missing/invalid directories, or EOF are errors. Declining
+leaves everything untouched. Mounted host files remain; sandbox-local data is
+lost. Deletion does not recreate sandboxes. List and delete cannot be combined
+with each other, `--name`, or positional workspaces.
+
+On an existing-sandbox/workspace conflict during a normal launch, the launcher offers:
 
 | Choice | Action |
 | --- | --- |

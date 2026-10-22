@@ -7,16 +7,22 @@ SETTINGS_FALLBACK_PROFILE=settings-co.json
 PISSBOX_PI_DIR=${PISSBOX_PI_DIR:-}
 PISSBOX_STATE_DIR=${PISSBOX_STATE_DIR:-}
 SANDBOX_NAME=""
+DELETE_DIRECTORY=""
+LIST_SANDBOXES=false
 WORKSPACES=()
 
 # --- Help -------------------------------------------------------------------
 show_help() {
 	cat <<EOF
 Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
+       ${0##*/} -d DIR
+       ${0##*/} -l
 
 Start Pi in an SBX sandbox with sandbox-only configuration.
 
 Options:
+  -d, --delete DIR     Confirm deletion of all sandboxes with DIR as a workspace
+  -l, --ls             List sandboxes, current-directory matches first
   --name NAME          Pass an explicit sandbox name to SBX
   --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
   --pissbox-state-dir DIR
@@ -33,12 +39,35 @@ SBX chooses the sandbox name unless --name is provided.
 If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
 Deletion requires a separate confirmation [y/N].
 Deletion removes sandbox-local data and exits; mounted host files remain.
+Delete requires an existing directory and errors if no sandboxes match.
+Matching uses exact absolute workspace paths, not parent or child directories.
+Delete and list require jq and cannot be combined with each other, --name, or workspaces.
 EOF
 }
 
 # --- Argument parsing -------------------------------------------------------
 while [[ $# -gt 0 ]]; do
 	case $1 in
+	-d | --delete)
+		if [[ -z ${2:-} || ${2:-} == -* ]]; then
+			echo "$1 requires a directory" >&2
+			exit 1
+		fi
+		DELETE_DIRECTORY=$2
+		shift 2
+		;;
+	--delete=*)
+		DELETE_DIRECTORY=${1#*=}
+		if [[ -z $DELETE_DIRECTORY ]]; then
+			echo "--delete requires a directory" >&2
+			exit 1
+		fi
+		shift
+		;;
+	-l | --ls)
+		LIST_SANDBOXES=true
+		shift
+		;;
 	--name)
 		if [[ -z ${2:-} || ${2:-} == -* ]]; then
 			echo "--name requires a sandbox name" >&2
@@ -169,6 +198,97 @@ confirm() {
 		esac
 	done
 }
+
+# --- Sandbox listing and deletion -------------------------------------------
+load_sandboxes() {
+	local directory=$1 listing
+	if ! command -v jq >/dev/null 2>&1; then
+		echo "Listing and deleting sandboxes requires jq; install jq first." >&2
+		exit 1
+	fi
+	listing=$(sbx ls --json)
+	# Validate before selecting names: malformed metadata must never drive deletion.
+	SANDBOXES=$(printf '%s\n' "$listing" | jq -ce --arg directory "$directory" '
+		if type != "array" then error("Expected a sandbox array")
+		else map(
+			if ((.name | type == "string") and
+				(.name | test("^[A-Za-z0-9][A-Za-z0-9_.-]*$")) and
+				(.agent | type == "string") and (.status | type == "string") and
+				(.workspaces | type == "array") and
+				(.workspaces | all(.[]; type == "string" and startswith("/"))))
+			then . + {associated: (.workspaces | index($directory) != null)}
+			else error("Invalid sandbox metadata; refusing to continue") end
+		) end
+	')
+}
+
+print_sandbox_header() {
+	local heading="" muted="" reset=""
+	if [[ -t 1 && ${TERM:-} != dumb && -z ${NO_COLOR+x} ]]; then
+		heading=$'\033[1;36m'
+		muted=$'\033[2m'
+		reset=$'\033[0m'
+	fi
+	printf '%s%s%s\n' "$heading" "$1" "$reset"
+	printf '%s────────────────────────────────────────%s\n' "$muted" "$reset"
+	if [[ -n ${2:-} ]]; then
+		printf '  %s%s%s\n' "$muted" "$2" "$reset"
+	fi
+}
+
+print_sandbox_group() {
+	local associated=$1
+	printf '%s\n' "$SANDBOXES" | jq -r --argjson associated "$associated" '
+		map(select(.associated == $associated)) |
+		if length == 0 then "  (none)"
+		else .[] | "  \(.name)  [\(.status)]  (\(.agent))\n    \(.workspaces | join(", "))"
+		end
+	'
+}
+
+# Run management operations before touching Pi settings or shared state.
+if [[ -n $DELETE_DIRECTORY || $LIST_SANDBOXES == true ]]; then
+	if [[ ( -n $DELETE_DIRECTORY && $LIST_SANDBOXES == true ) ||
+		-n $SANDBOX_NAME || ${#WORKSPACES[@]} -ne 0 ]]; then
+		echo "Delete and list cannot be combined with each other, --name, or workspaces." >&2
+		exit 1
+	fi
+	if [[ -n $DELETE_DIRECTORY ]]; then
+		if [[ ! -d $DELETE_DIRECTORY ]]; then
+			echo "Directory does not exist: $DELETE_DIRECTORY" >&2
+			exit 1
+		fi
+		DIRECTORY=$(cd "$DELETE_DIRECTORY" && pwd -P)
+	else
+		DIRECTORY=$(pwd -P)
+	fi
+	load_sandboxes "$DIRECTORY"
+	if [[ $LIST_SANDBOXES == true ]]; then
+		print_sandbox_header "Current directory" "$DIRECTORY"
+		print_sandbox_group true
+		printf '\n'
+		print_sandbox_header "Other sandboxes"
+		print_sandbox_group false
+		exit 0
+	fi
+
+	MATCHING_NAMES=$(printf '%s\n' "$SANDBOXES" | jq -r '.[] | select(.associated) | .name')
+	if [[ -z $MATCHING_NAMES ]]; then
+		echo "No sandboxes associated with directory: $DIRECTORY" >&2
+		exit 1
+	fi
+	SANDBOX_NAMES=()
+	while IFS= read -r NAME; do
+		SANDBOX_NAMES+=("$NAME")
+	done <<< "$MATCHING_NAMES"
+	printf 'Sandboxes associated with %s:\n' "$DIRECTORY" >&2
+	print_sandbox_group true >&2
+	echo "Deletion loses sandbox-local data. Mounted host files remain." >&2
+	if confirm "Delete all ${#SANDBOX_NAMES[@]} matching sandboxes? [y/N]" n; then
+		exec sbx rm --force "${SANDBOX_NAMES[@]}"
+	fi
+	exit 0
+fi
 
 # --- Launcher paths ---------------------------------------------------------
 # Follow launcher symlinks without readlink -f (unavailable on older macOS).

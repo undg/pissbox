@@ -2,8 +2,6 @@
 
 <img width="512" height="279" alt="image" src="https://github.com/user-attachments/assets/2153ea65-a15d-49c3-970e-e1a6b3bb937e" />
 
-
-
 Personal [Pi coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
 environment for Docker Sandboxes (`sbx`): a local Linux image, disposable
 sandboxes, and shared host-owned Pi configuration and tool state.
@@ -14,28 +12,27 @@ On the host, with Docker running and SBX **v0.39.0+** installed:
 
 ```bash
 bin/build-image
-bin/pissbox /path/to/project
+bin/pissbox
 ```
 
-The first command builds and imports `pissbox:local`; the second opens Pi.
-Use Pi's `/login` inside the sandbox for GitHub Copilot authentication.
+Build once, then run `pissbox` from your project directory.
+No arguments needed: it opens Pi in the current directory.
 Workspaces are live host mounts: edits persist after sandbox removal.
 
-## Real-life example: port skills between agents
+For API keys, prefer SBX proxy-managed secrets when supported and configured:
+keys stay on the host while the proxy authenticates requests. The agent can
+read Pi's `auth.json` and environment variables passed directly into the sandbox.
 
-Work on your sandbox Pi, OpenCode, and native Pi setups in one session
-(with `pissbox` on your PATH):
+## Work across directories
+
+Add directories when you need them (with multiple define current one with `.`):
 
 ```bash
-pissbox ~/Code/pissbox ~/.config/opencode ~/.config/pi
+pissbox . ~/.config/opencode ~/.config/pi
 ```
 
-The first directory is the primary workspace; the others are additional
-read-write mounts. Pi can compare all three setups and port skills or tools
-between them without copying files into the sandbox first.
-
-For example, ask: “Adapt this OpenCode skill for both my native Pi and
-sandbox Pi setups.”
+`.` is your workspace; the other directories are also mounted read-write.
+Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
 
 ## Guides
 

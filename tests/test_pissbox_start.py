@@ -54,6 +54,207 @@ class LauncherTests(unittest.TestCase):
             shutil.copyfile(PI_DIR / name, directory / name)
         return directory
 
+    def manage(self, *args, listing=None, raw_listing=None, **kwargs):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="management-", dir=fixtures))
+        log = directory / "calls.jsonl"
+        result, _ = self.launch(
+            *args, TEST_SBX_CALL_LOG=str(log),
+            TEST_SBX_LISTING=raw_listing if raw_listing is not None else json.dumps(listing if listing is not None else []),
+            PISSBOX_PI_DIR="missing", PISSBOX_STATE_DIR=str(LAUNCHER / "missing"),
+            **kwargs,
+        )
+        calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        return result, calls
+
+    def test_list_groups_exact_workspace_matches_first(self):
+        listing = [
+            {"name": "other", "agent": "codex", "status": "stopped", "workspaces": [str(ROOT.parent)]},
+            {"name": "primary", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]},
+            {"name": "secondary", "agent": "pi", "status": "stopped", "workspaces": [str(ROOT / "tests"), str(ROOT)]},
+            {"name": "child", "agent": "pi", "status": "running", "workspaces": [str(ROOT / "tests")]},
+        ]
+        for flag in ("-l", "--ls"):
+            with self.subTest(flag=flag):
+                result, calls = self.manage(flag, listing=listing)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [["ls", "--json"]])
+                self.assertNotIn("\033[", result.stdout)
+                current, others = result.stdout.split("Other sandboxes")
+                self.assertIn("Current directory\n", current)
+                self.assertIn(f"  {ROOT}\n", current)
+                self.assertIn("primary  [running]", current)
+                self.assertIn("secondary  [stopped]", current)
+                self.assertNotIn("  other ", current)
+                self.assertNotIn("  child ", current)
+                self.assertIn("other  [stopped]  (codex)", others)
+                self.assertIn("child  [running]", others)
+                self.assertNotIn("  primary ", others)
+                self.assertNotIn("  secondary ", others)
+
+    def test_list_empty_groups_and_uses_callers_directory(self):
+        cwd = ROOT / "tests"
+        result, calls = self.manage("-l", cwd=cwd)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [["ls", "--json"]])
+        self.assertIn("Current directory\n", result.stdout)
+        self.assertIn(f"  {cwd}\n", result.stdout)
+        self.assertEqual(result.stdout.count("(none)"), 2)
+
+    def test_list_header_colors_respect_terminal_and_no_color(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="list-colors-", dir=fixtures))
+        for term, no_color, colored in (("xterm-256color", None, True), ("xterm-256color", "", False), ("dumb", None, False)):
+            with self.subTest(term=term, no_color=no_color):
+                env = self.environment(
+                    TERM=term, TEST_SBX_LISTING="[]",
+                    TEST_SBX_CALL_LOG=str(directory / "calls.jsonl"),
+                )
+                env.pop("NO_COLOR", None)
+                if no_color is not None:
+                    env["NO_COLOR"] = no_color
+                master, slave = pty.openpty()
+                try:
+                    result = subprocess.run(
+                        [str(LAUNCHER), "-l"], cwd=ROOT, env=env,
+                        stdin=subprocess.DEVNULL, stdout=slave,
+                        stderr=subprocess.PIPE, text=True, timeout=5,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    output = os.read(master, 8192).decode()
+                    if colored:
+                        self.assertIn("\033[1;36mCurrent directory\033[0m", output)
+                        self.assertIn("\033[1;36mOther sandboxes\033[0m", output)
+                        self.assertIn(f"\033[2m{ROOT}\033[0m", output)
+                    else:
+                        self.assertNotIn("\033[", output)
+                        self.assertIn("Current directory", output)
+                        self.assertIn("Other sandboxes", output)
+                finally:
+                    os.close(master)
+                    os.close(slave)
+
+    def test_delete_all_exact_matches_after_one_confirmation(self):
+        listing = [
+            {"name": "first", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]},
+            {"name": "other", "agent": "pi", "status": "running", "workspaces": [str(ROOT.parent)]},
+            {"name": "second", "agent": "pi", "status": "stopped", "workspaces": [str(ROOT / "tests"), str(ROOT), str(ROOT)]},
+        ]
+        for args in (("-d", "."), ("--delete", "."), ("--delete=.",)):
+            with self.subTest(args=args):
+                result, calls = self.manage(*args, listing=listing, answers="yes\n")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [["ls", "--json"], ["rm", "--force", "first", "second"]])
+                self.assertEqual(result.stderr.count("[y/N]"), 1)
+                self.assertIn("first  [running]", result.stderr)
+                self.assertIn("second  [stopped]", result.stderr)
+                self.assertNotIn("  other ", result.stderr)
+                self.assertIn("Mounted host files remain", result.stderr)
+                self.assertTrue(ROOT.is_dir())
+
+    def test_delete_resolves_spaces_relative_paths_and_symlinks(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="delete-", dir=fixtures))
+        target = directory / "workspace with spaces"
+        target.mkdir()
+        link = directory / "link"
+        link.symlink_to(target)
+        listing = [{"name": "match", "agent": "pi", "status": "running", "workspaces": [str(target)]}]
+        result, calls = self.manage("-d", "link", cwd=directory, listing=listing, answers="y\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[-1], ["rm", "--force", "match"])
+        self.assertTrue(target.is_dir())
+        self.assertTrue(link.is_symlink())
+
+    def test_delete_decline_eof_and_invalid_confirmation(self):
+        listing = [{"name": "match", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}]
+        for answers, status, deleted in (("\n", 0, False), ("no\n", 0, False), ("", 1, False), ("y", 1, False), ("maybe\nYES\n", 0, True)):
+            with self.subTest(answers=answers):
+                result, calls = self.manage("-d", ".", listing=listing, answers=answers)
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual(calls[1:], [["rm", "--force", "match"]] if deleted else [])
+
+    def test_management_rejects_missing_invalid_and_conflicting_arguments(self):
+        for args in (
+            ("-d",), ("--delete", ""), ("--delete=",), ("-d", "--ls"),
+            ("-d", "nonexistent-directory"), ("-d", str(LAUNCHER)),
+            ("-d", ".", "extra"), ("-l", "."), ("-d", ".", "-l"),
+            ("-l", "--name", "box"), ("--name=box", "-d", "."),
+        ):
+            with self.subTest(args=args):
+                result, calls = self.manage(*args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(result.stderr)
+                self.assertEqual(calls, [])
+
+    def test_delete_no_matches_is_an_error_without_confirmation(self):
+        result, calls = self.manage("-d", ".", answers="y\n")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("No sandboxes associated", result.stderr)
+        self.assertNotIn("[y/N]", result.stderr)
+        self.assertEqual(calls, [["ls", "--json"]])
+
+    def test_management_preserves_listing_and_deletion_failures(self):
+        for args in (("-l",), ("-d", ".")):
+            with self.subTest(args=args):
+                result, calls = self.manage(*args, TEST_SBX_LIST_STATUS="7", answers="y\n")
+                self.assertEqual(result.returncode, 7, result.stderr)
+                self.assertIn("listing unavailable", result.stderr)
+                self.assertEqual(calls, [["ls", "--json"]])
+        listing = [{"name": "match", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}]
+        result, calls = self.manage("-d", ".", listing=listing, TEST_SBX_REMOVE_STATUS="9", answers="y\n")
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertEqual(calls[-1], ["rm", "--force", "match"])
+
+    def test_management_rejects_invalid_metadata_before_confirmation(self):
+        invalid_listings = (
+            {}, [None],
+            [{"name": "-unsafe", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}],
+            [{"name": "match", "agent": "pi", "status": "running", "workspaces": str(ROOT)}],
+        )
+        for listing in invalid_listings:
+            with self.subTest(listing=listing):
+                result, calls = self.manage("-d", ".", listing=listing, answers="y\n")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("[y/N]", result.stderr)
+                self.assertEqual(calls, [["ls", "--json"]])
+
+    def test_management_rejects_empty_null_and_malformed_json(self):
+        for raw_listing in ("", "null", "not json", "[{}"):
+            with self.subTest(raw_listing=raw_listing):
+                result, calls = self.manage("-d", ".", raw_listing=raw_listing, answers="y\n")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("[y/N]", result.stderr)
+                self.assertEqual(calls, [["ls", "--json"]])
+
+    def test_management_reports_missing_jq_before_calling_sbx(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        commands = Path(tempfile.mkdtemp(prefix="no-jq-", dir=fixtures))
+        (commands / "bash").symlink_to(shutil.which("bash"))
+        result, calls = self.manage("-l", PATH=str(commands))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("install jq", result.stderr)
+        self.assertEqual(calls, [])
+
+    def test_repeated_delete_uses_last_directory(self):
+        listing = [{"name": "match", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}]
+        result, calls = self.manage("-d", "missing", "--delete=.", listing=listing, answers="y\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls[-1], ["rm", "--force", "match"])
+
+    def test_management_help_does_not_query_sbx(self):
+        for args in (("-l", "--help"), ("-d", ".", "-h")):
+            with self.subTest(args=args):
+                result, calls = self.manage(*args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("--delete DIR", result.stdout)
+                self.assertIn("--ls", result.stdout)
+                self.assertEqual(calls, [])
+
     def test_new_sandbox_keeps_original_arguments(self):
         result, calls = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
