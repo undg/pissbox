@@ -67,6 +67,29 @@ generated link directly. Pi's settings changes write through to the active
 profile. A pre-existing regular `settings.json` is backed up as
 `settings.json.replaced*`.
 
+## Session titles
+
+New interactive sessions receive a short title after the first successful exchange.
+The session-name extension makes one background request to the current model,
+using only the first user message (up to 4,000 characters). This consumes a small
+amount of additional model usage. Failures leave the session unnamed, without
+retries. Existing conversations and manually named sessions are left alone.
+Titles appear in Pi's default footer and session picker.
+
+To refresh the title from the current conversation, run:
+
+```text
+/skill:session-name
+/skill:session-name focus on the shared-cache fix
+```
+
+The skill uses the conversation already in context and calls `set_session_name`
+to replace the title. It can also accept an exact title. For a direct manual
+rename without model generation, use `/name My title`.
+
+Run `/reload` in an existing Pi session after adding or changing the extension
+or skill. These live in the shared Pi directory; no image rebuild is needed.
+
 ## Existing sandboxes
 
 List or delete sandboxes directly from the host:
