@@ -69,9 +69,10 @@ profile. A pre-existing regular `settings.json` is backed up as
 
 ## Session titles
 
-New interactive sessions receive a short title after the first successful exchange.
-The session-name extension makes one background request to the current model,
-using only the first user message (up to 4,000 characters). This consumes a small
+New interactive sessions start generating a short title when the first text prompt
+is submitted, without waiting for Pi to finish the task. The session-name extension
+makes one background request to the current model, using only the first user
+message (up to 4,000 characters). This consumes a small
 amount of additional model usage. Failures leave the session unnamed, without
 retries. Existing conversations and manually named sessions are left alone.
 Titles appear in Pi's default footer and session picker.

@@ -11,7 +11,6 @@ function normalizeName(text) {
 /** @param {import("@earendil-works/pi-coding-agent").ExtensionAPI} pi */
 export default function (pi) {
 	let eligible = false;
-	let firstPrompt = "";
 	/** @type {AbortController | undefined} */
 	let pending;
 
@@ -28,28 +27,21 @@ export default function (pi) {
 			entry.type === "compaction" || entry.type === "branch_summary" || entry.type === "custom_message");
 		eligible = ctx.mode === "tui" && (event.reason === "startup" || event.reason === "new") &&
 			!pi.getSessionName() && !hasConversation;
-		firstPrompt = "";
 	});
 	pi.on("session_shutdown", cancel);
 	pi.on("session_info_changed", () => {
 		eligible = false;
 		cancel();
 	});
-	pi.on("before_agent_start", (event) => {
-		if (eligible && !firstPrompt && event.messageType === "user") {
-			firstPrompt = event.prompt.slice(0, 4000);
-		}
-	});
-	pi.on("agent_settled", (event, ctx) => {
-		if (!eligible || !firstPrompt || event.aborted || !ctx.model || pi.getSessionName()) return;
-		const last = ctx.sessionManager.getBranch().findLast((entry) => entry.type === "message");
-		if (last?.type !== "message" || last.message.role !== "assistant" || last.message.stopReason !== "stop") return;
+	pi.on("before_agent_start", (event, ctx) => {
+		if (!eligible || event.messageType !== "user" || !event.prompt.trim() || !ctx.model || pi.getSessionName()) return;
 		eligible = false;
+		const firstPrompt = event.prompt.slice(0, 4000);
 		const model = ctx.model;
 		const controller = new AbortController();
 		const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]);
 		pending = controller;
-		// Do not hold up settlement or the next prompt while the title is generated.
+		// Generate alongside the main response without delaying the user's task.
 		void (async () => {
 			try {
 				const result = await ctx.modelRegistry.streamSimple(model, {

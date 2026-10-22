@@ -54,8 +54,9 @@ function session({ mode = "tui", name, entries = [
 		ctx, entries, requests, saved, emit,
 		rename: (name) => tools.get("set_session_name").execute("rename", { name }),
 		prompt(text = "Fix login redirect loop") {
-			emit("before_agent_start", { messageType: "user", prompt: text });
+			const result = emit("before_agent_start", { messageType: "user", prompt: text });
 			entries.push({ type: "message", message: { role: "user", content: text } });
+			return result;
 		},
 		settle(stopReason = "stop") {
 			entries.push({ type: "message", message: { role: "assistant", stopReason } });
@@ -68,13 +69,14 @@ function title(text, stopReason = "stop") {
 	return { stopReason, content: [{ type: "text", text }] };
 }
 
-test("names a new session once, in the background, using only the bounded first prompt", async () => {
+test("names a new session on its first prompt without waiting for the task to finish", async () => {
 	const s = session();
 	s.emit("session_start");
-	s.prompt("Fix login redirect loop " + "x".repeat(5000));
-	s.prompt("Second message must not enter the naming request");
 	assert.equal(s.requests.length, 0);
-	assert.equal(s.settle(), undefined, "settlement must not wait for the title request");
+	assert.equal(s.prompt("Fix login redirect loop " + "x".repeat(5000)), undefined,
+		"prompt submission must not wait for the title request");
+	assert.equal(s.requests.length, 1, "start naming before any assistant response or settlement");
+	s.prompt("Second message must not enter the naming request");
 	assert.equal(s.requests.length, 1);
 	assert.equal(s.requests[0].model, s.ctx.model);
 	assert.equal(s.requests[0].context.messages.length, 1);
@@ -95,7 +97,6 @@ test("auto-names a session initialized with Pi's real startup metadata", async (
 	const s = session({ entries: manager.getBranch() });
 	s.emit("session_start");
 	s.prompt();
-	s.settle();
 	assert.equal(s.requests.length, 1, "startup metadata must not count as an existing conversation");
 	s.requests[0].resolve(title("Fix login redirect loop"));
 	await setImmediate();
@@ -142,13 +143,17 @@ test("a new session gets its own request and cannot receive the previous session
 	assert.equal(s.requests[1].context.messages[0].content, "New task");
 });
 
-test("does not generate a title for an aborted or failed exchange", () => {
+test("waits for a user text prompt rather than custom messages or image-only prompts", async () => {
 	const s = session();
 	s.emit("session_start");
-	s.prompt();
-	s.emit("agent_settled", { aborted: true });
-	s.settle("error");
+	s.emit("before_agent_start", { messageType: "custom" });
+	s.prompt("");
 	assert.equal(s.requests.length, 0);
+	s.prompt();
+	assert.equal(s.requests.length, 1);
+	s.requests[0].resolve(title("Fix login redirect loop"));
+	await setImmediate();
+	assert.deepEqual(s.saved, ["Fix login redirect loop"]);
 });
 
 test("generation failures and empty output are silent and never retried", async () => {
@@ -161,6 +166,7 @@ test("generation failures and empty output are silent and never retried", async 
 		else s.requests[0].resolve(result);
 		await setImmediate();
 		assert.deepEqual(s.saved, []);
+		s.prompt("Another task must not retry a failed title request");
 		s.settle();
 		assert.equal(s.requests.length, 1);
 	}
