@@ -34,6 +34,20 @@ Run `bin/pissbox --help` for all options. Directory selection is:
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
 
+## Optional Herd reporting
+
+Build the host helper once with `bin/build-bridge` (Go 1.24+), or cross-compile
+all macOS/Linux binaries with `bin/build-bridge --all`. Then launch pissbox
+from a Herd pane. The launcher selects the matching prebuilt binary and reports
+sandbox Pi as `pissbox-pi`, including working/idle state and blocking extension UI
+prompts. Herd handles notifications according to its settings.
+
+Outside Herd, no helper runs. Missing binaries or bridge failures warn without
+blocking Pi. No network port, MCP server, new mount, or permanent daemon is
+needed. The helper runs only while the launcher is attached; direct SBX launches
+bypass it. See the [bridge guide](../go-bridge/README.md) for limitations,
+shared-state security, testing, and future packaging.
+
 ## Configuration and login
 
 The launcher mounts `pi-agent/`; kit setup links it to `$HOME/.pi/agent`.

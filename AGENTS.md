@@ -13,7 +13,9 @@ or directory name. User guides start at [README.md](README.md).
   Keep its `AGENTS.md` brief and general; repository rules belong here.
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
   during environment work. Use the `bash-cli-style` skill for Bash changes.
-- `.cache/`: gitignored, host-owned Linux tool state and test fixtures.
+- `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
+- `go-bridge/`: optional host-only Go lifecycle bridge; build matching binaries
+  with `bin/build-bridge` or cross-compile all four targets with `--all`.
 - `tests/`: Python-standard-library regression tests.
 
 ## Image and kit constraints
@@ -105,7 +107,9 @@ or directory name. User guides start at [README.md](README.md).
 Read affected kit files before editing. Run:
 
 ```bash
-bash -n bin/pissbox bin/build-image sbx-kit/files/home/.pissbox/scripts/*.sh
+bash -n bin/pissbox bin/build-image bin/build-bridge sbx-kit/files/home/.pissbox/scripts/*.sh
+(cd go-bridge && go test -race ./... && go vet ./...)
+node --test go-bridge/pi-extension.test.mjs
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 git diff --check
 sbx kit validate ./sbx-kit

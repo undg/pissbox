@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import sys
+
+args = sys.argv[1:]
+if args == ["env", "GOHOSTOS"]:
+    print(os.environ.get("TEST_GO_OS", "linux"))
+elif args == ["env", "GOHOSTARCH"]:
+    print(os.environ.get("TEST_GO_ARCH", "arm64"))
+elif args[:1] == ["build"]:
+    print("go:" + json.dumps({
+        "args": args,
+        "cwd": os.getcwd(),
+        "os": os.environ.get("GOOS"),
+        "arch": os.environ.get("GOARCH"),
+        "cgo": os.environ.get("CGO_ENABLED"),
+    }))
+    sys.exit(int(os.environ.get("TEST_GO_STATUS", "0")))
+else:
+    sys.exit(1)

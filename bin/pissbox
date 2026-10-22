@@ -10,6 +10,8 @@ SANDBOX_NAME=""
 DELETE_DIRECTORY=""
 LIST_SANDBOXES=false
 WORKSPACES=()
+BRIDGE_PID=""
+BRIDGE_ENV_ARGS=()
 
 # --- Help -------------------------------------------------------------------
 show_help() {
@@ -38,6 +40,8 @@ Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
 If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
 Deletion requires a separate confirmation [y/N].
+Inside Herd, an optional prebuilt host bridge reports Pi lifecycle state.
+Build it with bin/build-bridge; bridge failures never prevent launching Pi.
 Deletion removes sandbox-local data and exits; mounted host files remain.
 Delete requires an existing directory and errors if no sandboxes match.
 Matching uses exact absolute workspace paths, not parent or child directories.
@@ -330,9 +334,78 @@ if [[ -n $SANDBOX_NAME ]]; then
 	SBX_ARGS+=(--name "$SANDBOX_NAME")
 fi
 
+# --- Optional Herd bridge ---------------------------------------------------
+stop_bridge() {
+	if [[ -n $BRIDGE_PID ]]; then
+		kill "$BRIDGE_PID" 2>/dev/null || true
+		wait "$BRIDGE_PID" 2>/dev/null || true
+		BRIDGE_PID=""
+	fi
+	BRIDGE_ENV_ARGS=()
+}
+
+start_bridge() {
+	local os arch binary mailbox attempt
+	BRIDGE_ENV_ARGS=()
+	if [[ ${HERDR_ENV:-} != 1 ]]; then
+		return 0
+	fi
+	if [[ -z ${HERDR_SOCKET_PATH:-} || -z ${HERDR_PANE_ID:-} ]]; then
+		echo "Warning: Herd bridge disabled; missing socket or pane environment." >&2
+		return 0
+	fi
+	case $(uname -s) in
+	Darwin) os=darwin ;;
+	Linux) os=linux ;;
+	*)
+		echo "Warning: Herd bridge disabled; unsupported host OS." >&2
+		return 0
+		;;
+	esac
+	case $(uname -m) in
+	arm64 | aarch64) arch=arm64 ;;
+	x86_64 | amd64) arch=amd64 ;;
+	*)
+		echo "Warning: Herd bridge disabled; unsupported host architecture." >&2
+		return 0
+		;;
+	esac
+	binary="$SCRIPT_DIR/../.cache/bin/go-bridge-$os-$arch"
+	if [[ ! -x $binary ]]; then
+		echo "Warning: Herd bridge binary missing; run bin/build-bridge. Continuing without it." >&2
+		return 0
+	fi
+	if [[ ! -f $PISSBOX_PI_DIR/extensions/pissbox-bridge.js ]]; then
+		echo "Warning: Herd bridge extension missing from selected Pi directory. Continuing without it." >&2
+		return 0
+	fi
+	if ! mailbox=$(mktemp -d "$PISSBOX_STATE_DIR/bridge-launch.XXXXXXXX"); then
+		echo "Warning: cannot create Herd bridge mailbox. Continuing without it." >&2
+		return 0
+	fi
+	"$binary" --mailbox "$mailbox" --herdr-socket "$HERDR_SOCKET_PATH" \
+		--herdr-pane "$HERDR_PANE_ID" </dev/null &
+	BRIDGE_PID=$!
+	for ((attempt = 0; attempt < 50; attempt++)); do
+		if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
+			break
+		fi
+		if [[ -f $mailbox/ready ]]; then
+			BRIDGE_ENV_ARGS=(--env "PISSBOX_BRIDGE_DIR=$mailbox")
+			return 0
+		fi
+		sleep 0.02
+	done
+	echo "Warning: Herd bridge failed to start. Continuing without it." >&2
+	stop_bridge
+}
+
+trap stop_bridge EXIT
+start_bridge
+
 # Keep stdin/stdout on the terminal and stream stderr while capturing SBX's error.
 exec 3>&1
-if SBX_ERROR=$(sbx "${SBX_ARGS[@]}" \
+if SBX_ERROR=$(sbx "${SBX_ARGS[@]}" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"} \
 	"$SCRIPT_DIR/../sbx-kit" "${WORKSPACES[@]}" "$PISSBOX_PI_DIR" "$PISSBOX_STATE_DIR" \
 	2>&1 1>&3 | tee -a /dev/stderr); then
 	exit 0
@@ -340,6 +413,7 @@ else
 	SBX_STATUS=$?
 fi
 exec 3>&-
+stop_bridge
 
 # --- Existing sandbox handling ----------------------------------------------
 CONFLICT_PATTERN="sandbox '([^']+)' already exists and can't be given new workspaces"
@@ -365,7 +439,14 @@ while true; do
 		exit 1
 	fi
 	case ${CHOICE:-p} in
-	[Pp]) exec sbx run --name "$SANDBOX_NAME" ;;
+	[Pp])
+		start_bridge
+		if [[ -n $BRIDGE_PID ]]; then
+			sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
+			exit $?
+		fi
+		exec sbx run --name "$SANDBOX_NAME"
+		;;
 	[Ss]) exec sbx exec -it "$SANDBOX_NAME" bash ;;
 	[Dd])
 		echo "Deletion loses sandbox-local data. Mounted host files remain." >&2

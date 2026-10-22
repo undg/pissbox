@@ -19,8 +19,8 @@ class LauncherTests(unittest.TestCase):
         env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith("TEST_SBX_")
-            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR")
+            if not key.startswith(("TEST_SBX_", "HERDR_"))
+            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR", "PISSBOX_BRIDGE_DIR")
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
         env.update(overrides)

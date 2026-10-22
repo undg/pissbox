@@ -38,14 +38,19 @@
 ## Host ↔ pissbox bridge / Herd
 
 Agent discovery, review feedback, session visibility, and completion notifications
-are related parts of the host/sandbox bridge gap. The transport and exact failure
-mechanisms remain unresolved.
+are related parts of the host/sandbox bridge gap. The initial
+[Go mailbox bridge](go-bridge/README.md) implements custom-agent lifecycle
+reporting; real Herd/SBX behavior and notifications still need a host smoke test.
+Upstream's official Pi integration requires host Pi process detection, so merely
+forwarding its socket messages is insufficient for sandbox Pi. Review delivery
+and native session-log integration remain unresolved.
 
-- [ ] Herd's sidebar does not detect sandbox agents; bridge mechanism unknown.
-- [ ] **Finished-job notifications:** the user reports missing host notifications
-      when sandbox Pi finishes a job. The bridge needs to expose completion to
-      the host and associate it with the correct workspace/session. Notification
-      transport and completion-event detection have not been investigated.
+- [ ] **Sandbox agent visibility:** custom `pissbox-pi` lifecycle reporting is
+      implemented; real Herd sidebar visibility still needs verification.
+- [ ] **Finished-job notifications:** the initial bridge reports final Pi
+      settlement through Herd's semantic state API, bound to the launching pane.
+      Real host notifications still need verification, including active-tab
+      suppression. Native session visibility remains outside this first slice.
 - [ ] **herdr-reviewr → sandbox Pi comments:**
       [herdr-reviewr](https://github.com/persiyanov/herdr-reviewr) collects
       line/range comments and sends them together to the workspace agent's input.
