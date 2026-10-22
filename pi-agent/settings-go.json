@@ -1,4 +1,5 @@
 {
+  "$schema": "https://pi.dev/schemas/settings.schema.json",
   "lastChangelogVersion": "1.3.0",
   "hideThinkingBlock": true,
   "extensions": [
@@ -17,7 +18,7 @@
   },
   "showCacheMissNotices": true,
   "collapseChangelog": true,
-  "quietStartup": "header",
+  "quietStartup": false,
   "enableInstallTelemetry": false,
   "treeFilterMode": "all",
   "warnings": {
