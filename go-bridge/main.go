@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -56,7 +54,7 @@ func (b *bridge) poll(ctx context.Context) error {
 	return nil
 }
 
-func (b *bridge) run(ctx context.Context, parentPID int) error {
+func (b *bridge) run(ctx context.Context, ownerPID int) error {
 	if err := markReady(b.root); err != nil {
 		return fmt.Errorf("cannot create mailbox readiness marker")
 	}
@@ -79,10 +77,13 @@ func (b *bridge) run(ctx context.Context, parentPID int) error {
 	defer ticker.Stop()
 	lastHeartbeat := time.Now()
 	for {
-		if parentPID != 0 && os.Getppid() != parentPID {
+		if ownerPID != 0 && !ownerAlive(ownerPID) {
 			return nil
 		}
-		if err := b.poll(ctx); err != nil {
+		pollCtx, cancel := context.WithTimeout(ctx, 750*time.Millisecond)
+		err := b.poll(pollCtx)
+		cancel()
+		if err != nil {
 			return err
 		}
 		if time.Since(lastHeartbeat) >= time.Second {
@@ -99,39 +100,14 @@ func (b *bridge) run(ctx context.Context, parentPID int) error {
 	}
 }
 
-func run(args []string, stderr io.Writer) error {
-	flags := flag.NewFlagSet("go-bridge", flag.ContinueOnError)
-	flags.SetOutput(stderr)
-	mailbox := flags.String("mailbox", "", "dedicated shared mailbox directory")
-	socket := flags.String("herdr-socket", "", "host Herd Unix socket")
-	pane := flags.String("herdr-pane", "", "launching Herd pane ID (host-owned)")
-	if err := flags.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			return nil
-		}
-		return err
-	}
-	if *mailbox == "" || *socket == "" || *pane == "" || flags.NArg() != 0 {
-		return fmt.Errorf("--mailbox, --herdr-socket and --herdr-pane are required; no positional arguments")
-	}
-	root, err := os.OpenRoot(*mailbox)
-	if err != nil {
-		return fmt.Errorf("cannot open mailbox directory")
-	}
-	defer root.Close()
-	logger := log.New(stderr, "pissbox bridge: ", 0)
-	b := bridge{
-		root:   root,
-		target: &herdr{socket: *socket, pane: *pane},
-		warn:   func(message string) { logger.Println(message) },
-	}
+func run(args []string, stdout, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return b.run(ctx, os.Getppid())
+	return controlCLI(ctx, args, stdout, stderr)
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "pissbox bridge:", err)
 		os.Exit(1)
 	}

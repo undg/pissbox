@@ -4,34 +4,30 @@ import argparse
 import json
 import os
 from pathlib import Path
-import signal
+import secrets
 import sys
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mailbox", required=True)
-parser.add_argument("--herdr-socket", required=True)
-parser.add_argument("--herdr-pane", required=True)
+parser.add_argument("operation", choices=("register", "unregister"))
+parser.add_argument("--mailbox")
+parser.add_argument("--herdr-socket")
+parser.add_argument("--herdr-pane")
+parser.add_argument("--owner-pid", type=int)
+parser.add_argument("--id")
 args = parser.parse_args()
 if os.environ.get("TEST_BRIDGE_START_FAIL") == "1":
     sys.exit(1)
 
 log = Path(os.environ["TEST_BRIDGE_LOG"])
-ready = Path(args.mailbox) / "ready"
-
-def record(kind):
+if args.operation == "register":
+    registration = {"kind": "register", **vars(args), "id": secrets.token_hex(16)}
+    (Path(args.mailbox) / "ready").write_text("1\n")
     with log.open("a") as output:
-        output.write(json.dumps({"kind": kind, **vars(args)}) + "\n")
-
-def stop(_signal, _frame):
-    sys.exit(0)
-
-signal.signal(signal.SIGTERM, stop)
-signal.signal(signal.SIGINT, stop)
-record("start")
-ready.write_text("1\n")
-try:
-    while True:
-        signal.pause()
-finally:
-    ready.unlink(missing_ok=True)
-    record("stop")
+        output.write(json.dumps(registration) + "\n")
+    print(registration["id"])
+else:
+    registrations = [json.loads(line) for line in log.read_text().splitlines()]
+    registration = next(event for event in registrations if event["id"] == args.id)
+    (Path(registration["mailbox"]) / "ready").unlink(missing_ok=True)
+    with log.open("a") as output:
+        output.write(json.dumps({**registration, "kind": "unregister"}) + "\n")

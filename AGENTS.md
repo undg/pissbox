@@ -68,6 +68,12 @@ or directory name. User guides start at [README.md](README.md).
   Choices are case-insensitive. `d` warns about local data loss, requires a
   separate explicit yes, then runs `sbx rm --force NAME` without recreating.
   Invalid input retries; EOF aborts. Other errors preserve output and status.
+- The optional Herd bridge is one persistent host daemon per OS user, independent
+  of checkout/state root. Launchers own opaque mailbox registrations, never the
+  daemon PID. Cleanup unregisters; only explicit bridge `stop` terminates it.
+  Keep the control socket host-only, retain the filesystem mailbox boundary, and
+  never silently replace an incompatible live daemon. After daemon failure,
+  existing Pi sessions need launcher reattach; registrations are memory-only.
 - Workspaces are live host mounts. New mounts, mappings, kit files, or images
   require a new sandbox name. Never silently remove/recreate a sandbox.
   Sandbox-local data survives restart, not removal; mounted state survives both.
@@ -120,7 +126,9 @@ removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
 validation; installing the CLI or reading help is not validation.
 
 Tests stub Docker/SBX and use isolated homes for link scripts. Fixtures stay
-under ignored `.cache/test-fixtures/`. They cover argument forwarding, symlink
+under ignored `.cache/test-fixtures/`. Bridge process tests must set an isolated
+`PISSBOX_BRIDGE_RUNTIME_DIR` there and stop their daemons in cleanup; never
+contact or stop the user's actual bridge. They cover argument forwarding, symlink
 launches, menu/deletion/EOF behavior, terminal handling, settings profiles,
 shared links, and refusal to replace data. Do not claim a real image build,
 sandbox launch, authentication, or persistence check without running it.

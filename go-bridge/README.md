@@ -2,7 +2,8 @@
 
 Optional host-side bridge between sandbox Pi and host integrations. First scope:
 Herd sidebar state and Herd's existing completion/attention notifications.
-No MCP endpoint, HTTP listener, permanent daemon, or third-party Go dependencies.
+One persistent daemon per host OS user, shared across checkouts and state roots.
+No MCP endpoint, HTTP listener, service manager, or third-party Go dependencies.
 
 ## Build
 
@@ -25,7 +26,7 @@ The launcher selects the binary from this checkout, independently of a custom
 
 Build, then launch `bin/pissbox` from a normal Herd terminal pane. The launcher
 uses `HERDR_ENV=1`, `HERDR_SOCKET_PATH`, and `HERDR_PANE_ID` on the host. Outside
-Herd it starts no helper. Missing binaries/extensions and startup failures warn
+Herd it never contacts the daemon. Missing binaries/extensions and startup failures warn
 without preventing Pi from starting.
 
 The selected Pi directory must contain `extensions/pissbox-bridge.js`. The
@@ -34,7 +35,9 @@ the extension too. Pi discovers it automatically. The extension is plain JS
 with JSDoc types so lifecycle tests need only Node, not a TS compiler.
 
 ```text
-Pi lifecycle → atomic mailbox events → Go helper → Herd local socket
+launchers → host control socket → persistent Go daemon
+                                  ├─ mailbox A → Herd pane A
+Pi lifecycle → atomic events ─────└─ mailbox B → Herd pane B
 ```
 
 Herd sees the custom agent `pissbox-pi`, source `pissbox:pi`. The official Pi
@@ -47,10 +50,62 @@ automatic continuation remains. It releases on session shutdown. Headless Pi
 sessions do not report. This needs a Pi version exposing `agent_settled` and
 `ui_prompt_start`/`ui_prompt_end`; ordinary model/tool output is not inspected.
 
-The helper stops and releases when the launcher exits/disconnects; it also
-checks for parent-process exit. It does not supervise or stop sandbox Pi.
-Reattaching through the launcher's Pi choice gets a new helper and mailbox;
-choosing shell does not. Direct `sbx run` bypasses this integration.
+The launcher registers a fresh mailbox with its host-owned socket, pane, and
+launcher PID. Normal exit unregisters that opaque registration ID, drains final
+events, and best-effort releases only its own Herd agent. The daemon also polls
+owner PID liveness for launcher crashes. Duplicate mailbox or socket/pane bindings
+are refused, including while the old registration is draining. Workers are
+independent: one failed Herd connection or mailbox cannot stall the other panes.
+
+The daemon survives launcher exit and can remain idle indefinitely. It does not
+supervise or stop sandbox Pi. Reattaching through the launcher's Pi choice gets
+a new registration and mailbox; shell/quit/delete do not register another.
+Help/list/delete commands never contact the daemon. Direct `sbx run` bypasses
+this integration.
+
+## Daemon control and restart
+
+The runtime directory is Go's per-user cache directory plus `pissbox/bridge`:
+`~/Library/Caches/pissbox/bridge` on macOS; `$XDG_CACHE_HOME/pissbox/bridge` on
+Linux, or `~/.cache/pissbox/bridge` when XDG is unset. It is independent of the
+checkout and `PISSBOX_STATE_DIR`. It must be owned by the current user with mode
+0700. `control.sock` is host-only, mode 0600; `daemon.lock` holds an OS flock for
+the daemon's lifetime. A versioned handshake checks readiness. PID/socket files
+alone never establish ownership. Concurrent starters converge on the lock holder;
+a stale socket is recovered only under the lock. Standard streams are detached
+from the launcher's terminal and pipes.
+
+Use the matching binary for your host (example: macOS arm64):
+
+```bash
+.cache/bin/go-bridge-darwin-arm64 ensure  # Start if absent; otherwise check compatibility
+.cache/bin/go-bridge-darwin-arm64 status  # JSON: protocol version, PID, registration count
+.cache/bin/go-bridge-darwin-arm64 stop    # Explicitly stop and release all registrations
+```
+
+`register --mailbox DIR --herdr-socket PATH --herdr-pane ID --owner-pid PID`
+ensures the daemon, then prints an opaque ID after mailbox readiness is installed.
+`unregister --id ID` drains/releases that registration only; it never starts or
+stops a daemon. The launcher uses these operations automatically. Control messages
+are capped at 16 KiB with 2-second IO deadlines; startup readiness has a 3-second
+retry window. Socket paths are limited to 103 bytes for macOS compatibility.
+`PISSBOX_BRIDGE_RUNTIME_DIR` overrides the private runtime directory for isolated
+tests; setting different overrides intentionally creates separate daemons. Do not
+mount the runtime directory into SBX.
+
+Registrations exist only in memory. After daemon death, mailbox readiness becomes
+stale within five seconds and Pi stops publishing as before. Starting another
+launch ensures a new daemon but **does not restore old registrations**. Exit the
+old Pi attachment and reattach through `bin/pissbox` (choose Pi), which registers
+a fresh mailbox. No sandbox recreation is needed.
+
+For a binary upgrade, close active launches, run `stop` with the old matching
+binary, build/install the replacement, then launch again. An incompatible live
+daemon is never silently replaced or killed. A protocol-compatible existing
+daemon continues running its old executable until explicitly stopped. When moving
+from the old per-launch model, first close launches that still own per-launch
+helpers; the singleton cannot adopt them. There is no watchdog or automatic
+restart for existing sessions.
 
 ## Mailbox and boundary
 
@@ -60,7 +115,7 @@ inside the shared-state mount. Only its path is passed into the sandbox as
 
 Events are small immutable JSON files, published by atomic rename and named
 with a monotonic timestamp and random suffix. Reading them in filename order
-preserves quick working → idle transitions between polls. The helper polls at
+preserves quick working → idle transitions between polls. Each mailbox worker polls at
 100 ms, validates and forwards events, and removes consumed event files. Failed
 Herd requests remain queued for retry with a bounded socket timeout. Messages
 contain no prompts, source contents, credentials, or session logs.
@@ -78,10 +133,10 @@ oversized files, symlinks, and non-regular files are rejected. Reads are rooted 
 the adapter, pane, source, and agent; sandbox events cannot request arbitrary
 Herd methods, host commands, or resume commands.
 
-The helper refreshes a readiness marker every second. The extension stops
-publishing to a missing/stale helper and warns once if an active bridge fails.
+Each worker refreshes its readiness marker every second. The extension stops
+publishing to a missing/stale worker and warns once if an active bridge fails.
 A stale environment from an earlier sandbox launch is silently ignored at
-startup. A mailbox with more than 4096 directory entries disables the helper;
+startup. A mailbox with more than 4096 directory entries disables that registration;
 after its marker expires the extension stops publishing. Empty mailboxes and
 incomplete pending files are retained; no background cleanup removes shared
 state.
@@ -95,7 +150,9 @@ bound Herd agent.
 ## Extend
 
 `mailbox.go` owns the envelope and safe file reads; `herdr.go` owns Herd requests;
-`main.go` owns polling, retries, readiness, and shutdown. The small adapter
+`main.go` owns mailbox polling, retries, readiness, and final drain;
+`control.go` owns the host CLI, singleton lock/socket, registrations, and owner
+liveness. The small adapter
 interface separates transport from host integration. Add capabilities explicitly
 with validation and tests, not a generic host RPC passthrough.
 
@@ -114,11 +171,17 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 bin/build-bridge --all
 ```
 
-Go tests use a real local Unix socket with a simulated Herd responder. Launcher
-tests stub SBX and the helper; JS tests drive extension lifecycle callbacks.
+Go tests use real CLI/daemon subprocesses and local Unix sockets with simulated
+Herd responders. They cover concurrent startup, crash recovery, incompatible
+protocols, independent routing, owner death, and stalled connections. Launcher
+tests stub SBX and control operations, plus one real-daemon launcher-crash check;
+JS tests drive unchanged extension lifecycle callbacks. All test daemons use
+isolated directories under `.cache/test-fixtures/` and are stopped by cleanup.
 These do not prove a real Herd/SBX connection or macOS runtime compatibility.
 
-For the real smoke test, launch from Herd, check `herdr agent list` for
-`pissbox-pi`, run a task, and observe working → idle. Switch away from its tab
-to test completion notifications, exercise a blocking extension UI prompt for
-attention, then disconnect and confirm the custom agent is released.
+For the real smoke test, launch from two Herd panes and check `status` shows one
+PID and two registrations. Check `herdr agent list` for `pissbox-pi`, run tasks,
+and observe each pane's independent working → idle states. Switch away from a tab
+to test completion notifications and exercise a blocking extension UI prompt for
+attention. Close one launcher: only its agent should release; the other must keep
+reporting under the same daemon PID. After both close, the daemon remains idle.

@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import time
 
 args = sys.argv[1:]
 if os.environ.get("TEST_SBX_CALL_LOG"):
@@ -30,6 +31,8 @@ if args[:1] == ["rm"]:
     sys.exit(int(os.environ.get("TEST_SBX_REMOVE_STATUS", "0")))
 
 mode = os.environ.get("TEST_SBX_MODE", "success")
+if mode == "wait":
+    time.sleep(60)
 if mode == "conflict":
     name = os.environ.get("TEST_SBX_NAME", "pi-existing")
     print(

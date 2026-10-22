@@ -10,7 +10,8 @@ SANDBOX_NAME=""
 DELETE_DIRECTORY=""
 LIST_SANDBOXES=false
 WORKSPACES=()
-BRIDGE_PID=""
+BRIDGE_ID=""
+BRIDGE_BINARY=""
 BRIDGE_ENV_ARGS=()
 
 # --- Help -------------------------------------------------------------------
@@ -336,16 +337,15 @@ fi
 
 # --- Optional Herd bridge ---------------------------------------------------
 stop_bridge() {
-	if [[ -n $BRIDGE_PID ]]; then
-		kill "$BRIDGE_PID" 2>/dev/null || true
-		wait "$BRIDGE_PID" 2>/dev/null || true
-		BRIDGE_PID=""
+	if [[ -n $BRIDGE_ID ]]; then
+		"$BRIDGE_BINARY" unregister --id "$BRIDGE_ID" || true
+		BRIDGE_ID=""
 	fi
 	BRIDGE_ENV_ARGS=()
 }
 
 start_bridge() {
-	local os arch binary mailbox attempt
+	local os arch binary mailbox
 	BRIDGE_ENV_ARGS=()
 	if [[ ${HERDR_ENV:-} != 1 ]]; then
 		return 0
@@ -383,21 +383,15 @@ start_bridge() {
 		echo "Warning: cannot create Herd bridge mailbox. Continuing without it." >&2
 		return 0
 	fi
-	"$binary" --mailbox "$mailbox" --herdr-socket "$HERDR_SOCKET_PATH" \
-		--herdr-pane "$HERDR_PANE_ID" </dev/null &
-	BRIDGE_PID=$!
-	for ((attempt = 0; attempt < 50; attempt++)); do
-		if ! kill -0 "$BRIDGE_PID" 2>/dev/null; then
-			break
-		fi
-		if [[ -f $mailbox/ready ]]; then
-			BRIDGE_ENV_ARGS=(--env "PISSBOX_BRIDGE_DIR=$mailbox")
-			return 0
-		fi
-		sleep 0.02
-	done
+	BRIDGE_BINARY=$binary
+	if BRIDGE_ID=$("$binary" register --mailbox "$mailbox" \
+		--herdr-socket "$HERDR_SOCKET_PATH" --herdr-pane "$HERDR_PANE_ID" \
+		--owner-pid "$$" </dev/null) && [[ -n $BRIDGE_ID ]]; then
+		BRIDGE_ENV_ARGS=(--env "PISSBOX_BRIDGE_DIR=$mailbox")
+		return 0
+	fi
+	BRIDGE_ID=""
 	echo "Warning: Herd bridge failed to start. Continuing without it." >&2
-	stop_bridge
 }
 
 trap stop_bridge EXIT
@@ -441,7 +435,7 @@ while true; do
 	case ${CHOICE:-p} in
 	[Pp])
 		start_bridge
-		if [[ -n $BRIDGE_PID ]]; then
+		if [[ -n $BRIDGE_ID ]]; then
 			sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
 			exit $?
 		fi
