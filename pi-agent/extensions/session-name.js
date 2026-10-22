@@ -23,8 +23,11 @@ export default function (pi) {
 	pi.on("session_start", (event, ctx) => {
 		cancel();
 		// Existing conversations, including reloads and forks, are never auto-renamed.
+		const hasConversation = ctx.sessionManager.getBranch().some((entry) =>
+			(entry.type === "message" && entry.message.role !== "system") ||
+			entry.type === "compaction" || entry.type === "branch_summary" || entry.type === "custom_message");
 		eligible = ctx.mode === "tui" && (event.reason === "startup" || event.reason === "new") &&
-			!pi.getSessionName() && ctx.sessionManager.getBranch().length === 0;
+			!pi.getSessionName() && !hasConversation;
 		firstPrompt = "";
 	});
 	pi.on("session_shutdown", cancel);

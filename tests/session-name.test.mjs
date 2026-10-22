@@ -4,9 +4,12 @@ import { realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { setImmediate } from "node:timers/promises";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 // Use the installed Pi dependencies and the same alias its extension loader uses.
-const piRequire = createRequire(realpathSync(execFileSync("sh", ["-c", "command -v pi"], { encoding: "utf8" }).trim()));
+const piExecutable = pathToFileURL(realpathSync(execFileSync("sh", ["-c", "command -v pi"], { encoding: "utf8" }).trim()));
+const piRequire = createRequire(piExecutable);
+const { SessionManager } = await import(new URL("./index.js", piExecutable));
 const { createJiti } = piRequire("jiti");
 const jiti = createJiti(import.meta.url, {
 	fsCache: false,
@@ -14,7 +17,10 @@ const jiti = createJiti(import.meta.url, {
 });
 const extension = await jiti.import("../pi-agent/extensions/session-name.js", { default: true });
 
-function session({ mode = "tui", name, entries = [] } = {}) {
+function session({ mode = "tui", name, entries = [
+	{ type: "model_change", provider: "current-provider", modelId: "current-model" },
+	{ type: "thinking_level_change", thinkingLevel: "medium" },
+] } = {}) {
 	const handlers = new Map();
 	const tools = new Map();
 	const requests = [];
@@ -80,6 +86,20 @@ test("names a new session once, in the background, using only the bounded first 
 	assert.deepEqual(s.saved, ["Fix login redirect loop"]);
 	s.settle();
 	assert.equal(s.requests.length, 1);
+});
+
+test("auto-names a session initialized with Pi's real startup metadata", async () => {
+	const manager = SessionManager.inMemory(process.cwd());
+	manager.appendModelChange("current-provider", "current-model");
+	manager.appendThinkingLevelChange("medium");
+	const s = session({ entries: manager.getBranch() });
+	s.emit("session_start");
+	s.prompt();
+	s.settle();
+	assert.equal(s.requests.length, 1, "startup metadata must not count as an existing conversation");
+	s.requests[0].resolve(title("Fix login redirect loop"));
+	await setImmediate();
+	assert.deepEqual(s.saved, ["Fix login redirect loop"]);
 });
 
 test("leaves existing, resumed, forked, reloaded and headless conversations alone", () => {
