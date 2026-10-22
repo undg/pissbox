@@ -45,9 +45,9 @@ Upstream's official Pi integration requires host Pi process detection, so merely
 forwarding its socket messages is insufficient for sandbox Pi. Review delivery
 and native session-log integration remain unresolved.
 
-- [ ] **Sandbox agent visibility:** custom `pissbox-pi` lifecycle reporting is
+- [x] **Sandbox agent visibility:** custom `pissbox-pi` lifecycle reporting is
       implemented; real Herd sidebar visibility still needs verification.
-- [ ] **Finished-job notifications:** the initial bridge reports final Pi
+- [x] **Finished-job notifications:** the initial bridge reports final Pi
       settlement through Herd's semantic state API, bound to the launching pane.
       Real host notifications still need verification, including active-tab
       suppression. Native session visibility remains outside this first slice.
