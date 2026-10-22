@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import platform
 import shutil
 import subprocess
 import tempfile
@@ -14,7 +15,27 @@ PI_DIR = ROOT / "pi-agent"
 STATE_DIR = ROOT / ".cache"
 
 
+def without_optional_bridge_diagnostics(stderr):
+    # Dedicated bridge tests assert these warnings; general launcher tests must
+    # work with either missing, current, or stale prebuilt optional binaries.
+    return "".join(line for line in stderr.splitlines(keepends=True)
+                   if not line.startswith(("Warning: Host bridge", "pissbox bridge:")))
+
+
 class LauncherTests(unittest.TestCase):
+    def setUp(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        self.bridge_runtime = tempfile.mkdtemp(prefix="ls-", dir=fixtures)
+        self.addCleanup(self.stop_test_bridge)
+
+    def stop_test_bridge(self):
+        if not (Path(self.bridge_runtime) / "control.sock").exists():
+            return
+        arch = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}.get(platform.machine())
+        binary = STATE_DIR / f"bin/go-bridge-{platform.system().lower()}-{arch}"
+        subprocess.run([str(binary), "stop"], env=self.environment(), capture_output=True, timeout=6)
+
     def environment(self, **overrides):
         env = {
             key: value
@@ -23,6 +44,7 @@ class LauncherTests(unittest.TestCase):
             and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR", "PISSBOX_BRIDGE_DIR")
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
+        env["PISSBOX_BRIDGE_RUNTIME_DIR"] = self.bridge_runtime
         env.update(overrides)
         return env
 
@@ -36,11 +58,17 @@ class LauncherTests(unittest.TestCase):
             capture_output=True,
             timeout=5,
         )
-        calls = [
-            json.loads(line.removeprefix("sbx:"))
-            for line in result.stdout.splitlines()
-            if line.startswith("sbx:")
-        ]
+        calls = []
+        for line in result.stdout.splitlines():
+            if not line.startswith("sbx:"):
+                continue
+            args = json.loads(line.removeprefix("sbx:"))
+            # Optional launch mailbox arguments vary with installed host binary.
+            calls.append([arg for i, arg in enumerate(args)
+                          if not arg.startswith("PISSBOX_BRIDGE_DIR=")
+                          and not (arg == "--env" and i + 1 < len(args)
+                                   and args[i + 1].startswith("PISSBOX_BRIDGE_DIR="))])
+        result.stderr = without_optional_bridge_diagnostics(result.stderr)
         return result, calls
 
     def conflict(self, answers, **env):
@@ -526,7 +554,7 @@ class LauncherTests(unittest.TestCase):
                 text=True, timeout=5,
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stderr, "")
+            self.assertEqual(without_optional_bridge_diagnostics(result.stderr), "")
         finally:
             os.close(master)
             os.close(slave)

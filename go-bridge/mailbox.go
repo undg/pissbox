@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -95,15 +94,14 @@ func readEvent(root *os.Root, name string) (event, error) {
 }
 
 func markReady(root *os.Root) error {
-	file, err := root.OpenFile("ready", os.O_WRONLY|os.O_CREATE|os.O_TRUNC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	info, err := root.Lstat("ready")
+	if err == nil && !info.Mode().IsRegular() {
 		return errors.New("ready marker is not a regular file")
 	}
-	_, err = fmt.Fprintln(file, "1")
-	return err
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	// Atomic replacement prevents readers observing an empty capability marker
+	// between truncation and write during a normal heartbeat.
+	return publishRecord(root, "ready", protocolVersion)
 }

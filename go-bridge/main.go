@@ -38,7 +38,7 @@ func (b *bridge) poll(ctx context.Context) error {
 		if err != nil {
 			// Do not log sandbox-provided contents, filenames, or error strings.
 			b.warning("discarding an invalid mailbox event")
-		} else {
+		} else if b.target != nil {
 			b.attempted = true
 			if err := b.target.Send(ctx, e); err != nil {
 				b.warning("Herd reporting unavailable; queued events will retry")

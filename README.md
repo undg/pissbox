@@ -39,7 +39,7 @@ Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
 - [Usage, settings, and sandbox lifecycle](sbx-kit/README.md)
 - [Image builds, optional CA, and bundled search model](sbx-kit/README.image.md)
 - [Shared Linux tool state](sbx-kit/SHARED-DIRECTORIES.md)
-- [Optional Herd lifecycle bridge and Go cross-builds](go-bridge/README.md)
+- [Agent messaging, optional Herd lifecycle bridge, and Go cross-builds](go-bridge/README.md)
 - [Known issues](KNOWN_ISSUES.md)
 - [Development rules and verification](AGENTS.md)
 - [Make targets, scoped mutation testing, coverage, and CRAP metrics](tools/quality/README.md)

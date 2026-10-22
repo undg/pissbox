@@ -1,13 +1,13 @@
 # go-bridge
 
-Optional host-side bridge between sandbox Pi and host integrations. First scope:
-Herd sidebar state and Herd's existing completion/attention notifications.
+Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar
+state and Herd's existing completion/attention notifications.
 One persistent daemon per host OS user, shared across checkouts and state roots.
 No MCP endpoint, HTTP listener, service manager, or third-party Go dependencies.
 
 ## Build
 
-Requires **Go 1.24+ on the build machine only**:
+Requires **Go 1.25+ on the build machine only** (for rooted atomic rename):
 
 ```bash
 bin/build-bridge        # Current host OS and CPU
@@ -24,15 +24,16 @@ The launcher selects the binary from this checkout, independently of a custom
 
 ## Use
 
-Build, then launch `bin/pissbox` from a normal Herd terminal pane. The launcher
-uses `HERDR_ENV=1`, `HERDR_SOCKET_PATH`, and `HERDR_PANE_ID` on the host. Outside
-Herd it never contacts the daemon. Missing binaries/extensions and startup failures warn
-without preventing Pi from starting.
+Build, then launch `bin/pissbox` from any terminal. Agent discovery and messaging
+work without Herd. Inside Herd the launcher additionally binds `HERDR_SOCKET_PATH`
+and `HERDR_PANE_ID` when `HERDR_ENV=1`. An incomplete Herd binding warns but leaves
+messaging enabled. Missing binaries/extensions and startup failures warn without
+preventing Pi from starting.
 
-The selected Pi directory must contain `extensions/pissbox-bridge.js`. The
-repository's default `pi-agent/` already does; alternate Pi directories need
-the extension too. Pi discovers it automatically. The extension is plain JS
-with JSDoc types so lifecycle tests need only Node, not a TS compiler.
+The selected Pi directory must contain `extensions/pissbox-bridge.js` and its
+`extensions/lib/agent-messaging.js` helper. The repository's default `pi-agent/`
+already does; alternate Pi directories need both. Pi discovers the root extension
+automatically. Both files are plain JS; tests use Node and Go, not a TS compiler.
 
 ```text
 launchers → host control socket → persistent Go daemon
@@ -50,9 +51,9 @@ automatic continuation remains. It releases on session shutdown. Headless Pi
 sessions do not report. This needs a Pi version exposing `agent_settled` and
 `ui_prompt_start`/`ui_prompt_end`; ordinary model/tool output is not inspected.
 
-The launcher registers a fresh mailbox with its host-owned socket, pane, and
-launcher PID. Normal exit unregisters that opaque registration ID, drains final
-events, and best-effort releases only its own Herd agent. The daemon also polls
+The launcher registers a fresh mailbox with its launcher PID and an optional,
+complete host-owned Herd socket/pane binding. Normal exit unregisters that opaque
+registration ID, drains final events, and best-effort releases only its own Herd agent. The daemon also polls
 owner PID liveness for launcher crashes. Duplicate mailbox or socket/pane bindings
 are refused, including while the old registration is draining. Workers are
 independent: one failed Herd connection or mailbox cannot stall the other panes.
@@ -83,8 +84,13 @@ Use the matching binary for your host (example: macOS arm64):
 .cache/bin/go-bridge-darwin-arm64 stop    # Explicitly stop and release all registrations
 ```
 
-`register --mailbox DIR --herdr-socket PATH --herdr-pane ID --owner-pid PID`
+`register --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]`
 ensures the daemon, then prints an opaque ID after mailbox readiness is installed.
+The Herd arguments must either both be present or both be absent. Host control
+protocol **2** rejects older live daemons; stop one with its matching old binary
+before upgrading. Lifecycle envelopes remain version 1. The readiness marker
+contains `2`; messaging refuses fresh legacy markers too, including after an
+extension reload inside an old still-running launch.
 `unregister --id ID` drains/releases that registration only; it never starts or
 stops a daemon. The launcher uses these operations automatically. Control messages
 are capped at 16 KiB with 2-second IO deadlines; startup readiness has a 3-second
@@ -117,8 +123,10 @@ Events are small immutable JSON files, published by atomic rename and named
 with a monotonic timestamp and random suffix. Reading them in filename order
 preserves quick working → idle transitions between polls. Each mailbox worker polls at
 100 ms, validates and forwards events, and removes consumed event files. Failed
-Herd requests remain queued for retry with a bounded socket timeout. Messages
-contain no prompts, source contents, credentials, or session logs.
+Herd requests remain queued for retry with a bounded socket timeout. Lifecycle events
+contain no prompts, source contents, credentials, or session logs. Peer message
+payloads exist only in the filesystem transport and Pi conversation; the daemon
+never logs them.
 
 The version-1 envelope accepts only:
 
@@ -127,7 +135,7 @@ The version-1 envelope accepts only:
 {"version":1,"kind":"release"}
 ```
 
-State may be `idle`, `working`, or `blocked`, with an optional message of at most
+Lifecycle state may be `idle`, `working`, or `blocked`, with an optional message of at most
 512 bytes without control characters. Unknown fields, other event kinds,
 oversized files, symlinks, and non-regular files are rejected. Reads are rooted in the mailbox. The host fixes
 the adapter, pane, source, and agent; sandbox events cannot request arbitrary
@@ -143,16 +151,135 @@ state.
 
 **This is not an isolation boundary between sandboxes sharing writable state.**
 Any process that can write another launch's mailbox can forge that launch's
-state events. Per-launch directories prevent accidental mixing, not a malicious
-shared-state writer. Host operations remain limited to reporting/releasing the
-bound Herd agent.
+state events or peer identities/messages/receipts. Per-launch directories prevent
+accidental mixing, not a malicious shared-state writer. Host adapter operations
+remain limited to reporting/releasing the bound Herd agent.
+
+## Agent messaging
+
+`agent_list` returns `self` and live `peers` across all registered mailboxes and
+state roots. `agent_send({ to, text, inReplyTo? })` addresses one exact live agent
+ID. Session names are display metadata, not addresses. A peer can reply by sending
+to the incoming `from.id` and optionally referencing its `id` as `inReplyTo`.
+There is no broadcast, automatic reply, or automatic resend.
+
+The recipient inserts a displayed `agent-peer` custom message through
+`pi.sendMessage(..., { deliverAs: "followUp", triggerTurn: true })`. Idle Pi wakes;
+busy Pi receives a follow-up after current work. Text is never submitted as user
+input or expanded as a slash command. The tool succeeds only after an explicit
+`queued` receipt following native queue insertion, **not** after reasoning or an
+answer. A timeout or disappearing recipient after publication is `indeterminate`:
+insertion may already have happened. Do not retry automatically. Unknown/expired
+addresses and full queues fail before publication. Bridge loss or local
+cancellation after publishing a request is likewise potentially indeterminate.
+
+Each session startup (including new/resume/fork/reload) creates a random 128-bit
+live ID; shutdown removes presence, cancels local requests, and clears the poll
+timer. Rename updates metadata without changing the ID. Messaging runs in TUI,
+RPC, JSON, and print modes while Pi is alive; Herd reporting stays TUI-only.
+Presence refreshes every second and expires after 10 seconds. An expired or
+retired ID never revives within this daemon lifetime. After a long process pause,
+reload/reattach for a new address. Removing a launch registration retires its
+agents on the next messaging poll without affecting other launches.
+
+### File layout and version-1 envelopes
+
+All IDs below are 32 lowercase hex characters. The sandbox knows only its mounted
+launch mailbox, never the host control socket. Each agent has independent queues:
+
+```text
+bridge-launch.*/
+  ready                          # Host writes 2; refreshes every second
+  <lifecycle-event>.json          # Existing lifecycle transport
+  agents/<live-agent-id>/
+    presence.json                # Pi publishes identity atomically
+    inbox-index.json             # Host publishes pending message IDs atomically
+    requests/<request-id>.json    # Pi → daemon: list or send
+    responses/<request-id>.json   # Daemon → originating Pi
+    inbox/<message-id>.json       # Daemon → recipient Pi
+    receipts/<message-id>.json    # Recipient Pi → daemon
+```
+
+Presence (file mtime is the lease; names/cwd are metadata, not routing paths):
+
+```json
+{"version":1,"agent":{"id":"<agent-id>","sessionId":"<Pi-session-id>","name":"Example","cwd":"/workspace","state":"idle"}}
+```
+
+Requests contain no caller-selected sender identity. The daemon resolves the
+sender from the registered source agent. Unknown fields are rejected:
+
+```json
+{"version":1,"id":"<request-id>","op":"list"}
+{"version":1,"id":"<request-id>","op":"send","to":"<recipient-id>","text":"Hello","inReplyTo":"<optional-message-id>"}
+```
+
+List responses contain `self` and, when nonempty, `peers` identity objects. Send
+responses carry a bridge-generated `messageId`. Failures use `error`:
+
+```json
+{"version":1,"id":"<request-id>","status":"ok","self":{"id":"<self-id>","sessionId":"<session-id>","name":"Example","cwd":"/workspace","state":"idle"}}
+{"version":1,"id":"<request-id>","status":"queued","messageId":"<message-id>"}
+{"version":1,"id":"<request-id>","status":"failed","error":"unknown or expired recipient"}
+{"version":1,"id":"<request-id>","status":"indeterminate","messageId":"<message-id>","error":"receipt timeout; queue insertion may have occurred; do not resend automatically"}
+```
+
+The bridge atomically publishes a bounded inbox index when its pending set
+changes, including an empty index when no messages are pending:
+
+```json
+{"version":1,"to":"<recipient-id>","messages":["<message-id>"]}
+```
+
+The recipient opens this well-known file, then reads each message by its exact
+validated filename. Do not rely on directory enumeration for host-to-sandbox
+notification: observed virtiofs listings omitted host-created files even while
+those files were readable by exact path. The index holds at most 64 unique live
+message IDs; malformed indexes, traversal IDs, and mismatched recipients are
+rejected. For compatibility, an absent index falls back to directory scanning
+with older protocol-2 daemons; this fallback is not reliable on affected mounts.
+Updating binaries alone does not change an already-running compatible daemon:
+explicitly stop/start it and reattach affected launches to activate the fix.
+
+Inbox records include the exact recipient, sender identity, and deadline as Unix
+milliseconds. Optional `inReplyTo` is copied from the send request:
+
+```json
+{"version":1,"id":"<message-id>","to":"<recipient-id>","from":{"id":"<sender-id>","sessionId":"<session-id>","name":"Sender","cwd":"/workspace","state":"working"},"text":"Hello","expires":1780000000000}
+{"version":1,"id":"<message-id>","to":"<recipient-id>","status":"queued"}
+```
+
+The second envelope belongs in `receipts/`, only after insertion. The recipient
+processes inboxes serially, fences mismatched/expired addresses, and deduplicates
+message IDs for its live incarnation. Replayed send request IDs return the cached
+result without a second insertion; pending duplicates do not enqueue again.
+
+Limits: 16 KiB UTF-8 text, 32 KiB serialized record (including JSON escaping), 64
+unacknowledged incoming messages and 64 outgoing sends per agent. The receipt
+deadline is 10 seconds after bridge publication; the extension waits up to 12
+seconds for the bridge response. Requests, inboxes, and responses use exclusive
+temporary `.pending` files plus atomic rename. Reads are bounded regular-file
+reads; symlinks, FIFOs, malformed records, traversal IDs, and queue overflow are
+rejected. Go operations are rooted in each mailbox; Node uses only validated IDs
+under its own agent directory and rejects non-directory/symlink queue paths.
+
+Additional safety ceilings: 256 live agents, 4096 agent directories per mailbox,
+256 request-directory entries, 4096 processed request IDs and received message
+IDs per incarnation, and 4096 retained retired IDs before admitting new agents
+is disabled. Reload for per-incarnation exhaustion; explicitly restart the daemon
+for retired-ID exhaustion. A peer list exceeding 32 KiB fails explicitly rather
+than silently truncating peers. No deduplication IDs are evicted to permit replay.
+Consumed records are removed; abandoned agent directories and incomplete pending
+files are retained, never silently migrated or deleted. Shared writable state is
+a trusted local transport, not an authorization boundary.
 
 ## Extend
 
 `mailbox.go` owns the envelope and safe file reads; `herdr.go` owns Herd requests;
 `main.go` owns mailbox polling, retries, readiness, and final drain;
 `control.go` owns the host CLI, singleton lock/socket, registrations, and owner
-liveness. The small adapter
+liveness. `messaging.go` owns the separate presence/routing/receipt worker, so a
+stalled Herd adapter cannot delay peer messages. The small adapter
 interface separates transport from host integration. Add capabilities explicitly
 with validation and tests, not a generic host RPC passthrough.
 
@@ -178,8 +305,13 @@ Go tests use real CLI/daemon subprocesses and local Unix sockets with simulated
 Herd responders. They cover concurrent startup, crash recovery, incompatible
 protocols, independent routing, owner death, and stalled connections. Launcher
 tests stub SBX and control operations, plus one real-daemon launcher-crash check;
-JS tests drive unchanged extension lifecycle callbacks. All test daemons use
-isolated directories under `.cache/test-fixtures/` and are stopped by cleanup.
+JS tests drive lifecycle callbacks and connect real daemon subprocesses to the
+extension tools, checking native queue call options, idle/busy delivery contracts,
+replies, simultaneous sends, address replacement, deduplication, and timer cleanup.
+Indexed delivery is tested with inbox enumeration unavailable, plus malformed
+index/path-traversal rejection. Go simulated receivers consume the actual indexes
+and check they clear after acknowledgements.
+All test daemons use isolated directories under `.cache/test-fixtures/` and are stopped by cleanup.
 These do not prove a real Herd/SBX connection or macOS runtime compatibility.
 
 For the real smoke test, launch from two Herd panes and check `status` shows one

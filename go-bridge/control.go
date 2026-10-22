@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const protocolVersion = 1
+const protocolVersion = 2
 const controlTimeout = 2 * time.Second
 
 // Control is host-only. The sandbox only receives its mailbox directory.
@@ -170,7 +170,7 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		return errors.New("expected ensure, register, unregister, status, or stop")
 	}
 	if args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(stdout, "Usage: go-bridge {ensure|status|stop|register|unregister}\nregister --mailbox DIR --herdr-socket PATH --herdr-pane ID --owner-pid PID\nunregister --id ID\nRuntime: per-user cache/pissbox/bridge; override PISSBOX_BRIDGE_RUNTIME_DIR.")
+		fmt.Fprintln(stdout, "Usage: go-bridge {ensure|status|stop|register|unregister}\nregister --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]\nunregister --id ID\nRuntime: per-user cache/pissbox/bridge; override PISSBOX_BRIDGE_RUNTIME_DIR.")
 		return nil
 	}
 	op := args[0]
@@ -198,13 +198,13 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if op == "register" && (req.Mailbox == "" || req.Socket == "" || req.Pane == "" || req.Owner <= 1) {
-		return errors.New("register requires --mailbox, --herdr-socket, --herdr-pane and --owner-pid")
+	if op == "register" && (req.Mailbox == "" || req.Owner <= 1 || (req.Socket == "") != (req.Pane == "")) {
+		return errors.New("register requires --mailbox and --owner-pid; Herd socket and pane must be supplied together")
 	}
 	if op == "unregister" && req.ID == "" {
 		return errors.New("unregister requires --id")
 	}
-	if op == "register" {
+	if op == "register" && req.Socket != "" {
 		// Relative host socket paths belong to the caller, not the first launcher
 		// that happened to start the shared daemon.
 		var err error
@@ -260,16 +260,17 @@ type daemon struct {
 }
 
 func (d *daemon) register(req controlRequest) (string, error) {
-	if !filepath.IsAbs(req.Mailbox) || !filepath.IsAbs(req.Socket) || req.Pane == "" || req.Owner <= 1 || !ownerAlive(req.Owner) {
+	if !filepath.IsAbs(req.Mailbox) || (req.Socket == "") != (req.Pane == "") ||
+		(req.Socket != "" && !filepath.IsAbs(req.Socket)) || req.Owner <= 1 || !ownerAlive(req.Owner) {
 		return "", errors.New("invalid host registration or dead owner")
 	}
 	mailbox, err := filepath.EvalSymlinks(req.Mailbox)
 	if err != nil || mailbox != filepath.Clean(req.Mailbox) {
 		return "", errors.New("mailbox must be an existing canonical directory")
 	}
-	if socket, err := filepath.EvalSymlinks(req.Socket); err == nil {
+	if socket, err := filepath.EvalSymlinks(req.Socket); req.Socket != "" && err == nil {
 		req.Socket = socket
-	} else if parent, err := filepath.EvalSymlinks(filepath.Dir(req.Socket)); err == nil {
+	} else if parent, err := filepath.EvalSymlinks(filepath.Dir(req.Socket)); req.Socket != "" && err == nil {
 		req.Socket = filepath.Join(parent, filepath.Base(req.Socket))
 	}
 	d.mu.Lock()
@@ -278,7 +279,7 @@ func (d *daemon) register(req controlRequest) (string, error) {
 		return "", errors.New("too many bridge registrations")
 	}
 	for _, r := range d.regs {
-		if r.mailbox == mailbox || (r.socket == req.Socket && r.pane == req.Pane) {
+		if r.mailbox == mailbox || (req.Socket != "" && r.socket == req.Socket && r.pane == req.Pane) {
 			return "", errors.New("mailbox or Herd pane already registered")
 		}
 	}
@@ -302,7 +303,10 @@ func (d *daemon) register(req controlRequest) (string, error) {
 	d.regs[id] = r
 	go func() {
 		defer cancel()
-		b := bridge{root: root, target: &herdr{socket: req.Socket, pane: req.Pane}, warn: func(string) {}}
+		b := bridge{root: root, warn: func(string) {}}
+		if req.Socket != "" {
+			b.target = &herdr{socket: req.Socket, pane: req.Pane}
+		}
 		// An independent worker bounds the effect of a failed mailbox or Herd socket.
 		_ = b.run(ctx, req.Owner)
 		root.Remove("ready")
@@ -392,6 +396,11 @@ func serve(ctx context.Context, dir string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d := &daemon{ctx: ctx, regs: make(map[string]*registration)}
+	messagingDone := make(chan struct{})
+	go func() {
+		defer close(messagingDone)
+		d.runMessaging(ctx)
+	}()
 	var handlers sync.WaitGroup
 	go func() {
 		<-ctx.Done()
@@ -430,6 +439,7 @@ func serve(ctx context.Context, dir string) error {
 		}()
 	}
 	cancel()
+	<-messagingDone
 	handlers.Wait()
 	d.mu.Lock()
 	pending := make([]*registration, 0, len(d.regs))

@@ -41,7 +41,7 @@ Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
 If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
 Deletion requires a separate confirmation [y/N].
-Inside Herd, an optional prebuilt host bridge reports Pi lifecycle state.
+An optional prebuilt host bridge enables agent messaging and Herd lifecycle state.
 Build it with bin/build-bridge; bridge failures never prevent launching Pi.
 Deletion removes sandbox-local data and exits; mounted host files remain.
 Delete requires an existing directory and errors if no sandboxes match.
@@ -335,7 +335,7 @@ if [[ -n $SANDBOX_NAME ]]; then
 	SBX_ARGS+=(--name "$SANDBOX_NAME")
 fi
 
-# --- Optional Herd bridge ---------------------------------------------------
+# --- Optional host bridge ---------------------------------------------------
 stop_bridge() {
 	if [[ -n $BRIDGE_ID ]]; then
 		"$BRIDGE_BINARY" unregister --id "$BRIDGE_ID" || true
@@ -346,19 +346,20 @@ stop_bridge() {
 
 start_bridge() {
 	local os arch binary mailbox
+	local herd_args=()
 	BRIDGE_ENV_ARGS=()
-	if [[ ${HERDR_ENV:-} != 1 ]]; then
-		return 0
-	fi
-	if [[ -z ${HERDR_SOCKET_PATH:-} || -z ${HERDR_PANE_ID:-} ]]; then
-		echo "Warning: Herd bridge disabled; missing socket or pane environment." >&2
-		return 0
+	if [[ ${HERDR_ENV:-} == 1 ]]; then
+		if [[ -n ${HERDR_SOCKET_PATH:-} && -n ${HERDR_PANE_ID:-} ]]; then
+			herd_args=(--herdr-socket "$HERDR_SOCKET_PATH" --herdr-pane "$HERDR_PANE_ID")
+		else
+			echo "Warning: Herd reporting disabled; missing socket or pane environment. Agent messaging remains available." >&2
+		fi
 	fi
 	case $(uname -s) in
 	Darwin) os=darwin ;;
 	Linux) os=linux ;;
 	*)
-		echo "Warning: Herd bridge disabled; unsupported host OS." >&2
+		echo "Warning: Host bridge disabled; unsupported host OS." >&2
 		return 0
 		;;
 	esac
@@ -366,32 +367,32 @@ start_bridge() {
 	arm64 | aarch64) arch=arm64 ;;
 	x86_64 | amd64) arch=amd64 ;;
 	*)
-		echo "Warning: Herd bridge disabled; unsupported host architecture." >&2
+		echo "Warning: Host bridge disabled; unsupported host architecture." >&2
 		return 0
 		;;
 	esac
 	binary="$SCRIPT_DIR/../.cache/bin/go-bridge-$os-$arch"
 	if [[ ! -x $binary ]]; then
-		echo "Warning: Herd bridge binary missing; run bin/build-bridge. Continuing without it." >&2
+		echo "Warning: Host bridge binary missing; run bin/build-bridge. Continuing without it." >&2
 		return 0
 	fi
-	if [[ ! -f $PISSBOX_PI_DIR/extensions/pissbox-bridge.js ]]; then
-		echo "Warning: Herd bridge extension missing from selected Pi directory. Continuing without it." >&2
+	if [[ ! -f $PISSBOX_PI_DIR/extensions/pissbox-bridge.js ||
+		! -f $PISSBOX_PI_DIR/extensions/lib/agent-messaging.js ]]; then
+		echo "Warning: Host bridge extension missing from selected Pi directory. Continuing without it." >&2
 		return 0
 	fi
 	if ! mailbox=$(mktemp -d "$PISSBOX_STATE_DIR/bridge-launch.XXXXXXXX"); then
-		echo "Warning: cannot create Herd bridge mailbox. Continuing without it." >&2
+		echo "Warning: cannot create host bridge mailbox. Continuing without it." >&2
 		return 0
 	fi
 	BRIDGE_BINARY=$binary
 	if BRIDGE_ID=$("$binary" register --mailbox "$mailbox" \
-		--herdr-socket "$HERDR_SOCKET_PATH" --herdr-pane "$HERDR_PANE_ID" \
-		--owner-pid "$$" </dev/null) && [[ -n $BRIDGE_ID ]]; then
+		${herd_args[@]+"${herd_args[@]}"} --owner-pid "$$" </dev/null) && [[ -n $BRIDGE_ID ]]; then
 		BRIDGE_ENV_ARGS=(--env "PISSBOX_BRIDGE_DIR=$mailbox")
 		return 0
 	fi
 	BRIDGE_ID=""
-	echo "Warning: Herd bridge failed to start. Continuing without it." >&2
+	echo "Warning: Host bridge failed to start. Continuing without it." >&2
 }
 
 trap stop_bridge EXIT

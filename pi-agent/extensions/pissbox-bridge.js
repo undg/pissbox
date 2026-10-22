@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { renameSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { registerMessaging } from "./lib/agent-messaging.js";
 
 /** @typedef {"idle" | "working" | "blocked"} State */
 /** @typedef {import("@earendil-works/pi-coding-agent").ExtensionContext} ExtensionContext */
@@ -12,6 +13,7 @@ export default function (pi) {
 	const configured = process.env.PISSBOX_BRIDGE_DIR;
 	if (!configured || !path.isAbsolute(configured)) return;
 	const mailbox = configured;
+	registerMessaging(pi, mailbox);
 
 	let active = false;
 	let busy = false;

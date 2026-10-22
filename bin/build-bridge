@@ -8,7 +8,7 @@ show_help() {
 	cat <<EOF
 Usage: ${0##*/} [--all]
 
-Build the host Go bridge. Requires Go 1.24 or newer on the build machine only.
+Build the host Go bridge. Requires Go 1.25 or newer on the build machine only.
 
 Options:
   --all       Cross-compile macOS/Linux, each for arm64 and amd64
@@ -55,7 +55,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 OUTPUT_DIR="$ROOT_DIR/.cache/bin"
 
 if ! command -v go >/dev/null 2>&1; then
-	echo "Building the bridge requires Go 1.24 or newer; packaged hosts do not need Go." >&2
+	echo "Building the bridge requires Go 1.25 or newer; packaged hosts do not need Go." >&2
 	exit 1
 fi
 mkdir -p "$OUTPUT_DIR"

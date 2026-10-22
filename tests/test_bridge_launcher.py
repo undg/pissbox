@@ -26,6 +26,7 @@ class BridgeLauncherTests(unittest.TestCase):
         for name in ("settings-co.json", "settings-go.json"):
             (pi / name).write_text("{}")
         shutil.copy2(ROOT / "pi-agent/extensions/pissbox-bridge.js", pi / "extensions")
+        shutil.copytree(ROOT / "pi-agent/extensions/lib", pi / "extensions/lib")
         os_name = platform.system().lower()
         arch = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}[platform.machine()]
         self.binary = self.checkout / f".cache/bin/go-bridge-{os_name}-{arch}"
@@ -118,6 +119,14 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(events, [])
 
+    def test_missing_messaging_helper_warns_but_launches_pi(self):
+        (self.checkout / "pi-agent/extensions/lib/agent-messaging.js").unlink()
+        result, calls, events = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("extension missing", result.stderr)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(events, [])
+
     def test_launcher_crash_unregisters_but_leaves_real_daemon_alive(self):
         if not shutil.which("go"):
             self.skipTest("real bridge process test requires Go")
@@ -196,12 +205,22 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(events, [])
 
-    def test_outside_herd_does_not_contact_daemon(self):
+    def test_outside_herd_registers_messaging_without_a_herd_binding(self):
         result, calls, events = self.launch(HERDR_ENV="")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn("bridge", result.stderr)
-        self.assertFalse(any(arg.startswith("PISSBOX_BRIDGE_DIR=") for arg in calls[0]))
-        self.assertEqual(events, [])
+        self.assertEqual([event["kind"] for event in events], ["register", "unregister"])
+        self.assertIsNone(events[0]["herdr_socket"])
+        self.assertIsNone(events[0]["herdr_pane"])
+        self.assertIn("PISSBOX_BRIDGE_DIR=" + events[0]["mailbox"], calls[0])
+
+    def test_partial_herd_binding_keeps_messaging_available(self):
+        result, calls, events = self.launch(HERDR_SOCKET_PATH="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Herd reporting disabled", result.stderr)
+        self.assertEqual([event["kind"] for event in events], ["register", "unregister"])
+        self.assertIsNone(events[0]["herdr_socket"])
+        self.assertIsNone(events[0]["herdr_pane"])
+        self.assertIn("PISSBOX_BRIDGE_DIR=" + events[0]["mailbox"], calls[0])
 
 
 if __name__ == "__main__":

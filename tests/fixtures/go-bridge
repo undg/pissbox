@@ -21,7 +21,7 @@ if os.environ.get("TEST_BRIDGE_START_FAIL") == "1":
 log = Path(os.environ["TEST_BRIDGE_LOG"])
 if args.operation == "register":
     registration = {"kind": "register", **vars(args), "id": secrets.token_hex(16)}
-    (Path(args.mailbox) / "ready").write_text("1\n")
+    (Path(args.mailbox) / "ready").write_text("2\n")
     with log.open("a") as output:
         output.write(json.dumps(registration) + "\n")
     print(registration["id"])

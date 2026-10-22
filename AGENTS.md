@@ -14,8 +14,9 @@ or directory name. User guides start at [README.md](README.md).
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
   during environment work. Use the `bash-cli-style` skill for Bash changes.
 - `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
-- `go-bridge/`: optional host-only Go lifecycle bridge; build matching binaries
-  with `bin/build-bridge` or cross-compile all four targets with `--all`.
+- `go-bridge/`: optional host-only messaging/lifecycle bridge; requires Go 1.25+
+  to build. Build matching binaries with `bin/build-bridge` or cross-compile all
+  four targets with `--all`.
 - `tests/`: Python-standard-library regression tests.
 
 ## Image and kit constraints
@@ -68,9 +69,10 @@ or directory name. User guides start at [README.md](README.md).
   Choices are case-insensitive. `d` warns about local data loss, requires a
   separate explicit yes, then runs `sbx rm --force NAME` without recreating.
   Invalid input retries; EOF aborts. Other errors preserve output and status.
-- The optional Herd bridge is one persistent host daemon per OS user, independent
-  of checkout/state root. Launchers own opaque mailbox registrations, never the
-  daemon PID. Cleanup unregisters; only explicit bridge `stop` terminates it.
+- The optional host bridge provides agent messaging without Herd and lifecycle
+  reporting with a complete optional Herd binding. It is one persistent host daemon
+  per OS user, independent of checkout/state root. Launchers own opaque mailbox
+  registrations, never the daemon PID. Cleanup unregisters; only explicit bridge `stop` terminates it.
   Keep the control socket host-only, retain the filesystem mailbox boundary, and
   never silently replace an incompatible live daemon. After daemon failure,
   existing Pi sessions need launcher reattach; registrations are memory-only.
