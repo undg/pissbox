@@ -162,7 +162,10 @@ suppression settings still apply.
 
 ## Verify
 
-From the repository root:
+From the repository root, `make check` runs Go/JS/Python tests, vet, Bash syntax,
+and whitespace checks. Cross-build separately with `make build-all`. See
+[quality tooling](../tools/quality/README.md) for scoped Go/extension mutation
+testing and coverage/CRAP metrics.
 
 ```bash
 (cd go-bridge && go test -race ./... && go vet ./...)

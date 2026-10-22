@@ -110,6 +110,11 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Verification
 
+`make help` lists development targets. `make check` runs ordinary checks without
+installing tools or running mutation tests. See [quality tooling](tools/quality/README.md)
+and the project `code-quality` skill for scoped mutation, coverage, and CRAP checks.
+Mutation targets require `BASE` or exact `FILES`; never widen an empty selection.
+
 Read affected kit files before editing. Run:
 
 ```bash

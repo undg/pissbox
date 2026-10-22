@@ -42,3 +42,4 @@ Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
 - [Optional Herd lifecycle bridge and Go cross-builds](go-bridge/README.md)
 - [Known issues](KNOWN_ISSUES.md)
 - [Development rules and verification](AGENTS.md)
+- [Make targets, scoped mutation testing, coverage, and CRAP metrics](tools/quality/README.md)

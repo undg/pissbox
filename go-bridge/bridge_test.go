@@ -16,7 +16,10 @@ import (
 
 func fixture(t *testing.T) (string, *os.Root) {
 	t.Helper()
-	base := filepath.Join("..", ".cache", "test-fixtures")
+	base := os.Getenv("PISSBOX_BRIDGE_TEST_FIXTURE_DIR")
+	if base == "" {
+		base = filepath.Join("..", ".cache", "test-fixtures")
+	}
 	if err := os.MkdirAll(base, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +33,15 @@ func fixture(t *testing.T) (string, *os.Root) {
 	}
 	t.Cleanup(func() { root.Close() })
 	return dir, root
+}
+
+func TestFixtureRootOverride(t *testing.T) {
+	base, _ := fixture(t)
+	t.Setenv("PISSBOX_BRIDGE_TEST_FIXTURE_DIR", base)
+	dir, _ := fixture(t)
+	if filepath.Dir(dir) != base {
+		t.Fatalf("fixture root override ignored: %s is not under %s", dir, base)
+	}
 }
 
 func queue(t *testing.T, dir string, seq int, body string) string {
