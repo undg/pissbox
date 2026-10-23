@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -369,6 +370,41 @@ func TestIdleControlClientExpiresWithoutStallingStatus(t *testing.T) {
 		t.Fatal("idle control client was not disconnected")
 	} else if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
 		t.Fatal("server did not enforce its control IO deadline")
+	}
+}
+
+func TestCLIRejectsInvalidArgumentsBeforeCreatingRuntimeState(t *testing.T) {
+	p := processFixture(t)
+	runtime := filepath.Join(p.dir, "unused")
+	for _, args := range [][]string{
+		{}, {"unknown"}, {"ensure", "extra"}, {"status", "--unknown"},
+		{"register", "--owner-pid", fmt.Sprint(os.Getpid())},
+		{"register", "--mailbox", p.dir, "--owner-pid", "1"},
+		{"register", "--mailbox", p.dir, "--owner-pid", "invalid"},
+		{"register", "--mailbox", p.dir, "--owner-pid", fmt.Sprint(os.Getpid()), "--herdr-socket", "herd.sock"},
+		{"register", "--mailbox", p.dir, "--owner-pid", fmt.Sprint(os.Getpid()), "--herdr-pane", "pane"},
+		{"unregister"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			cmd := p.command(args...)
+			cmd.Env = append(cmd.Env, "PISSBOX_BRIDGE_RUNTIME_DIR="+runtime)
+			if out, err := cmd.CombinedOutput(); err == nil {
+				t.Fatalf("accepted invalid arguments %v: %s", args, out)
+			}
+			if _, err := os.Stat(runtime); !os.IsNotExist(err) {
+				t.Fatalf("invalid arguments reached runtime setup: %v", err)
+			}
+		})
+	}
+	for _, args := range [][]string{{"--help"}, {"-h"}, {"register", "--help"}} {
+		cmd := p.command(args...)
+		cmd.Env = append(cmd.Env, "PISSBOX_BRIDGE_RUNTIME_DIR="+runtime)
+		if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "Usage") {
+			t.Fatalf("help failed for %v: %v: %s", args, err, out)
+		}
+	}
+	if _, err := os.Stat(runtime); !os.IsNotExist(err) {
+		t.Fatalf("help reached runtime setup: %v", err)
 	}
 }
 

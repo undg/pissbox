@@ -32,8 +32,11 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   **Blocked:** SBX reports `not signed in to Docker`; no login attempted.
 - [x] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
   inspect fresh reports for concrete risks and fix verified problems.
-- [!] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
+- [x] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
   mutations where practical; investigate meaningful survivors and baseline errors.
+- [!] Risk review: inspect flagged control/router/poller functions, add missing
+  CLI safety validation coverage, and correct any verified tooling documentation
+  mismatches. No complexity-only refactor without a correctness reason.
 - [ ] Final ordinary aggregate `check`, review git status, record limitations and
   commits. No claim of real image build, host execution or sandbox launch.
 
@@ -91,3 +94,10 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   changes masked by the synchronous session-info event. These are not proven
   universally equivalent; no exclusions or brittle wording assertions added.
   `make test-js` now passes 24 tests.
+- Inspected CRAP-flagged control/router/poller code and existing integration
+  coverage. No verified production correctness defect found; no complexity-only
+  refactor. Added CLI invalid-argument and help tests to verify they never create
+  runtime state/start a daemon. `make test-go` passes with these cases.
+- Documentation mismatch found: quality/kit guides still claim Go 1.24, while
+  `go.mod` requires 1.25. Kit guide also incorrectly describes the old per-launch,
+  Herd-only bridge instead of the persistent messaging daemon.
