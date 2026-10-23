@@ -7,7 +7,7 @@ import test from "node:test";
 import extension from "../pi-agent/extensions/pissbox-bridge.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const fixtures = path.join(root, ".cache/test-fixtures");
+const fixtures = process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR || path.join(root, ".cache/test-fixtures");
 mkdirSync(fixtures, { recursive: true });
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function waitFor(check) {

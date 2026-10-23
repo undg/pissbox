@@ -161,7 +161,17 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
         selected = "pi-agent/extensions/my [worker].js"
         self.write(selected, "export default function value(n) { return n > 0; }\n")
         self.write("pi-agent/auth.json", "not-a-secret test sentinel\n")
-        self.write("go-bridge/pi-extension.test.mjs", 'import assert from "node:assert/strict"; import value from "../pi-agent/extensions/my [worker].js"; assert.equal(value(1), true);\n')
+        self.write("go-bridge/pi-extension.test.mjs", 'import "./agent-messaging.test.mjs"; import assert from "node:assert/strict"; import value from "../pi-agent/extensions/my [worker].js"; assert.equal(value(1), true);\n')
+        self.write("go-bridge/go.mod", "module fixture\n")
+        self.write("go-bridge/go.sum", "")
+        self.write("go-bridge/agent-messaging.test.mjs", '''import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+for (const name of ["main.go", "go.mod", "go.sum"]) {
+    assert.ok(existsSync(new URL(name, import.meta.url)), name);
+}
+assert.ok(process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.endsWith("/.cache/test-fixtures"));
+assert.ok(!process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.includes("/sandboxes/"));
+''')
         self.write("tests/session-name.test.mjs", 'import test from "node:test"; test("baseline", () => {});\n')
         result = self.quality("mutation-js", "--dry-run", selected)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)

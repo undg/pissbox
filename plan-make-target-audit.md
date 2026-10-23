@@ -30,9 +30,9 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
 - [ ] Kit: read affected kit configuration and attempt `validate-kit`; distinguish
   environment/authentication blockers from repository defects.
   **Blocked:** SBX reports `not signed in to Docker`; no login attempted.
-- [!] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
+- [x] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
   inspect fresh reports for concrete risks and fix verified problems.
-- [ ] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
+- [!] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
   mutations where practical; investigate meaningful survivors and baseline errors.
 - [ ] Final ordinary aggregate `check`, review git status, record limitations and
   commits. No claim of real image build, host execution or sandbox launch.
@@ -55,3 +55,18 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   linux/arm64 and linux/amd64 binaries; cross-builds were not executed.
 - `make fmt`, `make tidy`: passed, no tracked changes.
 - `make validate-kit`: blocked by Docker sign-in, not a kit validation result.
+- `make tools`: passed; pinned npm audit reports zero vulnerabilities (glob
+  still emits an upstream deprecation warning).
+- `make coverage-go`: passed, 82.9% statements. `make coverage-js`: passed,
+  97.67% lines/statements, 89.28% branches, 100% functions.
+- Full `make crap-go`: passed; 34 functions, three above 30: `controlCLI`
+  (59.39), `requests` (40.19), `serve` (33.03). Coverage in that run: 83.1%.
+- Full `make crap-js`: passed; `agent-messaging.js` poll has complexity 30,
+  CRAP 30.1 at 96% coverage. Other functions below 30.
+- JS mutation dry run initially failed: whitelist omitted imported messaging
+  tests and the Go daemon fixture sources. Added only required source/module
+  files and kept daemon runtime paths at the real checkout's isolated fixtures.
+  Rerun passed (153 session-name mutants discovered, not executed).
+- `make test-python` with installed tools: all 113 pass, no skips. The real
+  Stryker literal-path regression now also checks imported helpers, Go fixture
+  inputs and short runtime paths; private sentinel remains excluded.

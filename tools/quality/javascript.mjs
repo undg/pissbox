@@ -39,10 +39,19 @@ async function mutation() {
 	// instead, including any metacharacters in the checkout's own path.
 	const { escape } = await loadTool("minimatch");
 	const patterns = files.map((name) => escape(path.resolve(name), { windowsPathsNoEscape: true }));
+	// Messaging integration tests spawn an isolated bridge. Keep its socket
+	// paths outside Stryker's deeply nested workdirs (Unix has a short limit).
+	process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR = path.join(root, ".cache/test-fixtures");
 	const stryker = new Stryker({
 		mutate: patterns,
-		// Whitelist source and tests. Never copy shared auth, sessions, or caches.
-		ignorePatterns: ["**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs", ...tests.map((name) => `!${name}`)],
+		// Whitelist source and test dependencies, including the Go messaging
+		// fixture. Never copy shared auth, sessions, caches or host binaries.
+		ignorePatterns: [
+			"**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs",
+			"!go-bridge/agent-messaging.test.mjs", "!go-bridge/*.go",
+			"!go-bridge/go.mod", "!go-bridge/go.sum",
+			...tests.map((name) => `!${name}`),
+		],
 		testRunner: "command",
 		commandRunner: { command: `node --test ${tests.join(" ")}` },
 		coverageAnalysis: "off",

@@ -130,9 +130,12 @@ and ordinary test failures do fail commands.
 Reports describe the latest successful run's scope, not necessarily the whole
 project. No-op, failed, and JS dry runs can leave previous reports untouched;
 check command output and timestamps before quoting results. Stryker keeps
-sandbox copies under `.cache/mutation/js/sandboxes/`, with only extension source
-and the two test files whitelisted: shared auth, sessions, settings, and caches
-are never copied. Generated reports, fixtures, tools, and sandboxes stay ignored.
+sandbox copies under `.cache/mutation/js/sandboxes/`, with extension source,
+the lifecycle suites and their helpers, and Go bridge source/module files
+whitelisted. The messaging suite builds an isolated daemon in each sandbox;
+its runtime fixtures use the real checkout's `.cache/test-fixtures/` to avoid
+Unix socket path limits. Shared auth, sessions, settings, host binaries, and
+caches are never copied. Generated reports, fixtures, tools, and sandboxes stay ignored.
 
 `make validate-kit` is separate because SBX validation requires Docker sign-in.
 `make fmt` and `make tidy` are explicit source/modfile-changing operations.
