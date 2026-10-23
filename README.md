@@ -34,6 +34,54 @@ pissbox . ~/.config/opencode ~/.config/pi
 `.` is your workspace; the other directories are also mounted read-write.
 Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
 
+## Optional agent tools
+
+Build the host bridge, then launch normally:
+
+```bash
+make build       # Current host; requires Go 1.25+
+bin/pissbox
+```
+
+The bridge adds `agent_list` and `agent_send` for discovery and addressed
+Pi-to-Pi messaging across active launches. Herd is not required; when launched
+inside Herd, the bridge also reports working, idle, and blocked states.
+`make build-all` cross-compiles for macOS/Linux on arm64/amd64.
+See the [bridge guide](go-bridge/README.md) for setup and daemon lifecycle.
+
+New interactive sessions also generate a title from the first prompt. Use
+`/skill:session-name` to refresh it from the conversation, or `/name My title`
+for a manual rename. Automatic naming makes a small additional model request.
+
+## Development
+
+Run from the checkout root. Tests require Go 1.25+, Node.js, Python 3, and Pi
+installed on PATH; no Pi login is needed.
+
+```bash
+make help        # All targets and scope options; also the default for make
+make check       # Go/JS/Python tests, Go vet, Bash syntax, whitespace checks
+make tools       # Explicit network install of pinned quality tools into .cache/
+make coverage    # Fresh Go and JavaScript coverage reports
+make metrics     # Fresh coverage plus complexity and CRAP risk reports
+make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
+make mutation-go FILES="go-bridge/mailbox.go"
+```
+
+`make check` does not install quality tools or run mutation testing. `make tools`
+installs Gremlins and go-crap for Go, plus StrykerJS, c8, and crap4ts for
+JavaScript. Building these tools requires Go 1.26.2+ (or automatic toolchain
+download); JavaScript quality tooling requires Node 22+ and npm.
+
+Mutation targets require exact `FILES` or a `BASE` Git ref; `FILES` overrides
+`BASE`. Scope limits mutated source files, not the test suite. Reports live under
+`.cache/coverage/`, `.cache/crap/`, and `.cache/mutation/`.
+See the [quality guide](tools/quality/README.md) for selection previews, dry runs,
+report interpretation, and tool versions.
+
+Image builds remain `bin/build-image`. `make validate-kit` separately validates
+the kit with SBX and requires Docker sign-in.
+
 ## Guides
 
 - [Usage, settings, and sandbox lifecycle](sbx-kit/README.md)
