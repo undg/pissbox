@@ -70,3 +70,16 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
 - `make test-python` with installed tools: all 113 pass, no skips. The real
   Stryker literal-path regression now also checks imported helpers, Go fixture
   inputs and short runtime paths; private sentinel remains excluded.
+- Go mutation scope: `go-bridge/mailbox.go` only (27 mutants). Initial run:
+  19 killed, 8 lived; no timeouts, invalid, uncovered or skipped mutants.
+  Added boundary tests for 512-byte messages, 2048-byte files, 4096 entries,
+  empty-directory EOF, release payload rejection, unsafe/closed ready paths,
+  and existing readiness-marker capability refresh. Final run: 27 killed,
+  zero lived/timeouts/invalid/uncovered/skipped (100% for this file only).
+- Copied-module baseline passed with race detector and isolated fixture root.
+  Used direct `go test` only because no Make target exposes this diagnostic;
+  the diagnostic copy contains current Go source/tests, not private state.
+- JS mutation scope: `pi-agent/extensions/session-name.js` only (153 mutants).
+  Initial run: 110 killed, 43 survived, zero timeouts/uncovered/errors; 71.90%.
+  Investigating meaningful contract/race test gaps, not changing behavior or
+  excluding mutants to inflate the score.
