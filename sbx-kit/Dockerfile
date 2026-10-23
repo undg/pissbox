@@ -17,7 +17,7 @@ ARG COLGREP_VERSION=1.8.5
 ######################################################################
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils && \
+    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils jq && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
@@ -31,6 +31,24 @@ RUN --mount=type=secret,id=custom_ca \
             /usr/local/share/ca-certificates/custom-ca.crt && \
         update-ca-certificates; \
     fi
+
+
+######################################################################
+# Project configuration: upstream TOML-to-JSON CLI, no Go runtime needed
+######################################################################
+ARG TARGETARCH
+RUN version=2.4.3 && \
+    case "$TARGETARCH" in \
+        amd64) checksum=70282ec360a01cd6895a01267110338c6dae00d73d0c00a83b5bdc3b1884d083 ;; \
+        arm64) checksum=1e5bb8e8f42dded2a811594f0b15e01ab0546d1c2c3b8b388252d3b6e2084ab0 ;; \
+        *) echo "Unsupported tomljson architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fLsS --retry 3 \
+        "https://github.com/pelletier/go-toml/releases/download/v${version}/tomljson_${version}_linux_${TARGETARCH}.tar.xz" \
+        -o /var/tmp/tomljson.tar.xz && \
+    printf '%s  %s\n' "$checksum" /var/tmp/tomljson.tar.xz | sha256sum -c - && \
+    tar -xJf /var/tmp/tomljson.tar.xz -C /usr/local/bin tomljson && \
+    rm /var/tmp/tomljson.tar.xz
 
 
 ######################################################################

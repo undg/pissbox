@@ -34,6 +34,62 @@ Run `bin/pissbox --help` for all options. Directory selection is:
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
 
+## First-time project setup
+
+Place a file named `.pissbox.toml` in the primary workspace (the current directory
+when no workspace arguments are supplied, otherwise the first workspace):
+
+```toml
+setup = [
+  "pnpm i --frozen-lockfile",
+  "colgrep init",
+]
+```
+
+Commands run **inside the sandbox**, as user `1000`, with the primary workspace
+as their initial working directory. Only that workspace's `.pissbox.toml` is
+used; parent directories and additional workspaces are not searched. Missing
+files, an omitted `setup`, and `setup = []` are no-ops. The old executable
+`.pissbox` format is not read.
+
+The image supplies upstream `tomljson` (from `pelletier/go-toml/v2`) and `jq`.
+The whole TOML file and schema are validated before commands run. Currently the
+only supported key is the top-level `setup` array of strings; unknown keys,
+wrong types, and NUL bytes are errors. TOML literal strings (`'...'`) and multiline
+strings are supported when shell commands contain quotes or multiple lines.
+
+This is the last creation-time kit setup step, after Pi/shared-directory links
+and npm configuration, before `pi --offline` starts. SBX owns the once-per-creation
+lifecycle: attaching to or restarting an existing sandbox does not rerun it.
+Rebuild/import the image once to install the parser, then use a new sandbox
+name. Subsequent `.pissbox.toml` edits need no image rebuild, but only take effect
+when creating another sandbox. Existing sandboxes do not receive new kit steps.
+
+Commands run in one Bash process with `errexit`, `nounset`, and `pipefail`.
+Changes from `cd`, variables, and exports carry between commands. An unhandled
+failure stops setup and prevents the initial Pi launch; completed commands are
+not rolled back. Write repeat-safe commands in case a failed creation is retried.
+Exports and shell state in this script do not carry into Pi; write any persistent
+configuration explicitly.
+
+**Review `.pissbox.toml` before launching an unfamiliar project.** Its setup
+commands are executable code, not passive settings. It can modify all read-write mounts, including host
+workspace files and shared Pi/tool state. The host launcher never sources it.
+For direct kit launches without `bin/pissbox`, also pass
+`--env PISSBOX_WORKSPACE_DIR=/absolute/primary/workspace`.
+
+The Python regression suite uses the real `tomljson` and `jq` tools; these tests
+report a skip when either tool is missing. The sandbox image supplies both.
+For host-side tests, install `jq` and the pinned CLI (requires Go on the host
+for installation only):
+
+```bash
+GOBIN="$PWD/.cache/bin" go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
+make test-python
+```
+
+The tests also search `.cache/bin`, so no PATH changes are needed.
+
 ## Optional messaging and Herd reporting
 
 Build the host helper once with `make build` (Go 1.25+), or cross-compile

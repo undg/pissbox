@@ -50,6 +50,18 @@ class KitLayoutTests(unittest.TestCase):
                         dockerfile.index("npm install -g pnpm"))
         self.assertNotIn("COPY ca.crt", dockerfile)
 
+    def test_project_toml_parser_is_pinned_verified_and_installed_after_ca(self):
+        dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
+        self.assertIn("RUN version=2.4.3", dockerfile)
+        self.assertIn("tomljson_${version}_linux_${TARGETARCH}.tar.xz", dockerfile)
+        self.assertIn("amd64) checksum=70282ec360a01cd6895a01267110338c6dae00d73d0c00a83b5bdc3b1884d083", dockerfile)
+        self.assertIn("arm64) checksum=1e5bb8e8f42dded2a811594f0b15e01ab0546d1c2c3b8b388252d3b6e2084ab0", dockerfile)
+        self.assertIn("xz-utils jq", dockerfile)
+        verify = dockerfile.index("sha256sum -c -")
+        extract = dockerfile.index("tar -xJf /var/tmp/tomljson.tar.xz -C /usr/local/bin tomljson")
+        self.assertLess(dockerfile.index("update-ca-certificates;"), verify)
+        self.assertLess(verify, extract)
+
     def test_bundled_model_default_is_seeded_after_shared_links(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
         spec = SPEC.read_text()

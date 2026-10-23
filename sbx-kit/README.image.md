@@ -2,7 +2,7 @@
 
 `sbx-kit/Dockerfile` extends `docker/sandbox-templates:shell-docker` with Pi,
 pnpm, colgrep, the `lightonai/LateOn-Code-edge` search model, fd, ripgrep,
-and Neovim. `EDITOR` and `VISUAL` select Neovim. The kit starts `pi --offline`
+Neovim, `jq`, and the upstream `tomljson` CLI. `EDITOR` and `VISUAL` select Neovim. The kit starts `pi --offline`
 as `agent`; Pi's global npm installation stays writable for self-updates.
 
 ## Build and import
@@ -52,6 +52,9 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 | `COLGREP_MODEL_REVISION` | Hugging Face model commit |
 
 Pins/defaults live in the Dockerfile. These do not pin apt packages or pnpm.
+`tomljson` is pinned to v2.4.3 with architecture-specific SHA-256 checksums in
+the Dockerfile; update the version and checksums together. It parses project
+`.pissbox.toml` files without installing a Go runtime or a custom parser.
 
 Registering without a rebuild, for example after copying an archive from
 another host of the same architecture:

@@ -37,6 +37,7 @@ Options:
 
 With no workspaces, use the current directory.
 The first workspace is primary; additional ones are mounted read-write.
+Primary-workspace .pissbox.toml setup commands run once during creation, before Pi.
 Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
 Settings profile follows the host name; unknown hosts use settings-co.json.
@@ -335,9 +336,16 @@ if [[ ${#WORKSPACES[@]} -eq 0 ]]; then
 	WORKSPACES=("$PWD")
 fi
 
+# Setup runs in the sandbox; never source project commands on the host.
+PISSBOX_WORKSPACE_DIR=${WORKSPACES[0]}
+if [[ $PISSBOX_WORKSPACE_DIR != /* ]]; then
+	PISSBOX_WORKSPACE_DIR="$PWD/$PISSBOX_WORKSPACE_DIR"
+fi
+
 # --- SBX invocation ---------------------------------------------------------
 SBX_ARGS=(run --env "PISSBOX_PI_DIR=$PISSBOX_PI_DIR"
-	--env "PISSBOX_STATE_DIR=$PISSBOX_STATE_DIR")
+	--env "PISSBOX_STATE_DIR=$PISSBOX_STATE_DIR"
+	--env "PISSBOX_WORKSPACE_DIR=$PISSBOX_WORKSPACE_DIR")
 if [[ -n $SANDBOX_NAME ]]; then
 	SBX_ARGS+=(--name "$SANDBOX_NAME")
 fi

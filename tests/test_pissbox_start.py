@@ -41,7 +41,7 @@ class LauncherTests(unittest.TestCase):
             key: value
             for key, value in os.environ.items()
             if not key.startswith(("TEST_SBX_", "HERDR_"))
-            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR", "PISSBOX_BRIDGE_DIR")
+            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR", "PISSBOX_BRIDGE_DIR", "PISSBOX_WORKSPACE_DIR")
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
         env["PISSBOX_BRIDGE_RUNTIME_DIR"] = self.bridge_runtime
@@ -314,9 +314,22 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls, [[
             "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
             "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+            "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}",
             str(ROOT / "bin" / "../sbx-kit"), str(ROOT), str(PI_DIR), str(STATE_DIR),
         ]])
         self.assertEqual(result.stderr, "")
+
+    def test_project_setup_is_forwarded_to_sandbox_not_executed_on_host(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory) / "primary workspace"
+            project.mkdir()
+            (project / ".pissbox.toml").write_text('setup = ["touch host-marker", "exit 42"]\n')
+            result, calls = self.launch(str(project), str(ROOT), cwd=project,
+                                        PISSBOX_WORKSPACE_DIR="wrong-inherited-value")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(f"PISSBOX_WORKSPACE_DIR={project}", calls[0])
+            self.assertFalse((project / "host-marker").exists())
 
     def test_launch_from_another_directory(self):
         cwd = ROOT / "tests" / "fixtures"
@@ -328,6 +341,7 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls, [[
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                     "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                    "--env", f"PISSBOX_WORKSPACE_DIR={cwd}",
                     str(ROOT / "bin" / "../sbx-kit"), str(cwd), str(PI_DIR), str(STATE_DIR),
                 ]])
 
@@ -343,6 +357,7 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls, [[
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                     "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                    "--env", f"PISSBOX_WORKSPACE_DIR={cwd}/.",
                     str(ROOT / "bin" / "../sbx-kit"), ".", str(PI_DIR), str(STATE_DIR),
                 ]])
 
@@ -496,6 +511,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(calls, [[
                         "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                         "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                        "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}/.",
                         str(ROOT / "bin" / "../sbx-kit"), ".", "workspace with spaces",
                         str(PI_DIR), str(STATE_DIR),
                     ]])
@@ -710,6 +726,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls, [[
             "run", "--env", f"PISSBOX_PI_DIR={pi}",
             "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+            "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}/workspace with spaces",
             "--name", "last", str(ROOT / "bin" / "../sbx-kit"),
             "workspace with spaces", "second workspace", "--path", str(pi),
             str(STATE_DIR),
