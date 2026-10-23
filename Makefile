@@ -33,9 +33,9 @@ test: test-go test-js test-python
 test-go:
 	cd go-bridge && go test -race -count=1 ./...
 
-## test-js: Run both extension lifecycle suites (requires installed Pi)
+## test-js: Run extension lifecycle suites (requires installed Pi)
 test-js:
-	node --test go-bridge/pi-extension.test.mjs tests/session-name.test.mjs
+	node --test 'pi-agent/extensions/**/*.test.mjs' 'tests/**/*.test.mjs'
 
 ## test-python: Run launcher, setup and quality-wrapper regression tests
 test-python:
@@ -89,7 +89,7 @@ mutation: mutation-go mutation-js
 mutation-go:
 	$(PYTHON) tools/quality/run.py mutation-go
 
-## mutation-js: Mutate selected extensions; run both lifecycle suites
+## mutation-js: Mutate selected extensions; run all extension suites
 mutation-js:
 	$(PYTHON) tools/quality/run.py mutation-js
 

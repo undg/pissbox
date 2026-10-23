@@ -296,7 +296,7 @@ testing and coverage/CRAP metrics.
 
 ```bash
 (cd go-bridge && go test -race ./... && go vet ./...)
-node --test go-bridge/pi-extension.test.mjs
+make test-js
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 bin/build-bridge --all
 ```
@@ -305,7 +305,8 @@ Go tests use real CLI/daemon subprocesses and local Unix sockets with simulated
 Herd responders. They cover concurrent startup, crash recovery, incompatible
 protocols, independent routing, owner death, and stalled connections. Launcher
 tests stub SBX and control operations, plus one real-daemon launcher-crash check;
-JS tests drive lifecycle callbacks and connect real daemon subprocesses to the
+JS suites live beside their extensions and libraries under `pi-agent/extensions/`.
+They drive lifecycle callbacks and connect real daemon subprocesses to the
 extension tools, checking native queue call options, idle/busy delivery contracts,
 replies, simultaneous sends, address replacement, deduplication, and timer cleanup.
 Indexed delivery is tested with inbox enumeration unavailable, plus malformed

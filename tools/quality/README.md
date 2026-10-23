@@ -18,6 +18,13 @@ JavaScript quality tooling requires **Node 22+ and npm**. The session-name suite
 also requires Pi installed on PATH with its loader dependencies; it exercises Pi's
 actual session metadata using the installed package. No Pi login is needed.
 
+JavaScript suites are colocated with their source as `*.test.mjs` under
+`pi-agent/extensions/`; shared helpers and their tests stay under `tests/`.
+Ordinary tests, coverage, and mutation baselines use Node's recursive
+`pi-agent/extensions/**/*.test.mjs` and `tests/**/*.test.mjs` discovery, not
+filename lists or suite-to-suite imports. Pi only auto-loads `.js` and `.ts`
+extensions, so the `.test.mjs` suites do not run when Pi starts.
+
 `make tools` installs Gremlins v0.6.0 and go-crap v0.5.1 into
 `.cache/quality-tools/bin/<os>-<arch>/`, and npm tools into
 `.cache/quality-tools/js/`. npm versions are locked in the adjacent package files:

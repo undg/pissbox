@@ -4,9 +4,9 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import extension from "../pi-agent/extensions/pissbox-bridge.js";
+import extension from "../pissbox-bridge.js";
 
-const root = fileURLToPath(new URL("../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
 const fixtures = process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR || path.join(root, ".cache/test-fixtures");
 mkdirSync(fixtures, { recursive: true });
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

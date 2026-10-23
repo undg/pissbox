@@ -3,10 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, utimesSync, writeFil
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import extension from "../pi-agent/extensions/pissbox-bridge.js";
-import "./agent-messaging.test.mjs";
+import extension from "./pissbox-bridge.js";
 
-const fixtures = fileURLToPath(new URL("../.cache/test-fixtures/", import.meta.url));
+const fixtures = fileURLToPath(new URL("../../.cache/test-fixtures/", import.meta.url));
 mkdirSync(fixtures, { recursive: true });
 
 function session(mode = "tui", ready = true) {

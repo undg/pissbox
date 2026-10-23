@@ -67,7 +67,9 @@ its space.
 ## Development
 
 Run from the checkout root. Tests require Go 1.25+, Node.js, Python 3, and Pi
-installed on PATH; no Pi login is needed.
+installed on PATH; no Pi login is needed. JavaScript suites live beside their
+extensions as `*.test.mjs`; ordinary tests, coverage, and mutation baselines
+all discover them recursively. Shared helpers and fixtures remain in `tests/`.
 
 ```bash
 make help        # All targets and scope options; also the default for make

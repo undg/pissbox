@@ -17,7 +17,9 @@ or directory name. User guides start at [README.md](README.md).
 - `go-bridge/`: optional host-only messaging/lifecycle bridge; requires Go 1.25+
   to build. Build matching binaries with `bin/build-bridge` or cross-compile all
   four targets with `--all`.
-- `tests/`: Python-standard-library regression tests.
+- `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
+  Keep JS suites beside their extension/library as `*.test.mjs`; Make, coverage,
+  and mutation runners discover them recursively. Go tests stay beside Go source.
 
 ## Image and kit constraints
 

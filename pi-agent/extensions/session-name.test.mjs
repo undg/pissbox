@@ -1,12 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
 import { setImmediate } from "node:timers/promises";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { resolvePiEntry } from "./pi-installation.mjs";
+import { pathToFileURL } from "node:url";
+import { resolvePiEntry } from "../../tests/pi-installation.mjs";
 
 // Use the installed Pi dependencies and the same alias its extension loader uses.
 const piEntry = resolvePiEntry(execFileSync("sh", ["-c", "command -v pi"], { encoding: "utf8" }).trim());
@@ -18,38 +16,7 @@ const jiti = createJiti(import.meta.url, {
 	fsCache: false,
 	alias: { typebox: piRequire.resolve("typebox") },
 });
-const extension = await jiti.import("../pi-agent/extensions/session-name.js", { default: true });
-
-test("resolves Pi's API through npm symlinks and Homebrew wrappers", () => {
-	const fixtures = fileURLToPath(new URL("../.cache/test-fixtures/", import.meta.url));
-	mkdirSync(fixtures, { recursive: true });
-	const root = mkdtempSync(path.join(fixtures, "pi-installation-"));
-	const npmDist = path.join(root, "npm/node_modules/@earendil-works/pi-coding-agent/dist");
-	mkdirSync(npmDist, { recursive: true });
-	writeFileSync(path.join(npmDist, "cli.js"), "");
-	writeFileSync(path.join(npmDist, "index.js"), "");
-	const npmBin = path.join(root, "npm/bin");
-	mkdirSync(npmBin);
-	symlinkSync(path.join(npmDist, "cli.js"), path.join(npmBin, "pi"));
-	assert.equal(resolvePiEntry(path.join(npmBin, "pi")), path.join(npmDist, "index.js"));
-
-	for (const location of ["libexec/lib", "libexec"]) {
-		const formula = path.join(root, location.replaceAll("/", "-"));
-		const packageRoot = path.join(formula, location, "node_modules/@earendil-works/pi-coding-agent");
-		mkdirSync(path.join(packageRoot, "dist"), { recursive: true });
-		writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ main: "dist/index.js" }));
-		writeFileSync(path.join(packageRoot, "dist/index.js"), "");
-		mkdirSync(path.join(formula, "bin"));
-		const wrapper = path.join(formula, "bin/pi");
-		writeFileSync(wrapper, "#!/bin/sh\n# Homebrew executable wrapper\n");
-		const link = path.join(root, location.replaceAll("/", "-") + "-pi");
-		symlinkSync(wrapper, link);
-		assert.equal(resolvePiEntry(link), path.join(packageRoot, "dist/index.js"));
-	}
-	const missing = path.join(root, "unsupported-pi");
-	writeFileSync(missing, "");
-	assert.throws(() => resolvePiEntry(missing), /Cannot locate Pi's JavaScript package/);
-});
+const extension = await jiti.import("./session-name.js", { default: true });
 
 function session({ mode = "tui", name, entries = [
 	{ type: "model_change", provider: "current-provider", modelId: "current-model" },

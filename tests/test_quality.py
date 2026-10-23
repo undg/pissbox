@@ -154,28 +154,58 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
         shutil.which("node") and (ROOT / ".cache/quality-tools/js/node_modules/@stryker-mutator/core/package.json").is_file(),
         "run make tools to enable the real Stryker literal-path check",
     )
-    def test_stryker_mutates_only_the_literal_path_with_spaces_and_brackets(self):
+    def test_js_runners_discover_colocated_tests_and_stryker_mutates_only_the_literal_path(self):
         shutil.copyfile(ROOT / "tools/quality/javascript.mjs", self.root / "tools/quality/javascript.mjs")
         (self.root / ".cache/quality-tools").mkdir(parents=True)
         (self.root / ".cache/quality-tools/js").symlink_to(ROOT / ".cache/quality-tools/js", target_is_directory=True)
         selected = "pi-agent/extensions/my [worker].js"
         self.write(selected, "export default function value(n) { return n > 0; }\n")
         self.write("pi-agent/auth.json", "not-a-secret test sentinel\n")
-        self.write("go-bridge/pi-extension.test.mjs", 'import "./agent-messaging.test.mjs"; import assert from "node:assert/strict"; import value from "../pi-agent/extensions/my [worker].js"; assert.equal(value(1), true);\n')
         self.write("go-bridge/go.mod", "module fixture\n")
         self.write("go-bridge/go.sum", "")
-        self.write("go-bridge/agent-messaging.test.mjs", '''import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
-for (const name of ["main.go", "go.mod", "go.sum"]) {
-    assert.ok(existsSync(new URL(name, import.meta.url)), name);
-}
-assert.ok(process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.endsWith("/.cache/test-fixtures"));
-assert.ok(!process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.includes("/sandboxes/"));
+        self.write("tests/pi-installation.mjs", "export const helper = true;\n")
+        self.write("tests/helper.test.mjs", '''import assert from "node:assert/strict";
+import { appendFileSync } from "node:fs";
+import { helper } from "./pi-installation.mjs";
+assert.equal(helper, true);
+appendFileSync(process.env.DISCOVERY_LOG, "helper\\n");
 ''')
-        self.write("tests/session-name.test.mjs", 'import test from "node:test"; test("baseline", () => {});\n')
-        self.write("tests/turn-timing.test.mjs", 'import test from "node:test"; test("timing baseline", () => {});\n')
-        result = self.quality("mutation-js", "--dry-run", selected)
-        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.write("pi-agent/extensions/new [suite].test.mjs", '''import assert from "node:assert/strict";
+import { appendFileSync } from "node:fs";
+import value from "./my [worker].js";
+import { helper } from "../../tests/pi-installation.mjs";
+assert.equal(value(1), true);
+assert.equal(helper, true);
+appendFileSync(process.env.DISCOVERY_LOG, "root\\n");
+''')
+        self.write("pi-agent/extensions/lib/new-nested.test.mjs", '''import assert from "node:assert/strict";
+import { appendFileSync, existsSync } from "node:fs";
+for (const name of ["main.go", "go.mod", "go.sum"]) {
+    assert.ok(existsSync(new URL("../../../go-bridge/" + name, import.meta.url)), name);
+}
+if (process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR) {
+    assert.ok(process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.endsWith("/.cache/test-fixtures"));
+    assert.ok(!process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.includes("/sandboxes/"));
+}
+appendFileSync(process.env.DISCOVERY_LOG, "nested\\n");
+''')
+        self.write("pi-agent/extensions/not-a-test.mjs", 'throw new Error("must not discover helpers");\n')
+        log = self.root / "discovery.log"
+        for runner in ["make", "coverage", "mutation"]:
+            with self.subTest(runner=runner):
+                log.write_text("")
+                if runner == "make":
+                    result = subprocess.run(
+                        ["make", "test-js"], cwd=self.root, env={**self.env, "DISCOVERY_LOG": str(log)},
+                        capture_output=True, text=True, timeout=10,
+                    )
+                elif runner == "coverage":
+                    result = self.quality("coverage-js", DISCOVERY_LOG=str(log))
+                else:
+                    result = self.quality("mutation-js", "--dry-run", selected, DISCOVERY_LOG=str(log))
+                self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+                self.assertEqual(sorted(log.read_text().splitlines()), ["helper", "nested", "root"],
+                                 "discover every suite once, without an explicit filename list")
         self.assertIn("Instrumented 1 source file(s)", result.stdout)
         self.assertNotIn("did not result in any files", result.stdout)
         sandboxes = self.root / ".cache/mutation/js/sandboxes"

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
-import { resolvePiEntry } from "./pi-installation.mjs";
+import { resolvePiEntry } from "../../tests/pi-installation.mjs";
 
 const piEntry = resolvePiEntry(execFileSync("sh", ["-c", "command -v pi"], { encoding: "utf8" }).trim());
 const piRequire = createRequire(piEntry);
@@ -15,7 +15,7 @@ const jiti = createJiti(import.meta.url, {
 	fsCache: false,
 	alias: { "@earendil-works/pi-tui": piRequire.resolve("@earendil-works/pi-tui") },
 });
-const extension = await jiti.import("../pi-agent/extensions/turn-timing.js", { default: true });
+const extension = await jiti.import("./turn-timing.js", { default: true });
 const sent = new Date(2026, 5, 12, 14, 30).getTime();
 
 function session(t, { mode = "tui", width = 100, manager = SessionManager.inMemory(process.cwd()) } = {}) {

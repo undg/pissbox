@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const tools = path.join(root, ".cache/quality-tools/js");
 const requireTool = createRequire(path.join(tools, "package.json"));
-const tests = ["go-bridge/pi-extension.test.mjs", "tests/session-name.test.mjs", "tests/turn-timing.test.mjs"];
+const tests = ["pi-agent/extensions/**/*.test.mjs", "tests/**/*.test.mjs"];
 const [command, ...args] = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const files = args.filter((arg) => arg !== "--dry-run");
@@ -48,12 +48,11 @@ async function mutation() {
 		// fixture. Never copy shared auth, sessions, caches or host binaries.
 		ignorePatterns: [
 			"**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs",
-			"!go-bridge/agent-messaging.test.mjs", "!go-bridge/*.go",
+			...tests.map((pattern) => `!${pattern}`), "!go-bridge/*.go",
 			"!go-bridge/go.mod", "!go-bridge/go.sum",
-			...tests.map((name) => `!${name}`),
 		],
 		testRunner: "command",
-		commandRunner: { command: `node --test ${tests.join(" ")}` },
+		commandRunner: { command: `node --test ${tests.map((pattern) => `'${pattern}'`).join(" ")}` },
 		coverageAnalysis: "off",
 		concurrency: 1,
 		symlinkNodeModules: false,
