@@ -1,9 +1,10 @@
 # Local image
 
-`sbx-kit/Dockerfile` extends `docker/sandbox-templates:shell-docker` with Pi,
-pnpm, colgrep, the `lightonai/LateOn-Code-edge` search model, fd, ripgrep,
-Neovim, `jq`, and the upstream `tomljson` CLI. `EDITOR` and `VISUAL` select Neovim. The kit starts `pi --offline`
-as `agent`; Pi's global npm installation stays writable for self-updates.
+`sbx-kit/Dockerfile` extends `docker/sandbox-templates:shell-docker` with Node
+26.9.0, Pi, pnpm, colgrep, the `lightonai/LateOn-Code-edge` search model, fd,
+ripgrep, Neovim, `jq`, and the upstream `tomljson` CLI. `EDITOR` and `VISUAL`
+select Neovim. The kit starts `pi --offline` as `agent`; Pi's global npm
+installation stays writable for self-updates.
 
 ## Build and import
 
@@ -52,6 +53,12 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 | `COLGREP_MODEL_REVISION` | Hugging Face model commit |
 
 Pins/defaults live in the Dockerfile. These do not pin apt packages or pnpm.
+Node 26.9.0 is installed from checksum-verified official Linux archives for
+amd64 and arm64. Its directory takes precedence over the base image's Node,
+with `node`, `npm`, and `npx` also linked into `/usr/local/bin`. The installation
+is owned by `agent` so global npm installs and Pi self-updates remain writable.
+Update the Node version and architecture-specific checksums together.
+
 `tomljson` is pinned to v2.4.3 with architecture-specific SHA-256 checksums in
 the Dockerfile; update the version and checksums together. It parses project
 `.pissbox.toml` files without installing a Go runtime or a custom parser.

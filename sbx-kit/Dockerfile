@@ -34,9 +34,33 @@ RUN --mount=type=secret,id=custom_ca \
 
 
 ######################################################################
-# Project configuration: upstream TOML-to-JSON CLI, no Go runtime needed
+# Install the pinned Node release before running npm as agent
 ######################################################################
 ARG TARGETARCH
+ENV PATH="/opt/pissbox/node/bin:${PATH}"
+RUN version=26.9.0 && \
+    case "$TARGETARCH" in \
+        amd64) arch=x64; checksum=c6ecd8efc1c1d395265891675319da7a7b3785c6be174bd78933cf4f057624d1 ;; \
+        arm64) arch=arm64; checksum=686d07ed3bc5d68d9f7bd4939b7e8849a87d0664ac19c8c5474474f44cc956db ;; \
+        *) echo "Unsupported Node architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fLsS --retry 3 \
+        "https://nodejs.org/dist/v${version}/node-v${version}-linux-${arch}.tar.xz" \
+        -o /var/tmp/node.tar.xz && \
+    printf '%s  %s\n' "$checksum" /var/tmp/node.tar.xz | sha256sum -c - && \
+    mkdir -p /opt/pissbox/node && \
+    tar -xJf /var/tmp/node.tar.xz -C /opt/pissbox/node --strip-components=1 && \
+    chown -R agent:agent /opt/pissbox/node && \
+    ln -sf /opt/pissbox/node/bin/node /usr/local/bin/node && \
+    ln -sf /opt/pissbox/node/bin/npm /usr/local/bin/npm && \
+    ln -sf /opt/pissbox/node/bin/npx /usr/local/bin/npx && \
+    rm /var/tmp/node.tar.xz && \
+    test "$(node --version)" = "v${version}"
+
+
+######################################################################
+# Project configuration: upstream TOML-to-JSON CLI, no Go runtime needed
+######################################################################
 RUN version=2.4.3 && \
     case "$TARGETARCH" in \
         amd64) checksum=70282ec360a01cd6895a01267110338c6dae00d73d0c00a83b5bdc3b1884d083 ;; \

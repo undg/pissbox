@@ -50,6 +50,22 @@ class KitLayoutTests(unittest.TestCase):
                         dockerfile.index("npm install -g pnpm"))
         self.assertNotIn("COPY ca.crt", dockerfile)
 
+    def test_node_is_pinned_verified_and_writable_before_pi_installation(self):
+        dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
+        node_step = dockerfile.index("RUN version=26.9.0")
+        extract = dockerfile.index("tar -xJf /var/tmp/node.tar.xz")
+        self.assertIn("node-v${version}-linux-${arch}.tar.xz", dockerfile)
+        self.assertIn("amd64) arch=x64; checksum=c6ecd8efc1c1d395265891675319da7a7b3785c6be174bd78933cf4f057624d1", dockerfile)
+        self.assertIn("arm64) arch=arm64; checksum=686d07ed3bc5d68d9f7bd4939b7e8849a87d0664ac19c8c5474474f44cc956db", dockerfile)
+        self.assertLess(dockerfile.index("update-ca-certificates;"), node_step)
+        self.assertLess(dockerfile.index("sha256sum -c -", node_step), extract)
+        self.assertLess(dockerfile.index("chown -R agent:agent /opt/pissbox/node"),
+                        dockerfile.index("npm install -g pnpm"))
+        self.assertIn('ENV PATH="/opt/pissbox/node/bin:${PATH}"', dockerfile)
+        self.assertIn('test "$(node --version)" = "v${version}"', dockerfile)
+        for tool in ("node", "npm", "npx"):
+            self.assertIn(f"ln -sf /opt/pissbox/node/bin/{tool} /usr/local/bin/{tool}", dockerfile)
+
     def test_project_toml_parser_is_pinned_verified_and_installed_after_ca(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
         self.assertIn("RUN version=2.4.3", dockerfile)
@@ -57,7 +73,7 @@ class KitLayoutTests(unittest.TestCase):
         self.assertIn("amd64) checksum=70282ec360a01cd6895a01267110338c6dae00d73d0c00a83b5bdc3b1884d083", dockerfile)
         self.assertIn("arm64) checksum=1e5bb8e8f42dded2a811594f0b15e01ab0546d1c2c3b8b388252d3b6e2084ab0", dockerfile)
         self.assertIn("xz-utils jq", dockerfile)
-        verify = dockerfile.index("sha256sum -c -")
+        verify = dockerfile.index("sha256sum -c -", dockerfile.index("RUN version=2.4.3"))
         extract = dockerfile.index("tar -xJf /var/tmp/tomljson.tar.xz -C /usr/local/bin tomljson")
         self.assertLess(dockerfile.index("update-ca-certificates;"), verify)
         self.assertLess(verify, extract)
