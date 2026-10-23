@@ -26,10 +26,11 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
 
 - [x] Ordinary checks: `test-go`, `test-js`, `test-python`, `vet`, `syntax`,
   whitespace check. Fix failures and the reproducible Homebrew discovery issue.
-- [!] Build: `build`, `build-all`; inspect format/module hygiene with `fmt`, `tidy`.
+- [x] Build: `build`, `build-all`; inspect format/module hygiene with `fmt`, `tidy`.
 - [ ] Kit: read affected kit configuration and attempt `validate-kit`; distinguish
   environment/authentication blockers from repository defects.
-- [ ] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
+  **Blocked:** SBX reports `not signed in to Docker`; no login attempted.
+- [!] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
   inspect fresh reports for concrete risks and fix verified problems.
 - [ ] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
   mutations where practical; investigate meaningful survivors and baseline errors.
@@ -50,3 +51,7 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   wrapper. Isolated npm-symlink and Homebrew-layout fixtures pass; `make test-js`
   passes 18 tests. This is not a real macOS/Homebrew execution.
 - `make vet`, `make syntax`, `git diff --check`: passed.
+- `make build`, `make build-all`: passed. Built darwin/arm64, darwin/amd64,
+  linux/arm64 and linux/amd64 binaries; cross-builds were not executed.
+- `make fmt`, `make tidy`: passed, no tracked changes.
+- `make validate-kit`: blocked by Docker sign-in, not a kit validation result.
