@@ -112,21 +112,55 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Verification
 
-`make help` lists development targets. `make check` runs ordinary checks without
-installing tools or running mutation tests. See [quality tooling](tools/quality/README.md)
-and the project `code-quality` skill for scoped mutation, coverage, and CRAP checks.
-Mutation targets require `BASE` or exact `FILES`; never widen an empty selection.
+Use the global `code-quality-metrics` skill for the assessment workflow and
+[quality tooling](tools/quality/README.md) for repository-specific details.
+Run from the checkout root. **Prefer the existing Make targets and repository
+wrappers over bespoke commands or direct Gremlins/Stryker/coverage invocations.**
+They preserve pinned tools, source selection, test isolation, and report paths.
+Use a lower-level command only when a target cannot express a needed focused
+check or when diagnosing the wrapper itself; explain the exception.
 
-Read affected kit files before editing. Run:
+Read affected kit files before editing. Start with `make help`; use:
+
+| Command | Purpose |
+| --- | --- |
+| `make check` | Ordinary tests, Go vet, Bash syntax, and whitespace checks |
+| `make test` | All suites wired into the Makefile |
+| `make test-go` | Go tests with race detection and no result cache |
+| `make test-js` | Extension lifecycle tests using installed Pi |
+| `make test-python` | Launcher, setup, and quality-wrapper regression tests |
+| `make vet syntax` | Go vet and Bash syntax only |
+| `make validate-kit` | SBX kit validation; requires Docker sign-in |
+| `make build` / `make build-all` | Host bridge build / all supported cross-builds |
+| `make tools` | Explicit network installation of pinned quality tools |
+| `make coverage` | Fresh Go and JS coverage reports |
+| `make coverage-go` / `make coverage-js` | Coverage for one language |
+| `make metrics BASE=origin/main` | Fresh coverage and scoped CRAP/complexity reports |
+| `make crap-go FILES="go-bridge/mailbox.go"` | CRAP report for one exact Go source file |
+| `make crap-js FILES="pi-agent/extensions/session-name.js"` | CRAP report for one exact extension |
+| `make mutation BASE=origin/main` | Mutants for feature changes in both languages |
+| `make mutation-go FILES="go-bridge/mailbox.go go-bridge/herdr.go"` | Mutants for exact Go files |
+| `make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"` | Mutants for one exact extension |
+
+Replace `origin/main` with the actual feature base; do not assume or fetch it.
+`FILES` overrides `BASE` and accepts exact paths, not globs. Mutation targets
+require a scope; never widen an empty selection. Scope limits mutated files or
+reported CRAP functions, not the corresponding test suite. Add `DRY_RUN=1` to a
+mutation command for discovery/baseline checks, not a mutation score.
+
+Preview selection without running tools through the existing wrapper:
 
 ```bash
-bash -n bin/pissbox bin/build-image bin/build-bridge sbx-kit/files/home/.pissbox/scripts/*.sh
-(cd go-bridge && go test -race ./... && go vet ./...)
-node --test go-bridge/pi-extension.test.mjs
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-git diff --check
-sbx kit validate ./sbx-kit
+python3 tools/quality/run.py mutation-go --base origin/main --list
+python3 tools/quality/run.py mutation-js --base origin/main --list
 ```
+
+Use unscoped `make metrics` / `make crap` or `make mutation-all` only for a
+deliberate full audit. Reports live under `.cache/coverage/`, `.cache/crap/`, and
+`.cache/mutation/`; verify freshness and scope before quoting results. Do not run
+concurrent writers for the same language/report. `make check` never installs
+quality tools or runs mutants. `make fmt` and `make tidy` modify files; they are
+not read-only checks.
 
 The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
 removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
