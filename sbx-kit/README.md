@@ -34,61 +34,93 @@ Run `bin/pissbox --help` for all options. Directory selection is:
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
 
-## First-time project setup
+## Project configuration and additional workspaces
 
-Place a file named `.pissbox.toml` in the primary workspace (the current directory
-when no workspace arguments are supplied, otherwise the first workspace):
+Put `.pissbox.toml` in the primary project. The host reads it before launch,
+so `jq` and `tomljson` must be on PATH even for an empty config. `make install`
+checks, but does not install them. Install `jq` with your package manager and:
+
+```bash
+go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
+```
+
+Add `GOBIN` (normally `~/go/bin`) to PATH. The image supplies its own parser.
 
 ```toml
+workspaces = [
+  "..",
+  "../shared-tools",
+]
+
 setup = [
-  "pnpm i --frozen-lockfile",
+  "pnpm install --frozen-lockfile",
   "colgrep init",
 ]
 ```
 
-Commands run **inside the sandbox**, as user `1000`, with the primary workspace
-as their initial working directory. Only that workspace's `.pissbox.toml` is
-used; parent directories and additional workspaces are not searched. Missing
-files, an omitted `setup`, and `setup = []` are no-ops. The old executable
-`.pissbox` format is not read.
+- `workspaces` **adds** read-write mounts after CLI paths; it never changes the
+  primary. Duplicates are removed in order, including shared Pi/state mounts.
+- Relative entries use the primary project, not a symlinked config's location.
+  Absolute paths work. Entries must be existing directories; no `~`, variable,
+  command, or glob expansion. Empty paths, line breaks, and NUL bytes are errors.
+- Only the primary config is read; no parent/additional-directory search.
+  Missing files/keys and empty arrays are no-ops. Help/list/delete ignore config.
 
-The image supplies upstream `tomljson` (from `pelletier/go-toml/v2`) and `jq`.
-The whole TOML file and schema are validated before commands run. Currently the
-only supported key is the top-level `setup` array of strings; unknown keys,
-wrong types, and NUL bytes are errors. TOML literal strings (`'...'`) and multiline
-strings are supported when shell commands contain quotes or multiple lines.
-
-This is the last creation-time kit setup step, after Pi/shared-directory links
-and npm configuration, before `pi --offline` starts. SBX owns the once-per-creation
-lifecycle: attaching to or restarting an existing sandbox does not rerun it.
-Rebuild/import the image once to install the parser, then use a new sandbox
-name. Subsequent `.pissbox.toml` edits need no image rebuild, but only take effect
-when creating another sandbox. Existing sandboxes do not receive new kit steps.
-
-Commands run in one Bash process with `errexit`, `nounset`, and `pipefail`.
-Changes from `cd`, variables, and exports carry between commands. An unhandled
-failure stops setup and prevents the initial Pi launch; completed commands are
-not rolled back. Write repeat-safe commands in case a failed creation is retried.
-Exports and shell state in this script do not carry into Pi; write any persistent
-configuration explicitly.
-
-**Review `.pissbox.toml` before launching an unfamiliar project.** Its setup
-commands are executable code, not passive settings. It can modify all read-write mounts, including host
-workspace files and shared Pi/tool state. The host launcher never sources it.
-For direct kit launches without `bin/pissbox`, also pass
-`--env PISSBOX_WORKSPACE_DIR=/absolute/primary/workspace`.
-
-The Python regression suite uses the real `tomljson` and `jq` tools; these tests
-report a skip when either tool is missing. The sandbox image supplies both.
-For host-side tests, install `jq` and the pinned CLI (requires Go on the host
-for installation only):
+With `workspaces = [".."]`, these all mount the current directory and its parent:
 
 ```bash
-GOBIN="$PWD/.cache/bin" go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
-make test-python
+pissbox
+pissbox -y
+pissbox .
+pissbox . -y
 ```
 
-The tests also search `.cache/bin`, so no PATH changes are needed.
+For `pissbox /path/to/project /path/to/extra`, both CLI paths stay mounted and
+`/path/to/project/.pissbox.toml` supplies additional directories.
+
+Skip configured mounts for one launch:
+
+```bash
+pissbox --ignore-config-workspaces
+pissbox . /path/to/extra -y --ignore-config-workspaces
+```
+
+CLI and shared Pi/state mounts stay; configured directory checks are skipped.
+The file/schema is still validated and `setup` still runs on creation. Existing
+sandbox mounts cannot be changed by this flag.
+
+### Symlinked configuration
+
+The host can read a symlink before choosing mounts, but the sandbox also needs
+access to its target. For a config in the parent directory, use
+`workspaces = [".."]`; targets elsewhere need their containing directory listed.
+Targets are not mounted automatically. With `--ignore-config-workspaces`,
+supply target mounts on the CLI. Broken/unreadable config links fail before SBX creation.
+
+Use a **new sandbox name** for changed mounts or kit files; no image rebuild
+is needed if the image has the parser. Reattaching with `-y` keeps existing
+mounts, although the host still validates the current config.
+
+## First-time project setup
+
+`setup` runs **once during creation, before Pi**, after built-in kit setup.
+Commands run as user `1000` in one Bash process, initially in the primary project;
+`cd`, variables, and exports carry between commands, but not into Pi.
+Bash uses `errexit`, `nounset`, and `pipefail`: unhandled failures prevent the
+initial Pi launch. Completed work is not rolled back; keep commands repeat-safe
+for failed-creation retries. Restarts and attachments never rerun setup.
+
+Both keys (`setup`, `workspaces`) must be arrays of strings. The entire config
+is validated before launch; unknown keys, wrong types, and NUL bytes fail.
+TOML literal (`'...'`) and multiline strings work for shell quoting. The old
+executable `.pissbox` format is not read.
+
+**Review unfamiliar configs:** mounts expose host directories read-write and
+setup commands can modify them, including shared Pi/tool state. Commands run
+only inside the sandbox, never on the host.
+
+For direct SBX kit launches, pass all workspaces explicitly and add
+`--env PISSBOX_WORKSPACE_DIR=/absolute/primary/workspace`.
 
 ## Optional messaging and Herd reporting
 

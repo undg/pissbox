@@ -39,6 +39,6 @@ setup:
     - command: 'npm config set cache "$HOME/.cache/npm" --location=user'
       user: "1000"
       description: Use the shared npm cache without replacing image cache data
-    - command: 'bash "$HOME/.pissbox/scripts/run-project-setup.sh"'
+    - command: 'bash "$HOME/.pissbox/scripts/project-setup.sh"'
       user: "1000"
       description: Run primary-workspace .pissbox.toml setup commands once before starting Pi

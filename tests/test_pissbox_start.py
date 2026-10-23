@@ -331,6 +331,255 @@ class LauncherTests(unittest.TestCase):
             self.assertIn(f"PISSBOX_WORKSPACE_DIR={project}", calls[0])
             self.assertFalse((project / "host-marker").exists())
 
+    def test_configured_parent_is_added_for_bare_yes_and_dot_launches(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            parent = Path(directory)
+            project = parent / "project"
+            project.mkdir()
+            (project / ".pissbox.toml").write_text('workspaces = [".."]\n')
+            kit = str(ROOT / "bin/../sbx-kit")
+            for args in ((), ("-y",), (".",), (".", "-y")):
+                with self.subTest(args=args):
+                    result, calls = self.launch(*args, cwd=project)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    mounts = calls[0][calls[0].index(kit) + 1:]
+                    primary = "." if "." in args else str(project)
+                    self.assertEqual(mounts, [primary, str(parent), str(PI_DIR), str(STATE_DIR)])
+
+    def test_configured_workspaces_add_to_cli_paths_not_caller_or_secondary_config(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            root = Path(directory)
+            project = root / "primary"
+            extra = root / "CLI extra"
+            caller = root / "caller"
+            configured = project / "configured with spaces"
+            for path in (project, extra, caller, configured):
+                path.mkdir()
+            (project / ".pissbox.toml").write_text('workspaces = ["configured with spaces"]\n')
+            for path in (caller, extra):
+                (path / ".pissbox.toml").write_text("not valid TOML")
+            result, calls = self.launch(str(project), str(extra), cwd=caller)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            kit = str(ROOT / "bin/../sbx-kit")
+            self.assertEqual(calls[0][calls[0].index(kit) + 1:],
+                             [str(project), str(extra), str(configured), str(PI_DIR), str(STATE_DIR)])
+
+    def test_ignore_config_workspaces_keeps_cli_mounts_and_skips_directory_checks(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            root = Path(directory)
+            project = root / "project"
+            extra = root / "CLI extra"
+            project.mkdir()
+            extra.mkdir()
+            text = 'workspaces = ["..", "missing"]\nsetup = ["touch host-marker"]\n'
+            config = project / ".pissbox.toml"
+            config.write_text(text)
+            flag = "--ignore-config-workspaces"
+            for args in ((flag,), ("-y", flag), (".", flag), (flag, ".", str(extra)),
+                         (".", flag, str(extra)), (".", str(extra), flag, flag)):
+                with self.subTest(args=args):
+                    result, calls = self.launch(*args, cwd=project)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    kit = str(ROOT / "bin/../sbx-kit")
+                    expected = ["." if "." in args else str(project)]
+                    if str(extra) in args:
+                        expected.append(str(extra))
+                    expected.extend([str(PI_DIR), str(STATE_DIR)])
+                    self.assertEqual(calls[0][calls[0].index(kit) + 1:], expected)
+                    self.assertNotIn(flag, calls[0])
+                    self.assertFalse((project / "host-marker").exists())
+                    self.assertEqual(config.read_text(), text)
+
+    def test_ignore_config_workspaces_still_validates_toml_and_schema(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            for text in ('workspaces = ["..",', 'workspaces = ".."', 'setup = 5'):
+                with self.subTest(text=text):
+                    (project / ".pissbox.toml").write_text(text)
+                    result, calls = self.launch("--ignore-config-workspaces", cwd=project)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+
+    def test_ignore_config_workspaces_after_separator_is_a_path_not_a_flag(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            caller = Path(directory)
+            flag = "--ignore-config-workspaces"
+            project = caller / flag
+            project.mkdir()
+            (project / ".pissbox.toml").write_text('workspaces = [".."]\n')
+            result, calls = self.launch("--", flag, cwd=caller)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            kit = str(ROOT / "bin/../sbx-kit")
+            self.assertEqual(calls[0][calls[0].index(kit) + 1:],
+                             [flag, str(caller), str(PI_DIR), str(STATE_DIR)])
+
+    def test_ignore_config_workspaces_does_not_change_existing_reattach(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / ".pissbox.toml").write_text('workspaces = ["missing"]\n')
+            result, calls = self.launch("--ignore-config-workspaces", "-y", cwd=project,
+                                        TEST_SBX_MODE="conflict", TEST_SBX_NAME="actual-name")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+
+    def test_ignore_config_workspaces_is_documented_in_help(self):
+        result, calls = self.launch("--ignore-config-workspaces", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--ignore-config-workspaces", result.stdout)
+        self.assertEqual(calls, [])
+
+    def test_symlinked_config_resolves_workspaces_from_primary_not_link_target(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            root = Path(directory)
+            project = root / "project"
+            extra = root / "extra"
+            rules = root / "shared/nested/rules.toml"
+            project.mkdir()
+            extra.mkdir()
+            rules.parent.mkdir(parents=True)
+            rules.write_text('workspaces = ["..", "../extra"]\nsetup = []\n')
+            (project / ".pissbox.toml").symlink_to("../shared/nested/rules.toml")
+            result, calls = self.launch(cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            kit = str(ROOT / "bin/../sbx-kit")
+            self.assertEqual(calls[0][calls[0].index(kit) + 1:],
+                             [str(project), str(root), str(extra), str(PI_DIR), str(STATE_DIR)])
+
+    def test_duplicate_cli_configured_and_shared_workspaces_are_removed(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            root = Path(directory)
+            project = root / "project"
+            extra = root / "extra"
+            project.mkdir()
+            extra.mkdir()
+            (root / "alias").symlink_to(extra, target_is_directory=True)
+            entries = [".", "../extra", "../alias", "..", "..", str(PI_DIR), str(STATE_DIR)]
+            (project / ".pissbox.toml").write_text("workspaces = " + json.dumps(entries))
+            result, calls = self.launch(".", "./", str(project), str(extra), str(extra), cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            kit = str(ROOT / "bin/../sbx-kit")
+            self.assertEqual(calls[0][calls[0].index(kit) + 1:],
+                             [".", str(extra), str(root), str(PI_DIR), str(STATE_DIR)])
+
+    def test_dash_prefixed_workspace_after_separator_is_not_a_cd_option(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            caller = Path(directory)
+            project = caller / "--project"
+            project.mkdir()
+            result, calls = self.launch("--", "--project", cwd=caller)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("PISSBOX_WORKSPACE_DIR=" + str(project), calls[0])
+
+    def test_configured_paths_are_literal_not_shell_expansions(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            names = ["$(touch host-marker)", "$HOME", "*"]
+            for name in names:
+                (project / name).mkdir()
+            (project / ".pissbox.toml").write_text("workspaces = " + json.dumps(names))
+            result, calls = self.launch(cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            kit = str(ROOT / "bin/../sbx-kit")
+            expected = [str(project), *(str(project / name) for name in names), str(PI_DIR), str(STATE_DIR)]
+            self.assertEqual(calls[0][calls[0].index(kit) + 1:], expected)
+            self.assertFalse((project / "host-marker").exists())
+
+    def test_invalid_project_config_fails_before_settings_state_or_sbx(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            config = project / ".pissbox.toml"
+            state = project / "uncreated-state"
+            pi = self.pi_directory()
+            for text in ('workspaces = ".."', 'workspaces = [1]', 'workspaces = [""]',
+                         'workspaces = ["\\u0000"]', 'workspaces = ["a\\nb"]',
+                         'workspaces = ["..",', 'workpsaces = [".."]', 'setup = 5'):
+                with self.subTest(text=text):
+                    config.write_text(text)
+                    result, calls = self.launch(cwd=project, PISSBOX_PI_DIR=str(pi),
+                                                PISSBOX_STATE_DIR=str(state))
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(calls, [])
+                    self.assertFalse((pi / "settings.json").exists())
+                    self.assertFalse(state.exists())
+
+    def test_configured_workspaces_must_be_existing_directories(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / "plain-file").write_text("not a directory")
+            for path in ("missing", "plain-file"):
+                with self.subTest(path=path):
+                    (project / ".pissbox.toml").write_text("workspaces = " + json.dumps([path]))
+                    result, calls = self.launch(cwd=project)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Configured workspace directory does not exist", result.stderr)
+                    self.assertEqual(calls, [])
+
+    def test_broken_project_config_link_fails_on_host_before_sbx(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / ".pissbox.toml").symlink_to("missing-config")
+            result, calls = self.launch(cwd=project)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("readable TOML file", result.stderr)
+            self.assertEqual(calls, [])
+
+    def test_config_requires_host_parser_tools_before_launching(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / ".pissbox.toml").write_text("workspaces = []\n")
+            for missing in ("tomljson", "jq"):
+                with self.subTest(missing=missing):
+                    tools = project / missing
+                    tools.mkdir()
+                    for tool in ("bash", "dirname", "readlink", "tomljson", "jq"):
+                        if tool != missing:
+                            (tools / tool).symlink_to(shutil.which(tool))
+                    result, calls = self.launch(cwd=project, PATH=str(tools))
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("requires " + missing + " on the host", result.stderr)
+                    self.assertEqual(calls, [])
+
+    def test_management_and_help_ignore_project_config(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / ".pissbox.toml").write_text("not valid TOML")
+            result, calls = self.launch("--help", cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls, [])
+            result, calls = self.manage("--ls", listing=[], cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls, [["ls", "--json"]])
+            listing = [{"name": "existing", "agent": "pi", "status": "running",
+                        "workspaces": [str(project)]}]
+            result, calls = self.manage("--delete", str(project), "--yes", listing=listing, cwd=project)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls, [["ls", "--json"], ["rm", "--force", "existing"]])
+
+    def test_configured_workspaces_do_not_change_existing_sandbox_reattach(self):
+        fixtures = STATE_DIR / "test-fixtures"
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / ".pissbox.toml").write_text('workspaces = [".."]\n')
+            result, calls = self.launch("-y", cwd=project, TEST_SBX_MODE="conflict",
+                                        TEST_SBX_NAME="actual-name")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+
     def test_launch_from_another_directory(self):
         cwd = ROOT / "tests" / "fixtures"
         for launcher in (LAUNCHER, "pissbox", cwd / "linked bin" / "pissbox"):

@@ -11,6 +11,8 @@ or directory name. User guides start at [README.md](README.md).
   Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
 - `sbx-kit/files/home/.pissbox/`: small setup scripts and shared-directory mappings.
+  `scripts/project-setup.sh` contains validation and sandbox setup. The host
+  invokes `--validate FILE` for JSON data only; keep validation in this one file.
 - `pi-agent/`: shared sandbox-only configuration, credentials, and sessions.
   Keep its `AGENTS.md` brief and general; repository rules belong here.
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
@@ -65,6 +67,19 @@ dependencies but never installs them automatically.
 
 ## Launcher and lifecycle contracts
 
+- Read only the primary workspace's `.pissbox.toml` on the host, before settings,
+  shared state, bridge registration, or SBX launch. Host `tomljson` and `jq` are
+  required when the config exists; keep `bin/install` checks and docs aligned.
+  Parse as data, never execute `setup` on the host. `workspaces` adds directories
+  after CLI workspaces, without changing the primary; paths are literal and
+  relative to the primary project, not the config symlink target. Validate
+  configured directories and deduplicate physical directory references in order.
+  No path arguments (including with `-y`) means current directory plus configured
+  extras. `--ignore-config-workspaces` skips configured mounts and directory
+  checks, not TOML/schema validation, CLI/shared mounts, or setup execution.
+  Help/list/delete bypass config. Existing mounts never change on attach.
+  A symlinked config must declare mounts exposing its target inside the sandbox;
+  do not automatically mount its target or search parent/additional configs.
 - Resolve launcher symlinks before locating resources; preserve the caller's
   working directory. First workspace is primary; with none, use the current
   directory. Extra workspaces retain host absolute paths, not arbitrary Docker
@@ -75,7 +90,8 @@ dependencies but never installs them automatically.
   mounting; relative overrides use the caller's directory. Do not discover
   native Pi configuration or use `PI_HOST_CONFIG_DIR`.
 - Pass the local kit, workspaces, Pi directory, and state root to `sbx run`, with
-  `--env PISSBOX_PI_DIR=...` and `--env PISSBOX_STATE_DIR=...`. SBX selects the
+  `--env PISSBOX_PI_DIR=...`, `--env PISSBOX_STATE_DIR=...`, and
+  `--env PISSBOX_WORKSPACE_DIR=...` for the primary project. SBX selects the
   sandbox unless `--name` is supplied; do not add custom discovery/bootstrap.
 - On the known existing-sandbox conflict, use the name reported by SBX. Enter
   or `p` runs `sbx run --name NAME`; `s` runs `sbx exec -it NAME bash`; `q` exits.

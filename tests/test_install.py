@@ -52,7 +52,7 @@ if call == ["go", "env", "GOVERSION"]:
 if call == ["sbx", "version"]:
     print("sbx version " + os.environ.get("INSTALL_TEST_SBX", "v0.39.0") + " test-hash")
 '''
-        for name in ("make", "go", "docker", "sbx", "jq"):
+        for name in ("make", "go", "docker", "sbx", "jq", "tomljson"):
             script = self.tools / name
             script.write_text(stub)
             script.chmod(0o755)
@@ -132,7 +132,7 @@ if call == ["sbx", "version"]:
         self.assertTrue(self.target.is_dir())
 
     def test_missing_dependencies_fail_before_any_build(self):
-        for name in ("make", "go", "docker", "sbx", "jq"):
+        for name in ("make", "go", "docker", "sbx", "jq", "tomljson"):
             with self.subTest(name=name):
                 tool = self.tools / name
                 hidden = self.tools / (name + ".hidden")
@@ -182,6 +182,7 @@ if call == ["sbx", "version"]:
                 if status == 0:
                     self.assertIn("Usage:", result.stdout)
                     self.assertIn("Optional bin/artifacts transfers require Python 3", result.stdout)
+                    self.assertIn("jq, and tomljson", result.stdout)
 
 
 if __name__ == "__main__":

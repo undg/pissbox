@@ -8,32 +8,25 @@ sandboxes, and shared host-owned Pi configuration and tool state.
 
 ## Start
 
-From the checkout root on the host:
+Host prerequisites: Make, Go **1.25+**, running Docker with buildx, SBX
+**v0.39.0+** with Docker sign-in, and `jq`. Put Go's binary directory (`GOBIN`,
+normally `~/go/bin`) on PATH, then from this checkout:
 
 ```bash
+go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
 make install
 ```
 
-The installer checks for Make, Go **1.25+**, Docker with buildx, SBX **v0.39.0+**,
-and `jq`, checks Docker connectivity, and validates the kit (including the
-Docker sign-in required by SBX). It does not install missing dependencies or
-perform login automatically. It then runs `make build` to build the host bridge
-and build/import the sandbox image, and links `~/.local/bin/pissbox` to this
-checkout's launcher.
+`make install` checks prerequisites, validates the kit, builds the host bridge
+and imports the image, then links `~/.local/bin/pissbox` to this checkout.
+It updates existing symlinks but refuses regular files/directories; failed
+checks/builds preserve the old link. Keep the checkout in place. Missing
+dependencies, login, and PATH changes remain manual (`bin/install --help`).
 
-Existing symlinks are repointed to this checkout, including broken links;
-matching links are unchanged. Regular files and directories are never replaced.
-Failed checks or builds leave the existing launcher link unchanged. Keep the
-checkout in place. If `~/.local/bin` is missing from `PATH`, the installer warns
-without modifying shell configuration. `bin/install --help` documents the flow.
-
-After installation, run `pissbox` from your project directory. No arguments
-needed: it opens Pi in the current directory. Authenticate using Pi's `/login`
-inside the sandbox on first use. Workspaces are live host mounts: edits persist
-after sandbox removal.
-
-For build-only use without creating a launcher link, run `make build`.
-Use `make build-image` instead if you do not need the optional bridge or Go.
+Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
+on first use. Workspace edits persist on the host after sandbox removal.
+`make build` builds without installing the launcher link; `make build-image`
+builds only the image and needs no host Go or bridge.
 
 For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
@@ -78,19 +71,30 @@ script, regardless of the caller's directory. An interrupted or failed write can
 leave partial artifacts; inspect these before retrying. Nothing loads an image,
 recreates a sandbox, installs dependencies, or changes the launcher link
 automatically. The destination still needs Docker/SBX and the launcher's `jq`
-dependency. Supply the image and bridge binaries matching its architecture;
-installed sandbox npm dependencies must also support that architecture.
+and `tomljson` dependencies. Supply the image and bridge binaries matching its
+architecture; installed sandbox npm dependencies must also support that architecture.
 
 ## Work across directories
 
-Add directories when you need them (with multiple define current one with `.`):
+The first directory is primary; additional directories are mounted read-write:
 
 ```bash
 pissbox . ~/.config/opencode ~/.config/pi
 ```
 
-`.` is your workspace; the other directories are also mounted read-write.
-Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
+Or keep recurring mounts and first-time setup in the primary project's `.pissbox.toml`:
+
+```toml
+workspaces = [".."]
+setup = ["pnpm install --frozen-lockfile"]
+```
+
+`pissbox` / `pissbox -y` default to the current directory. Configured workspaces
+add to CLI paths, resolve relative to the primary project, and are deduplicated.
+Use `--ignore-config-workspaces` to skip configured mounts without disabling setup.
+Symlink targets must be mounted too; use a new sandbox name for changed mounts.
+See [project configuration](sbx-kit/README.md#project-configuration-and-additional-workspaces)
+for setup behavior and symlink rules.
 
 ## Optional agent tools
 
@@ -124,9 +128,9 @@ its space.
 
 ## Development
 
-Run from the checkout root. Tests require Go 1.25+, Node.js, Python 3, and Pi
-installed on PATH; no Pi login is needed. JavaScript suites live beside their
-extensions as `*.test.mjs`; ordinary tests, coverage, and mutation baselines
+Run from the checkout root. Tests require Go 1.25+, Node.js, Python 3, Pi,
+`tomljson`, and `jq` installed on PATH; no Pi login is needed. JavaScript suites
+live beside their extensions as `*.test.mjs`; ordinary tests, coverage, and mutation baselines
 all discover them recursively. Shared helpers and fixtures remain in `tests/`.
 
 ```bash

@@ -8,7 +8,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "sbx-kit/files/home/.pissbox/scripts/run-project-setup.sh"
+SCRIPT = ROOT / "sbx-kit/files/home/.pissbox/scripts/project-setup.sh"
 SPEC = ROOT / "sbx-kit/spec.yaml"
 TOOL_PATH = os.environ["PATH"] + os.pathsep + str(ROOT / ".cache/bin")
 
@@ -45,6 +45,35 @@ class ProjectSetupTests(unittest.TestCase):
             text=True, capture_output=True, timeout=5,
         )
 
+    def test_validation_only_returns_data_without_workspace_env_or_running_commands(self):
+        self.config.write_text('workspaces = [".."]\nsetup = ["touch host-marker"]\n')
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--validate", str(self.config)],
+            cwd=self.workspace, env={"PATH": TOOL_PATH},
+            text=True, capture_output=True, timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout),
+                         {"workspaces": [".."], "setup": ["touch host-marker"]})
+        self.assertFalse((self.workspace / "host-marker").exists())
+        self.config.write_text("")
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--validate", str(self.config)],
+            env={"PATH": TOOL_PATH}, text=True, capture_output=True, timeout=5,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {"setup": [], "workspaces": []})
+
+    def test_invalid_validation_arguments_fail_without_workspace_access(self):
+        for args in (("--validate",), ("--validate", ""), ("--validate", "--unknown"), ("extra",)):
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    ["bash", str(SCRIPT), *args], env={"PATH": TOOL_PATH},
+                    text=True, capture_output=True, timeout=5,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("PISSBOX_WORKSPACE_DIR", result.stderr)
+
     def test_missing_config_is_a_noop_and_legacy_script_is_not_executed(self):
         (self.workspace / ".pissbox").write_text("exit 42\n")
         result = self.run_setup()
@@ -53,7 +82,8 @@ class ProjectSetupTests(unittest.TestCase):
         self.assertEqual(list(self.workspace.iterdir()), [self.workspace / ".pissbox"])
 
     def test_empty_config_or_setup_is_a_noop(self):
-        for config in ("# no project setup\n", "setup = []\n", 'setup = [""]\n'):
+        for config in ("", "# no project setup\n", "setup = []\n", 'setup = [""]\n',
+                       'workspaces = [".."]\n'):
             with self.subTest(config=config):
                 self.config.write_text(config)
                 result = self.run_setup()
@@ -108,6 +138,12 @@ printf "%s\n" "$HOME" >> message
                 result = self.run_setup()
                 self.assertNotEqual(result.returncode, 0, result.stderr)
                 self.assertFalse((self.workspace / "marker").exists())
+
+    def test_workspace_setting_is_validated_but_does_not_change_setup_directory(self):
+        self.config.write_text('workspaces = [".."]\nsetup = [\'printf "%s" "$PWD" > marker\']\n')
+        result = self.run_setup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.workspace / "marker").read_text(), str(self.workspace))
 
     def test_invalid_config_path_is_not_silently_skipped(self):
         self.config.mkdir()

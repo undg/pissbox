@@ -11,7 +11,8 @@ Check host dependencies, run make build, and link pissbox into ~/.local/bin.
 Options:
   -h, --help  Show this help
 
-Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, and jq.
+Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, jq, and tomljson.
+The host TOML CLI reads project workspaces before the sandbox exists.
 Docker must be running; kit validation must pass with your Docker sign-in.
 Dependencies are checked, never installed automatically.
 Optional bin/artifacts transfers require Python 3; it is not checked here.
@@ -57,7 +58,7 @@ SOURCE="$ROOT_DIR/bin/pissbox"
 check_target
 
 MISSING=false
-for TOOL in make go docker sbx jq; do
+for TOOL in make go docker sbx jq tomljson; do
 	if ! command -v "$TOOL" >/dev/null 2>&1; then
 		echo "Required command not found: $TOOL. Install it before running make install." >&2
 		MISSING=true
