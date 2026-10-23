@@ -42,7 +42,7 @@ async function mutation() {
 	const stryker = new Stryker({
 		mutate: patterns,
 		// Whitelist source and tests. Never copy shared auth, sessions, or caches.
-		ignorePatterns: ["**", "!pi-agent/extensions/**/*.js", ...tests.map((name) => `!${name}`)],
+		ignorePatterns: ["**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs", ...tests.map((name) => `!${name}`)],
 		testRunner: "command",
 		commandRunner: { command: `node --test ${tests.join(" ")}` },
 		coverageAnalysis: "off",

@@ -24,9 +24,9 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
 
 ## Tasks
 
-- [!] Ordinary checks: `test-go`, `test-js`, `test-python`, `vet`, `syntax`,
+- [x] Ordinary checks: `test-go`, `test-js`, `test-python`, `vet`, `syntax`,
   whitespace check. Fix failures and the reproducible Homebrew discovery issue.
-- [ ] Build: `build`, `build-all`; inspect format/module hygiene with `fmt`, `tidy`.
+- [!] Build: `build`, `build-all`; inspect format/module hygiene with `fmt`, `tidy`.
 - [ ] Kit: read affected kit configuration and attempt `validate-kit`; distinguish
   environment/authentication blockers from repository defects.
 - [ ] Tools and metrics: `tools`, `coverage-go`, `coverage-js`, `crap-go`, `crap-js`;
@@ -45,3 +45,8 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   npm shared-cache mapping. Added the declarative mapping and corrected docs;
   rerun passed, 113 tests, one real-Stryker test skipped until tool installation.
   No existing sandbox data was migrated or changed.
+- Homebrew discovery: resolve the package under the formula's `libexec` when
+  `pi` is a wrapper, and load dependencies relative to the package, not the
+  wrapper. Isolated npm-symlink and Homebrew-layout fixtures pass; `make test-js`
+  passes 18 tests. This is not a real macOS/Homebrew execution.
+- `make vet`, `make syntax`, `git diff --check`: passed.
