@@ -17,6 +17,7 @@ permissions:
       # pi's runtime package installs (extensions, skills, prompt templates,
       # themes) and the packages named in settings, fetched on startup.
       - registry.npmjs.org
+      - repo.ihsmarkit.com
       - opencode.ai
       - github.com
       - pi.dev
