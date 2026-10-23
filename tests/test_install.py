@@ -181,6 +181,7 @@ if call == ["sbx", "version"]:
                 self.assertFalse(self.target.exists())
                 if status == 0:
                     self.assertIn("Usage:", result.stdout)
+                    self.assertIn("Optional bin/artifacts transfers require Python 3", result.stdout)
 
 
 if __name__ == "__main__":

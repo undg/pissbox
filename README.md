@@ -39,6 +39,48 @@ For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
 
+## Transfer built artifacts
+
+Git carries the launcher, kit, and configuration. `bin/artifacts` transfers only
+untracked runtime artifacts between checkouts, without rebuilding or downloading
+the installed Pi package. It requires **Python 3** on the exporting and importing
+machines; normal installation and launching do not require Python.
+
+```bash
+# Source checkout; output paths are relative to the caller's working directory.
+make export-artifacts ARCHIVE=runtime.tar.gz
+# Transfer runtime.tar.gz to the destination machine, then in its checkout:
+make import-artifacts ARCHIVE=runtime.tar.gz
+bin/build-image --register  # Import this host architecture's restored image into SBX
+```
+
+Both Make targets require `ARCHIVE=...` and appear in `make help`.
+Direct script usage supports `bin/artifacts --export FILE` / `--import FILE`,
+`--export=FILE` / `--import=FILE`, and short flags `-e FILE` / `-i FILE`. Use matching Git revisions on both machines. Stop Pi and
+builds during transfers. Only import packages from trusted sources.
+
+The single allowlist in `bin/artifacts` defines archive paths and their placement:
+
+- `.cache/images/pissbox-local-{amd64,arm64}.tar` and `pissbox-local.tar` symlink.
+- `.cache/bin/go-bridge-{darwin,linux}-{amd64,arm64}` binaries.
+- `pi-agent/npm/package.json`, `package-lock.json`, and `node_modules/`.
+
+Missing source artifacts are skipped; an empty export fails. The gzip archive
+preserves executable permissions and relative symlinks. Credentials, sessions,
+tracked configuration, generated settings links, general caches, and indexes
+are not included. The search model is already in the image. Packages can still
+contain private/proprietary dependencies: review before sharing publicly.
+
+Export refuses an existing output file. Import validates archive paths, links,
+and destination conflicts before writing, and refuses existing artifacts rather
+than merging or overwriting them. It restores into the checkout containing the
+script, regardless of the caller's directory. An interrupted or failed write can
+leave partial artifacts; inspect these before retrying. Nothing loads an image,
+recreates a sandbox, installs dependencies, or changes the launcher link
+automatically. The destination still needs Docker/SBX and the launcher's `jq`
+dependency. Supply the image and bridge binaries matching its architecture;
+installed sandbox npm dependencies must also support that architecture.
+
 ## Work across directories
 
 Add directories when you need them (with multiple define current one with `.`):

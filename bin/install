@@ -14,6 +14,7 @@ Options:
 Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, and jq.
 Docker must be running; kit validation must pass with your Docker sign-in.
 Dependencies are checked, never installed automatically.
+Optional bin/artifacts transfers require Python 3; it is not checked here.
 Existing symlinks are updated; regular files and directories are never replaced.
 The checkout must stay in place. Shell configuration is not modified.
 EOF

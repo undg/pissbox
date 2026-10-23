@@ -6,8 +6,9 @@ export PYTHONDONTWRITEBYTECODE := 1
 export QUALITY_FILES = $(FILES)
 export QUALITY_BASE = $(BASE)
 export QUALITY_DRY_RUN = $(DRY_RUN)
+export ARTIFACT_ARCHIVE = $(ARCHIVE)
 
-.PHONY: help install build build-image build-image-all build-bridge build-bridge-all tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
+.PHONY: help install build build-image build-image-all build-bridge build-bridge-all export-artifacts import-artifacts tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
 
 ## help: Show available commands (default)
 help:
@@ -36,6 +37,16 @@ build-bridge:
 ## build-bridge-all: Cross-compile the bridge for macOS/Linux on amd64/arm64
 build-bridge-all:
 	bin/build-bridge --all
+
+## export-artifacts: Package runtime artifacts as .tar.gz (ARCHIVE=path required; needs Python 3)
+export-artifacts:
+	@test -n "$$ARTIFACT_ARCHIVE" || { echo 'Set ARCHIVE=path/to/artifacts.tar.gz' >&2; exit 1; }
+	bin/artifacts --export "$$ARTIFACT_ARCHIVE"
+
+## import-artifacts: Restore runtime artifacts without overwriting (ARCHIVE=path required; needs Python 3)
+import-artifacts:
+	@test -n "$$ARTIFACT_ARCHIVE" || { echo 'Set ARCHIVE=path/to/artifacts.tar.gz' >&2; exit 1; }
+	bin/artifacts --import "$$ARTIFACT_ARCHIVE"
 
 ## tools: Install pinned quality tools under .cache (network required)
 tools:

@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Transfer untracked runtime artifacts between pissbox checkouts."""
+
+import argparse
+import os
+from pathlib import Path, PurePosixPath
+import shutil
+import stat
+import sys
+import tarfile
+
+
+# Archive paths are also destinations relative to the checkout. No broad cache copies.
+ARTIFACTS = (
+    ".cache/images/pissbox-local-amd64.tar",
+    ".cache/images/pissbox-local-arm64.tar",
+    ".cache/images/pissbox-local.tar",
+    ".cache/bin/go-bridge-darwin-amd64",
+    ".cache/bin/go-bridge-darwin-arm64",
+    ".cache/bin/go-bridge-linux-amd64",
+    ".cache/bin/go-bridge-linux-arm64",
+    "pi-agent/npm/package.json",
+    "pi-agent/npm/package-lock.json",
+    "pi-agent/npm/node_modules",
+)
+TREE = "pi-agent/npm/node_modules"
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def allowed(name):
+    return name in ARTIFACTS or name.startswith(TREE + "/")
+
+
+def safe_name(name):
+    path = PurePosixPath(name)
+    if path.is_absolute() or ".." in path.parts or str(path) != name or not allowed(name):
+        raise ValueError(f"Path outside the artifact allowlist: {name}")
+    return path
+
+
+def link_target(member):
+    if member.islnk():
+        safe_name(member.linkname)
+        return member.linkname
+    target = PurePosixPath(member.linkname)
+    if target.is_absolute():
+        raise ValueError(f"Absolute symlink: {member.name}")
+    normalized = os.path.normpath(str(PurePosixPath(member.name).parent / target))
+    safe_name(normalized)
+    return normalized
+
+
+def validate_members(members):
+    entries = {}
+    for member in members:
+        path = safe_name(member.name)
+        if member.name in entries:
+            raise ValueError(f"Duplicate archive entry: {member.name}")
+        if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+            raise ValueError(f"Unsupported archive entry: {member.name}")
+        if member.isdir() and member.name != TREE and not member.name.startswith(TREE + "/"):
+            raise ValueError(f"Expected a file: {member.name}")
+        if member.issym() or member.islnk():
+            target = link_target(member)
+            if member.islnk() and (target not in entries or not entries[target].isfile()):
+                raise ValueError(f"Hard link must reference an earlier regular file: {member.name}")
+        entries[str(path)] = member
+    for name in entries:
+        for parent in PurePosixPath(name).parents:
+            if str(parent) in entries and not entries[str(parent)].isdir():
+                raise ValueError(f"Archive entry beneath a non-directory: {name}")
+    if not entries:
+        raise ValueError("The archive contains no artifacts")
+
+
+def check_parents(path):
+    for parent in path.parents:
+        if parent == ROOT:
+            break
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            raise ValueError(f"Artifact parent is not a real directory: {parent}")
+
+
+def export_artifacts(package):
+    selected = [name for name in ARTIFACTS if os.path.lexists(ROOT / name)]
+    if not selected:
+        raise ValueError("No artifacts found to export")
+    destination = package.resolve()
+    for name in ARTIFACTS:
+        artifact = ROOT / name
+        if destination == artifact or artifact in destination.parents:
+            raise ValueError("Package output must be outside the artifact paths")
+    # Preflight links and file types before creating an output archive.
+    members = []
+    with tarfile.open(fileobj=None, mode="w", name=os.devnull) as probe:
+        for name in selected:
+            path = ROOT / name
+            check_parents(path)
+            paths = [path]
+            if path.is_dir() and not path.is_symlink():
+                for directory, directories, files in os.walk(path, followlinks=False):
+                    paths.extend(Path(directory) / item for item in directories + files)
+            for item in paths:
+                members.append(probe.gettarinfo(str(item), str(item.relative_to(ROOT))))
+    validate_members(members)
+    # Exclusive creation prevents accidental replacement of an earlier package.
+    with package.open("xb") as output:
+        with tarfile.open(fileobj=output, mode="w:gz", compresslevel=1) as archive:
+            for member in members:
+                if member.isfile():
+                    with (ROOT / member.name).open("rb") as source:
+                        archive.addfile(member, source)
+                else:
+                    archive.addfile(member)
+    print(f"Exported {len(selected)} artifacts to {package}")
+
+
+def import_artifacts(package):
+    with tarfile.open(package, "r:gz") as archive:
+        members = archive.getmembers()
+        validate_members(members)
+        selected = [name for name in ARTIFACTS
+                    if any(m.name == name or m.name.startswith(name + "/") for m in members)]
+        # Check every destination before writing anything. Existing state is never merged.
+        for name in selected:
+            path = ROOT / name
+            check_parents(path)
+            if os.path.lexists(path):
+                raise ValueError(f"Refusing to overwrite existing artifact: {name}")
+        for member in members:
+            path = ROOT / member.name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if member.isdir():
+                path.mkdir(exist_ok=True)
+            elif member.issym():
+                path.symlink_to(member.linkname)
+            elif member.islnk():
+                os.link(ROOT / member.linkname, path)
+            else:
+                with archive.extractfile(member) as source, path.open("xb") as target:
+                    shutil.copyfileobj(source, target)
+                path.chmod(stat.S_IMODE(member.mode) & 0o777)
+        # Apply directory modes last so read-only directories do not block extraction.
+        for member in reversed(members):
+            if member.isdir():
+                (ROOT / member.name).chmod(stat.S_IMODE(member.mode) & 0o777)
+    print(f"Imported {len(selected)} artifacts into {ROOT}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Export or import allowlisted runtime artifacts as .tar.gz. "
+                    "Paths inside the archive map directly into this checkout.",
+        epilog="Missing export artifacts are skipped. Import refuses existing destinations. "
+               "Credentials, sessions, tracked configuration, and general caches are excluded. "
+               "Stop Pi and builds before transferring artifacts. Import does not load images "
+               "into SBX; use bin/build-image --register afterward.",
+    )
+    operation = parser.add_mutually_exclusive_group(required=True)
+    operation.add_argument("-e", "--export", metavar="FILE", type=Path, dest="export_path")
+    operation.add_argument("-i", "--import", metavar="FILE", type=Path, dest="import_path")
+    args = parser.parse_args()
+    try:
+        if args.export_path is not None:
+            export_artifacts(args.export_path)
+        else:
+            import_artifacts(args.import_path)
+    except (OSError, ValueError, EOFError, tarfile.TarError) as error:
+        parser.exit(1, f"Error: {error}\n")
+
+
+if __name__ == "__main__":
+    main()

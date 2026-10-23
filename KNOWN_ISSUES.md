@@ -9,11 +9,14 @@
       dependency support for both, and verifying that an archive copied to
       another host of the same architecture loads and runs. Nothing tests real
       SBX imports on either architecture yet.
-- [ ] **Bundled plugins and portable distribution:** Explore baking plugins and
-      their dependencies into the image to avoid runtime npm/Git downloads.
-      Package the image, launcher, kit, and configuration for other machines
-      requiring only Docker/SBX, without relying on Pi's npm/Git caches.
-      Exclude credentials and sessions; implementation deferred.
+- [x] **Portable runtime artifacts:** `bin/artifacts --export FILE` and
+      `--import FILE` transfer allowlisted image archives, host bridge binaries,
+      and installed Pi npm packages as `.tar.gz`; Git supplies the launcher, kit,
+      and configuration. Credentials, sessions, and general caches are excluded.
+      Import refuses existing artifacts; SBX image registration remains explicit.
+      Isolated fixture tests cover transfer and rejection behavior. Real
+      cross-machine/architecture transfers and offline startup remain unverified;
+      plugins are not baked into the image. See [transfer guide](README.md#transfer-built-artifacts).
 
 ## Shared-state security
 

@@ -17,7 +17,7 @@ class MakeBuildTests(unittest.TestCase):
         self.directory = Path(directory.name)
         (self.directory / "bin").mkdir()
         self.log = self.directory / "calls"
-        for name in ("install", "build-image", "build-bridge"):
+        for name in ("install", "build-image", "build-bridge", "artifacts"):
             script = self.directory / "bin" / name
             script.write_text(
                 '#!/bin/sh\n'
@@ -27,9 +27,9 @@ class MakeBuildTests(unittest.TestCase):
             )
             script.chmod(0o755)
 
-    def run_make(self, target, status="0", fail=""):
+    def run_make(self, target, status="0", fail="", variables=()):
         return subprocess.run(
-            ["make", "--no-print-directory", "-f", str(ROOT / "Makefile"), target],
+            ["make", "--no-print-directory", "-f", str(ROOT / "Makefile"), target, *variables],
             cwd=self.directory, text=True, capture_output=True, timeout=5,
             env={**os.environ, "MAKE_BUILD_LOG": str(self.log), "MAKE_BUILD_STATUS": status,
                  "MAKE_BUILD_FAIL": fail},
@@ -49,6 +49,26 @@ class MakeBuildTests(unittest.TestCase):
                 result = self.run_make(target)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.log.read_text().splitlines(), command)
+
+    def test_artifact_targets_forward_archive_as_one_argument_and_preserve_failures(self):
+        archive = "runtime artifacts; touch unexpected.tar.gz"
+        for target, flag in (("export-artifacts", "--export"), ("import-artifacts", "--import")):
+            for status in ("0", "37"):
+                with self.subTest(target=target, status=status):
+                    (self.directory / target).touch()
+                    self.log.write_text("")
+                    result = self.run_make(target, status=status, variables=(f"ARCHIVE={archive}",))
+                    self.assertEqual(result.returncode == 0, status == "0", result.stderr)
+                    self.assertEqual(self.log.read_text().splitlines(), ["bin/artifacts", flag, archive])
+                    self.assertFalse((self.directory / "unexpected.tar.gz").exists())
+
+    def test_artifact_targets_require_an_archive_before_running_the_script(self):
+        for target in ("export-artifacts", "import-artifacts"):
+            with self.subTest(target=target):
+                result = self.run_make(target, variables=("ARCHIVE=",))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Set ARCHIVE=", result.stderr)
+                self.assertFalse(self.log.exists())
 
     def test_build_runs_both_host_wrappers_even_with_matching_file(self):
         (self.directory / "build").touch()
@@ -82,6 +102,9 @@ class MakeBuildTests(unittest.TestCase):
         for target in ("install", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all"):
             self.assertIn(target, names)
         self.assertNotIn("build-all", names)
+        for target in ("export-artifacts", "import-artifacts"):
+            self.assertIn(target, names)
+        self.assertIn("ARCHIVE=path required", result.stdout)
         self.assertFalse(self.log.exists())
 
 
