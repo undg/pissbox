@@ -13,6 +13,7 @@ const piEntry = resolvePiEntry(execFileSync("sh", ["-c", "command -v pi"], { enc
 const piRequire = createRequire(piEntry);
 const { SessionManager } = await import(pathToFileURL(piEntry));
 const { createJiti } = piRequire("jiti");
+const { Check } = piRequire("typebox/value");
 const jiti = createJiti(import.meta.url, {
 	fsCache: false,
 	alias: { typebox: piRequire.resolve("typebox") },
@@ -84,7 +85,7 @@ function session({ mode = "tui", name, entries = [
 		event === "session_start" ? { reason: "startup", ...data } : data, ctx,
 	);
 	return {
-		ctx, entries, requests, saved, emit,
+		ctx, entries, requests, saved, emit, tools,
 		rename: (name) => tools.get("set_session_name").execute("rename", { name }),
 		prompt(text = "Fix login redirect loop") {
 			const result = emit("before_agent_start", { messageType: "user", prompt: text });
@@ -114,8 +115,12 @@ test("names a new session on its first prompt without waiting for the task to fi
 	assert.equal(s.requests[0].model, s.ctx.model);
 	assert.equal(s.requests[0].context.messages.length, 1);
 	assert.equal(s.requests[0].context.messages[0].content.length, 4000);
+	assert.equal(s.requests[0].context.messages[0].role, "user");
+	assert.ok(s.requests[0].context.systemPrompt.trim(), "title generation needs its own system instructions");
 	assert.match(s.requests[0].context.messages[0].content, /^Fix login redirect loop/);
 	assert.equal(s.requests[0].options.maxRetries, 0);
+	assert.equal(s.requests[0].options.reasoning, "minimal");
+	assert.equal(s.requests[0].options.cacheRetention, "none");
 	s.requests[0].resolve(title('"Fix login redirect loop"'));
 	await setImmediate();
 	assert.deepEqual(s.saved, ["Fix login redirect loop"]);
@@ -140,6 +145,7 @@ test("leaves existing, resumed, forked, reloaded and headless conversations alon
 	for (const s of [
 		session({ name: "Manual title" }),
 		session({ entries: [{ type: "message", message: { role: "user", content: "Old conversation" } }] }),
+		...["compaction", "branch_summary", "custom_message"].map((type) => session({ entries: [{ type }] })),
 		...["rpc", "json", "print"].map((mode) => session({ mode })),
 	]) {
 		s.emit("session_start");
@@ -148,6 +154,14 @@ test("leaves existing, resumed, forked, reloaded and headless conversations alon
 		assert.equal(s.requests.length, 0);
 		assert.deepEqual(s.saved, []);
 	}
+});
+
+test("a session metadata change before the first prompt disables automatic naming", () => {
+	const s = session();
+	s.emit("session_start");
+	s.emit("session_info_changed", { name: undefined });
+	s.prompt();
+	assert.equal(s.requests.length, 0);
 });
 
 test("skips even empty resumed, forked or reloaded sessions", () => {
@@ -169,8 +183,13 @@ test("a new session gets its own request and cannot receive the previous session
 	s.emit("session_start", { reason: "new" });
 	s.prompt("New task");
 	s.settle();
-	s.requests[1].resolve(title("New task title"));
+	// The old request settles while the replacement is still pending. Its
+	// cleanup must not clear the new controller.
 	s.requests[0].resolve(title("Stale title"));
+	await setImmediate();
+	assert.deepEqual(s.saved, []);
+	assert.equal(s.requests[1].options.signal.aborted, false);
+	s.requests[1].resolve(title("New task title"));
 	await setImmediate();
 	assert.deepEqual(s.saved, ["New task title"]);
 	assert.equal(s.requests[1].context.messages[0].content, "New task");
@@ -181,6 +200,7 @@ test("waits for a user text prompt rather than custom messages or image-only pro
 	s.emit("session_start");
 	s.emit("before_agent_start", { messageType: "custom" });
 	s.prompt("");
+	s.prompt(" \t\n ");
 	assert.equal(s.requests.length, 0);
 	s.prompt();
 	assert.equal(s.requests.length, 1);
@@ -211,7 +231,10 @@ test("manual rename wins over an in-flight automatic title", async () => {
 	s.prompt();
 	s.settle();
 	const result = await s.rename("Refresh session naming workflow");
-	assert.equal(result.details.name, "Refresh session naming workflow");
+	assert.deepEqual(result, {
+		content: [{ type: "text", text: "Session named: Refresh session naming workflow" }],
+		details: { name: "Refresh session naming workflow" },
+	});
 	assert.equal(s.requests[0].options.signal.aborted, true);
 	s.requests[0].resolve(title("Stale automatic title"));
 	await setImmediate();
@@ -231,6 +254,79 @@ test("/name changes, session switches and shutdown cancel pending generation", a
 		s.requests[0].resolve(title("Wrong session title"));
 		await setImmediate();
 		assert.deepEqual(s.saved, []);
+	}
+});
+
+test("title normalization removes controls and surrounding quotes without losing task text", async () => {
+	for (const [input, expected] of [
+		["  ``  Fix\u0000\u0085   login's redirect  ''  ", "Fix login's redirect"],
+		["x".repeat(81), "x".repeat(80)],
+	]) {
+		const automatic = session();
+		automatic.emit("session_start");
+		automatic.prompt();
+		automatic.requests[0].resolve(title(input));
+		await setImmediate();
+		assert.deepEqual(automatic.saved, [expected]);
+		const manual = session({ name: "Old title" });
+		const result = await manual.rename(input);
+		assert.deepEqual(manual.saved, [expected]);
+		assert.equal(result.details.name, expected);
+	}
+});
+
+test("only text response parts contribute to a generated title", async () => {
+	const s = session();
+	s.emit("session_start");
+	s.prompt();
+	s.requests[0].resolve({ stopReason: "stop", content: [
+		{ type: "thinking", text: "Not part of the title" },
+		{ type: "text", text: "Fix" },
+		{ type: "text", text: "login redirect" },
+	] });
+	await setImmediate();
+	assert.deepEqual(s.saved, ["Fix login redirect"]);
+});
+
+test("waits for session startup and an available model, but ignores system-only history", async () => {
+	const s = session({ entries: [{ type: "message", message: { role: "system", content: "System metadata" } }] });
+	s.emit("before_agent_start", { messageType: "user", prompt: "Before session startup" });
+	assert.equal(s.requests.length, 0);
+	s.emit("session_start");
+	const model = s.ctx.model;
+	s.ctx.model = undefined;
+	s.prompt();
+	assert.equal(s.requests.length, 0);
+	s.ctx.model = model;
+	s.prompt();
+	assert.equal(s.requests.length, 1);
+	s.requests[0].resolve(title("Fix login redirect"));
+	await setImmediate();
+	assert.deepEqual(s.saved, ["Fix login redirect"]);
+});
+
+test("a provider result arriving after the naming deadline is ignored", async (t) => {
+	const deadline = new AbortController();
+	t.mock.method(AbortSignal, "timeout", (milliseconds) => {
+		assert.equal(milliseconds, 15000);
+		return deadline.signal;
+	});
+	const s = session();
+	s.emit("session_start");
+	s.prompt();
+	deadline.abort();
+	s.requests[0].resolve(title("Late provider result"));
+	await setImmediate();
+	assert.equal(s.requests[0].options.signal.aborted, true);
+	assert.deepEqual(s.saved, []);
+});
+
+test("rename tool schema requires a title between one and eighty characters", () => {
+	const schema = session().tools.get("set_session_name").parameters;
+	assert.equal(Check(schema, { name: "Title" }), true);
+	assert.equal(Check(schema, { name: "x".repeat(80) }), true);
+	for (const input of [{}, { name: "" }, { name: "x".repeat(81) }, { name: 12 }]) {
+		assert.equal(Check(schema, input), false, JSON.stringify(input));
 	}
 });
 

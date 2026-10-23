@@ -81,5 +81,13 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   the diagnostic copy contains current Go source/tests, not private state.
 - JS mutation scope: `pi-agent/extensions/session-name.js` only (153 mutants).
   Initial run: 110 killed, 43 survived, zero timeouts/uncovered/errors; 71.90%.
-  Investigating meaningful contract/race test gaps, not changing behavior or
-  excluding mutants to inflate the score.
+  Added behavioral tests for title length/control/quote normalization, text-only
+  response parts, whitespace prompts, system-only versus compacted/custom history,
+  metadata changes, missing models, timeouts, request options, tool schema/output,
+  and old-request completion while a replacement remains pending.
+  Final run: 145 killed, 8 survived, zero timeouts/uncovered/errors; 94.77%.
+  Remaining survivors: three UI/schema description strings, two cleanup deletions,
+  a redundant pending-controller check, and tool-local cancellation/eligibility
+  changes masked by the synchronous session-info event. These are not proven
+  universally equivalent; no exclusions or brittle wording assertions added.
+  `make test-js` now passes 24 tests.
