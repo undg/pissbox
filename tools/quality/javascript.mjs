@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const tools = path.join(root, ".cache/quality-tools/js");
 const requireTool = createRequire(path.join(tools, "package.json"));
-const tests = ["go-bridge/pi-extension.test.mjs", "tests/session-name.test.mjs"];
+const tests = ["go-bridge/pi-extension.test.mjs", "tests/session-name.test.mjs", "tests/turn-timing.test.mjs"];
 const [command, ...args] = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const files = args.filter((arg) => arg !== "--dry-run");

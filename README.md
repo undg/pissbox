@@ -53,6 +53,17 @@ New interactive sessions also generate a title from the first prompt. Use
 `/skill:session-name` to refresh it from the conversation, or `/name My title`
 for a manual rename. Automatic naming makes a small additional model request.
 
+A third footer line shows a live activity timer on the left: `working 2m14s`
+during a run, then `idle 12m0s` for time since it finished (including interrupted
+runs). The right side shows `sent 14:30 · done 14:32 · took 2m14s`; `done` and
+`took` stay unknown during a run. Timing covers tools and automatic continuations
+until the agent settles; `sent` tracks the latest user message, not terminal focus.
+Idle time is unknown until a completed run has been recorded.
+Completed timing is saved as display-only session metadata and restored on
+resume or reload. Run `/reload` in an existing Pi instance to load the extension.
+This uses Pi's shared extension-status line; other status extensions can consume
+its space.
+
 ## Development
 
 Run from the checkout root. Tests require Go 1.25+, Node.js, Python 3, and Pi

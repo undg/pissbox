@@ -8,7 +8,7 @@ SBX as part of `make check`.
 
 ```bash
 make tools       # Explicit network install; never runs as a test dependency
-make check       # Go -race, both JS suites, Python tests, vet, Bash syntax, diff check
+make check       # Go -race, all JS suites, Python tests, vet, Bash syntax, diff check
 make metrics     # Fresh coverage plus complexity/CRAP reports for Go and extensions
 ```
 
@@ -61,7 +61,7 @@ scan**. Test-only changes need explicit implementation `FILES` to audit the
 assertions they improve. `--list` previews selection without requiring tools.
 
 Selection restricts **mutated files**, not tests. Gremlins runs the complete Go
-suite (`--integration`); Stryker's built-in command runner runs both extension
+suite (`--integration`); Stryker's built-in command runner runs all extension
 suites with coverage analysis off. Each tool uses one worker. Do not run two
 copies of the same language's target concurrently: report paths are shared.
 

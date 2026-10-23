@@ -173,6 +173,7 @@ assert.ok(process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.endsWith("/.cache/test-fix
 assert.ok(!process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR.includes("/sandboxes/"));
 ''')
         self.write("tests/session-name.test.mjs", 'import test from "node:test"; test("baseline", () => {});\n')
+        self.write("tests/turn-timing.test.mjs", 'import test from "node:test"; test("timing baseline", () => {});\n')
         result = self.quality("mutation-js", "--dry-run", selected)
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         self.assertIn("Instrumented 1 source file(s)", result.stdout)
