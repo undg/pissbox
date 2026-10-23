@@ -34,10 +34,10 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   inspect fresh reports for concrete risks and fix verified problems.
 - [x] Mutation: preview explicit scopes; run bounded Go and JS dry runs and real
   mutations where practical; investigate meaningful survivors and baseline errors.
-- [!] Risk review: inspect flagged control/router/poller functions, add missing
+- [x] Risk review: inspect flagged control/router/poller functions, add missing
   CLI safety validation coverage, and correct any verified tooling documentation
   mismatches. No complexity-only refactor without a correctness reason.
-- [ ] Final ordinary aggregate `check`, review git status, record limitations and
+- [x] Final ordinary aggregate `check`, review git status, record limitations and
   commits. No claim of real image build, host execution or sandbox launch.
 
 ## Results
@@ -100,4 +100,42 @@ Do not push, rebuild images, recreate sandboxes, or touch shared credentials/sta
   runtime state/start a daemon. `make test-go` passes with these cases.
 - Documentation mismatch found: quality/kit guides still claim Go 1.24, while
   `go.mod` requires 1.25. Kit guide also incorrectly describes the old per-launch,
-  Herd-only bridge instead of the persistent messaging daemon.
+  Herd-only bridge instead of the persistent messaging daemon. Corrected both
+  guides against `go.mod`, launcher registration/cleanup, and bridge documentation.
+- Final `make metrics`: passed, all supported production sources. Go statement
+  coverage 85.6%; `controlCLI` coverage 92.1%, CRAP 28.39 (was 59.39).
+  Remaining risk signals: `messaging.go:297` requests CRAP 40.19 (complexity 32,
+  80% coverage), `control.go:353` serve CRAP 33.03 (complexity 23, 73.3%
+  coverage), JS `agent-messaging.js:138` poll CRAP 30.1 (complexity 30,
+  96% coverage). These are investigation signals, not failed correctness checks.
+- Final JS coverage: 97.67% lines/statements, 89.28% branches, 100% functions.
+- Final `make check`: passed; Go race tests, 24 JS tests, all 113 Python tests
+  (no skips), vet, Bash syntax and whitespace checks. Final `make fmt` and
+  `make tidy` passed without changes.
+
+## Target coverage and limitations
+
+- Executed: help, test-go, test-js, test-python, vet, syntax, check, build,
+  build-all, tools, coverage-go, coverage-js, crap-go, crap-js, metrics,
+  scoped mutation-go/mutation-js (dry and real), fmt, tidy.
+- `test`, `coverage`, `crap`, and `mutation` are dependency-only aliases of
+  tested leaf targets. No extra duplicate runs needed.
+- `mutation-all` intentionally not run: bounded exact-file runs already verify
+  both engines; scores above are not project-wide mutation scores.
+- `validate-kit` was attempted and remains blocked by Docker sign-in.
+- No real macOS/Homebrew run, cross-target runtime execution, image build,
+  sandbox launch, Herd integration, authentication or persistence smoke test.
+- Commands ran sequentially. Generated tools/reports/logs stay ignored in
+  `.cache/`; source changes and this audit record are committed. No push.
+
+## Commits
+
+- `b3e8bfc` persist the configured npm cache in shared state
+- `91a7b68` resolve installed Pi tests through Homebrew wrappers
+- `c20977d` record bridge build audit and kit validation blocker
+- `2b87d56` include messaging integration fixtures in mutation sandboxes
+- `9ac89cc` cover mailbox limits and readiness capability refresh
+- `b218030` exercise session naming contracts and stale request races
+- `2d3a73c` verify CLI validation and help never start a daemon
+- Final documentation/audit commit records corrected prerequisites/lifecycle
+  guidance and final verification.

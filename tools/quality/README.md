@@ -12,7 +12,7 @@ make check       # Go -race, both JS suites, Python tests, vet, Bash syntax, dif
 make metrics     # Fresh coverage plus complexity/CRAP reports for Go and extensions
 ```
 
-Ordinary bridge development still requires Go 1.24+. Building the pinned quality
+Ordinary bridge development requires Go 1.25+. Building the pinned quality
 tools requires **Go 1.26.2+** (or Go's enabled automatic toolchain download).
 JavaScript quality tooling requires **Node 22+ and npm**. The session-name suite
 also requires Pi installed on PATH with its loader dependencies; it exercises Pi's

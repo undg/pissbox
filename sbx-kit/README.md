@@ -34,19 +34,24 @@ Run `bin/pissbox --help` for all options. Directory selection is:
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
 
-## Optional Herd reporting
+## Optional messaging and Herd reporting
 
-Build the host helper once with `bin/build-bridge` (Go 1.24+), or cross-compile
-all macOS/Linux binaries with `bin/build-bridge --all`. Then launch pissbox
-from a Herd pane. The launcher selects the matching prebuilt binary and reports
-sandbox Pi as `pissbox-pi`, including working/idle state and blocking extension UI
-prompts. Herd handles notifications according to its settings.
+Build the host helper once with `make build` (Go 1.25+), or cross-compile
+all macOS/Linux binaries with `make build-all`. The launcher selects the matching
+prebuilt binary and registers its mailbox with one persistent daemon per host
+OS user. Agent discovery and addressed Pi-to-Pi messaging work without Herd.
+Inside a Herd pane, the launcher also binds that pane and reports sandbox Pi as
+`pissbox-pi`, including working/idle state and blocking extension UI prompts.
+Herd handles notifications according to its settings.
 
-Outside Herd, no helper runs. Missing binaries or bridge failures warn without
-blocking Pi. No network port, MCP server, new mount, or permanent daemon is
-needed. The helper runs only while the launcher is attached; direct SBX launches
-bypass it. See the [bridge guide](../go-bridge/README.md) for limitations,
-shared-state security, testing, and future packaging.
+Missing binaries/extensions or bridge failures warn without blocking Pi. No
+network port, MCP server, or new mount is needed; the control socket stays on
+the host. Launcher exit unregisters only its mailbox, not the daemon. Explicit
+`stop` with the matching binary terminates the daemon. After daemon failure,
+existing sessions need launcher reattachment to register fresh mailboxes; a new
+launch does not restore old registrations. Direct SBX launches bypass this
+integration. See the [bridge guide](../go-bridge/README.md) for control commands,
+limitations, shared-state security, testing, and future packaging.
 
 ## Configuration and login
 
