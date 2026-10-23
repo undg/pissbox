@@ -8,16 +8,32 @@ sandboxes, and shared host-owned Pi configuration and tool state.
 
 ## Start
 
-On the host, with Docker running and SBX **v0.39.0+** installed:
+From the checkout root on the host:
 
 ```bash
-bin/build-image
-bin/pissbox
+make install
 ```
 
-Build once, then run `pissbox` from your project directory.
-No arguments needed: it opens Pi in the current directory.
-Workspaces are live host mounts: edits persist after sandbox removal.
+The installer checks for Make, Go **1.25+**, Docker with buildx, SBX **v0.39.0+**,
+and `jq`, checks Docker connectivity, and validates the kit (including the
+Docker sign-in required by SBX). It does not install missing dependencies or
+perform login automatically. It then runs `make build` to build the host bridge
+and build/import the sandbox image, and links `~/.local/bin/pissbox` to this
+checkout's launcher.
+
+Existing symlinks are repointed to this checkout, including broken links;
+matching links are unchanged. Regular files and directories are never replaced.
+Failed checks or builds leave the existing launcher link unchanged. Keep the
+checkout in place. If `~/.local/bin` is missing from `PATH`, the installer warns
+without modifying shell configuration. `bin/install --help` documents the flow.
+
+After installation, run `pissbox` from your project directory. No arguments
+needed: it opens Pi in the current directory. Authenticate using Pi's `/login`
+inside the sandbox on first use. Workspaces are live host mounts: edits persist
+after sandbox removal.
+
+For build-only use without creating a launcher link, run `make build`.
+Use `make build-image` instead if you do not need the optional bridge or Go.
 
 For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
@@ -36,17 +52,17 @@ Ask Pi: “Adapt this OpenCode skill for my native and sandbox Pi setups.”
 
 ## Optional agent tools
 
-Build the host bridge, then launch normally:
+`make build` already includes the host bridge. To rebuild only the bridge:
 
 ```bash
-make build       # Current host; requires Go 1.25+
+make build-bridge  # Current host; requires Go 1.25+
 bin/pissbox
 ```
 
 The bridge adds `agent_list` and `agent_send` for discovery and addressed
 Pi-to-Pi messaging across active launches. Herd is not required; when launched
 inside Herd, the bridge also reports working, idle, and blocked states.
-`make build-all` cross-compiles for macOS/Linux on arm64/amd64.
+`make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64.
 See the [bridge guide](go-bridge/README.md) for setup and daemon lifecycle.
 
 New interactive sessions also generate a title from the first prompt. Use
@@ -92,8 +108,11 @@ Mutation targets require exact `FILES` or a `BASE` Git ref; `FILES` overrides
 See the [quality guide](tools/quality/README.md) for selection previews, dry runs,
 report interpretation, and tool versions.
 
-Image builds remain `bin/build-image`. `make validate-kit` separately validates
-the kit with SBX and requires Docker sign-in.
+`make build-image` builds, saves, and imports the host-architecture sandbox image.
+`make build-image-all` builds and saves both amd64 and arm64 archives without
+importing them; the foreign architecture uses emulation. Use `bin/build-image`
+directly for custom flags or archive registration. `make validate-kit` separately
+validates the kit with SBX and requires Docker sign-in.
 
 ## Guides
 

@@ -10,8 +10,8 @@ No MCP endpoint, HTTP listener, service manager, or third-party Go dependencies.
 Requires **Go 1.25+ on the build machine only** (for rooted atomic rename):
 
 ```bash
-bin/build-bridge        # Current host OS and CPU
-bin/build-bridge --all  # darwin/linux × arm64/amd64, from either OS
+make build-bridge      # Current host OS and CPU
+make build-bridge-all  # darwin/linux × arm64/amd64, from either OS
 ```
 
 Binaries go to the ignored `.cache/bin/go-bridge-<os>-<arch>` paths.
@@ -290,7 +290,7 @@ suppression settings still apply.
 ## Verify
 
 From the repository root, `make check` runs Go/JS/Python tests, vet, Bash syntax,
-and whitespace checks. Cross-build separately with `make build-all`. See
+and whitespace checks. Cross-build separately with `make build-bridge-all`. See
 [quality tooling](../tools/quality/README.md) for scoped Go/extension mutation
 testing and coverage/CRAP metrics.
 
@@ -298,7 +298,7 @@ testing and coverage/CRAP metrics.
 (cd go-bridge && go test -race ./... && go vet ./...)
 make test-js
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-bin/build-bridge --all
+make build-bridge-all
 ```
 
 Go tests use real CLI/daemon subprocesses and local Unix sockets with simulated

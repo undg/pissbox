@@ -11,9 +11,16 @@ installation stays writable for self-updates.
 On the **host**, with Docker running and `docker`/`sbx` on PATH.
 The wrapper supports macOS's bundled Bash 3.2 and newer Bash on Linux:
 
+From the checkout root:
+
 ```bash
-bin/build-image
+make build-image      # Host architecture: build, save, and import into SBX
+make build-image-all  # amd64 + arm64: build and save only, no SBX import
 ```
+
+These targets call `bin/build-image` and `bin/build-image --amd64 --arm64`.
+The dual-architecture target builds sequentially; the foreign architecture uses
+emulation and may be slow. Use the wrapper directly for the options below.
 
 The wrapper resolves its checkout even through symlinks or from another working
 directory. By default it detects this host's architecture from the Docker

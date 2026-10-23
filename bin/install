@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [-h | --help]
+
+Check host dependencies, run make build, and link pissbox into ~/.local/bin.
+
+Options:
+  -h, --help  Show this help
+
+Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, and jq.
+Docker must be running; kit validation must pass with your Docker sign-in.
+Dependencies are checked, never installed automatically.
+Existing symlinks are updated; regular files and directories are never replaced.
+The checkout must stay in place. Shell configuration is not modified.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	*)
+		echo "Unexpected argument: $1. Use --help for usage." >&2
+		exit 1
+		;;
+	esac
+done
+
+check_target() {
+	if [[ -e $TARGET && ! -L $TARGET ]]; then
+		echo "Refusing to replace an existing file or directory: $TARGET" >&2
+		exit 1
+	fi
+}
+
+# Follow installer symlinks, including relative links, on macOS and Linux.
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+INSTALL_DIR="${HOME:?Set HOME to your home directory}/.local/bin"
+TARGET="$INSTALL_DIR/pissbox"
+SOURCE="$ROOT_DIR/bin/pissbox"
+check_target
+
+MISSING=false
+for TOOL in make go docker sbx jq; do
+	if ! command -v "$TOOL" >/dev/null 2>&1; then
+		echo "Required command not found: $TOOL. Install it before running make install." >&2
+		MISSING=true
+	fi
+done
+if [[ $MISSING == true ]]; then
+	exit 1
+fi
+
+cd "$ROOT_DIR"
+GO_VERSION=$(go env GOVERSION)
+if [[ ! $GO_VERSION =~ ^go([0-9]+)\.([0-9]+) ]] ||
+	(( BASH_REMATCH[1] < 1 || (BASH_REMATCH[1] == 1 && BASH_REMATCH[2] < 25) )); then
+	echo "Go 1.25+ is required; found: $GO_VERSION" >&2
+	exit 1
+fi
+SBX_VERSION=$(sbx version)
+if [[ ! $SBX_VERSION =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]] ||
+	(( BASH_REMATCH[1] == 0 && BASH_REMATCH[2] < 39 )); then
+	echo "SBX v0.39.0+ is required; found: $SBX_VERSION" >&2
+	exit 1
+fi
+
+docker info >/dev/null
+docker buildx version >/dev/null
+sbx kit validate "$ROOT_DIR/sbx-kit"
+
+mkdir -p "$INSTALL_DIR"
+make -C "$ROOT_DIR" build
+# A build can take a while; recheck before updating the command.
+check_target
+if [[ ! -L $TARGET || $(readlink "$TARGET") != "$SOURCE" ]]; then
+	ln -sfn "$SOURCE" "$TARGET"
+fi
+printf 'Installed launcher: %s -> %s\n' "$TARGET" "$SOURCE"
+case :${PATH:-}: in
+*:"$INSTALL_DIR":*) ;;
+*) echo "Warning: add $INSTALL_DIR to PATH to run pissbox by name." >&2 ;;
+esac

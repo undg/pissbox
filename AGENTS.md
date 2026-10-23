@@ -7,6 +7,8 @@ or directory name. User guides start at [README.md](README.md).
 ## Layout
 
 - `bin/pissbox`: host launcher; `bin/build-image`: build, save, and SBX import.
+- `bin/install`: check host dependencies, build, and link `~/.local/bin/pissbox`.
+  Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
 - `sbx-kit/files/home/.pissbox/`: small setup scripts and shared-directory mappings.
 - `pi-agent/`: shared sandbox-only configuration, credentials, and sessions.
@@ -20,6 +22,15 @@ or directory name. User guides start at [README.md](README.md).
 - `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
   Keep JS suites beside their extension/library as `*.test.mjs`; Make, coverage,
   and mutation runners discover them recursively. Go tests stay beside Go source.
+
+## Dependency changes
+
+When adding, removing, or changing a dependency or its minimum version, review
+`bin/install` in the same change. Keep host prerequisite checks, installer help,
+`tests/test_install.py`, and README requirements aligned. Sandbox-only tools
+belong in `sbx-kit/Dockerfile`, not in host prerequisite checks; update image
+pins/checksums and affected tests/docs as needed. The installer checks host
+dependencies but never installs them automatically.
 
 ## Image and kit constraints
 
@@ -133,7 +144,10 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make test-python` | Launcher, setup, and quality-wrapper regression tests |
 | `make vet syntax` | Go vet and Bash syntax only |
 | `make validate-kit` | SBX kit validation; requires Docker sign-in |
-| `make build` / `make build-all` | Host bridge build / all supported cross-builds |
+| `make install` | Check host prerequisites, build, and install the launcher symlink |
+| `make build` | Build the host bridge and build/save/import the host image |
+| `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
+| `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |
 | `make tools` | Explicit network installation of pinned quality tools |
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |

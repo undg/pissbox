@@ -1,7 +1,7 @@
 # Using pissbox
 
 This local SBX kit runs `pi --offline` from the `pissbox:local` image.
-Build and import it first with `bin/build-image`; see the
+Build and import it first with `make build-image` from the checkout root; see the
 [image guide](README.image.md) for CA setup and build options.
 
 ## Launch
@@ -92,8 +92,8 @@ The tests also search `.cache/bin`, so no PATH changes are needed.
 
 ## Optional messaging and Herd reporting
 
-Build the host helper once with `make build` (Go 1.25+), or cross-compile
-all macOS/Linux binaries with `make build-all`. The launcher selects the matching
+Build the host helper once with `make build-bridge` (Go 1.25+), or cross-compile
+all macOS/Linux binaries with `make build-bridge-all`. The launcher selects the matching
 prebuilt binary and registers its mailbox with one persistent daemon per host
 OS user. Agent discovery and addressed Pi-to-Pi messaging work without Herd.
 Inside a Herd pane, the launcher also binds that pane and reports sandbox Pi as
