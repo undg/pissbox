@@ -31,9 +31,11 @@
 - [x] **Fresh sandbox verification:** Custom-image availability in SBX,
       config links, Copilot login, and restart/replacement persistence need an
       end-to-end check. Stubbed CLI tests do not verify these.
-- [x] **npm cache mapping:** Setup selects `$HOME/.cache/npm`, but
-      `shared-directories.conf` lacks `npm|.cache/npm`. Three shared-directory
-      regression tests fail; the cache is not shared across sandbox removal.
+- [x] **npm cache mapping:** Added `npm|.cache/npm` to the shared-directory
+      configuration. Isolated-home regression tests verify persistence and
+      preservation of the image's `.npm` directory. Existing sandboxes need
+      a new sandbox name to receive the mapping; real SBX persistence remains
+      unverified.
 
 ## Host ↔ pissbox bridge / Herd
 

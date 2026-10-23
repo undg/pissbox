@@ -27,13 +27,14 @@ tool locations as user `1000`.
 | `colgrep/config` | `.config/colgrep` | Config for versions using this location |
 | `colgrep/cache` | `.cache/colgrep` | Runtime cache |
 | `onnxruntime` | `.cache/onnxruntime` | Linux runtime libraries |
+| `npm` | `.cache/npm` | npm package cache |
 | `pnpm/store` | `.local/share/pnpm/store` | Content-addressable packages |
 | `pnpm/cache` | `.cache/pnpm` | Package metadata |
 
-Project `node_modules` stays in the project. Kit setup points npm at
-`$HOME/.cache/npm`, but that directory currently has **no shared mapping**;
-its cache does not persist across sandbox removal. See [known issues](../KNOWN_ISSUES.md).
-The image's `$HOME/.npm` is left untouched.
+Project `node_modules` stays in the project. Kit setup points npm at the shared
+`$HOME/.cache/npm` directory. The image's `$HOME/.npm` is left untouched.
+Existing sandboxes need a new sandbox name to receive the mapping; setup does
+not migrate an existing local cache.
 
 ## Boundaries
 
