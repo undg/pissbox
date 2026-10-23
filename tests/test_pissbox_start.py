@@ -182,6 +182,25 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("Mounted host files remain", result.stderr)
                 self.assertTrue(ROOT.is_dir())
 
+    def test_delete_yes_skips_confirmation_and_keeps_exact_matching(self):
+        listing = [
+            {"name": "first", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]},
+            {"name": "other", "agent": "pi", "status": "running", "workspaces": [str(ROOT.parent)]},
+            {"name": "second", "agent": "pi", "status": "stopped", "workspaces": [str(ROOT / "tests"), str(ROOT)]},
+        ]
+        for args in (("--delete", ".", "--yes"), ("--yes", "--delete=."), ("-y", "-d", "."), ("-d", ".", "-y")):
+            with self.subTest(args=args):
+                result, calls = self.manage(*args, listing=listing)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls, [["ls", "--json"], ["rm", "--force", "first", "second"]])
+                self.assertNotIn("[y/N]", result.stderr)
+                self.assertIn("Mounted host files remain", result.stderr)
+
+    def test_yes_with_list_only_lists_sandboxes(self):
+        result, calls = self.manage("--yes", "--ls")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [["ls", "--json"]])
+
     def test_delete_resolves_spaces_relative_paths_and_symlinks(self):
         fixtures = STATE_DIR / "test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
@@ -211,6 +230,7 @@ class LauncherTests(unittest.TestCase):
             ("-d", "nonexistent-directory"), ("-d", str(LAUNCHER)),
             ("-d", ".", "extra"), ("-l", "."), ("-d", ".", "-l"),
             ("-l", "--name", "box"), ("--name=box", "-d", "."),
+            ("--yes", "-d", "nonexistent-directory"), ("--yes", "-d", ".", "-l"),
         ):
             with self.subTest(args=args):
                 result, calls = self.manage(*args)
@@ -219,23 +239,27 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls, [])
 
     def test_delete_no_matches_is_an_error_without_confirmation(self):
-        result, calls = self.manage("-d", ".", answers="y\n")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("No sandboxes associated", result.stderr)
-        self.assertNotIn("[y/N]", result.stderr)
-        self.assertEqual(calls, [["ls", "--json"]])
+        for extra in ((), ("--yes",)):
+            with self.subTest(extra=extra):
+                result, calls = self.manage("-d", ".", *extra, answers="y\n")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("No sandboxes associated", result.stderr)
+                self.assertNotIn("[y/N]", result.stderr)
+                self.assertEqual(calls, [["ls", "--json"]])
 
     def test_management_preserves_listing_and_deletion_failures(self):
-        for args in (("-l",), ("-d", ".")):
+        for args in (("-l",), ("-d", "."), ("-d", ".", "--yes")):
             with self.subTest(args=args):
                 result, calls = self.manage(*args, TEST_SBX_LIST_STATUS="7", answers="y\n")
                 self.assertEqual(result.returncode, 7, result.stderr)
                 self.assertIn("listing unavailable", result.stderr)
                 self.assertEqual(calls, [["ls", "--json"]])
         listing = [{"name": "match", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}]
-        result, calls = self.manage("-d", ".", listing=listing, TEST_SBX_REMOVE_STATUS="9", answers="y\n")
-        self.assertEqual(result.returncode, 9, result.stderr)
-        self.assertEqual(calls[-1], ["rm", "--force", "match"])
+        for extra in ((), ("--yes",)):
+            with self.subTest(extra=extra):
+                result, calls = self.manage("-d", ".", *extra, listing=listing, TEST_SBX_REMOVE_STATUS="9", answers="y\n")
+                self.assertEqual(result.returncode, 9, result.stderr)
+                self.assertEqual(calls[-1], ["rm", "--force", "match"])
 
     def test_management_rejects_invalid_metadata_before_confirmation(self):
         invalid_listings = (
@@ -245,7 +269,7 @@ class LauncherTests(unittest.TestCase):
         )
         for listing in invalid_listings:
             with self.subTest(listing=listing):
-                result, calls = self.manage("-d", ".", listing=listing, answers="y\n")
+                result, calls = self.manage("-d", ".", "--yes", listing=listing)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertNotIn("[y/N]", result.stderr)
                 self.assertEqual(calls, [["ls", "--json"]])
@@ -275,12 +299,13 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls[-1], ["rm", "--force", "match"])
 
     def test_management_help_does_not_query_sbx(self):
-        for args in (("-l", "--help"), ("-d", ".", "-h")):
+        for args in (("-l", "--help"), ("-d", ".", "-h"), ("--yes", "--help")):
             with self.subTest(args=args):
                 result, calls = self.manage(*args)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("--delete DIR", result.stdout)
                 self.assertIn("--ls", result.stdout)
+                self.assertIn("--yes", result.stdout)
                 self.assertEqual(calls, [])
 
     def test_new_sandbox_keeps_original_arguments(self):
@@ -445,6 +470,54 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls[1:], [["run", "--name", "pi-existing"]])
         self.assertIn("Choose [P/s/d/q]:", result.stderr)
         self.assertNotIn("Do you want to delete", result.stderr)
+
+    def test_yes_opens_existing_pi_without_reading_menu_input(self):
+        for flag in ("-y", "--yes"):
+            for answers in ("", "d\ny\n"):
+                with self.subTest(flag=flag, answers=answers):
+                    result, calls = self.launch(
+                        flag, answers=answers, TEST_SBX_MODE="conflict",
+                        TEST_SBX_NAME="actual-name",
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+                    self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+                    self.assertNotIn("d) Delete sandbox", result.stderr)
+                    self.assertNotIn("[y/N]", result.stderr)
+
+    def test_yes_preserves_multiple_workspaces_in_any_flag_position(self):
+        for flag in ("-y", "--yes"):
+            for args in ((flag, ".", "workspace with spaces"),
+                         (".", flag, "workspace with spaces"),
+                         (".", "workspace with spaces", flag)):
+                with self.subTest(args=args):
+                    result, calls = self.launch(*args)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls, [[
+                        "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
+                        "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
+                        str(ROOT / "bin" / "../sbx-kit"), ".", "workspace with spaces",
+                        str(PI_DIR), str(STATE_DIR),
+                    ]])
+
+    def test_yes_after_separator_is_a_workspace_not_menu_consent(self):
+        result, calls = self.launch("--", "--yes", TEST_SBX_MODE="conflict")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--yes", calls[0])
+        self.assertIn("Choose [P/s/d/q]", result.stderr)
+
+    def test_yes_preserves_launch_and_attach_failures(self):
+        for env, status, call_count in (
+            ({"TEST_SBX_MODE": "error"}, 7, 1),
+            ({"TEST_SBX_RUN_STATUS": "42"}, 42, 1),
+            ({"TEST_SBX_MODE": "conflict", "TEST_SBX_ATTACH_STATUS": "9"}, 9, 2),
+        ):
+            with self.subTest(env=env):
+                result, calls = self.launch("--yes", **env)
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual(len(calls), call_count)
+                self.assertNotIn("Choose [P/s/d/q]", result.stderr)
 
     def test_pi_choice(self):
         for answer in ("p", "P"):

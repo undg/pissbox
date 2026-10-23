@@ -104,6 +104,7 @@ List or delete sandboxes directly from the host:
 pissbox -l              # or --ls
 pissbox -d .            # or --delete .
 pissbox --delete /path/to/project
+pissbox --delete /path/to/project --yes  # Skip confirmation for automation
 ```
 
 Both operations require `jq` on the host (`brew install jq` on macOS). They
@@ -122,10 +123,11 @@ secondary workspace. Parent and child paths do not match automatically. This
 also means deleting by a shared Pi or cache directory can match many sandboxes.
 
 The launcher shows every matching sandbox and asks once `[y/N]` before removing
-all of them. No matches, missing/invalid directories, or EOF are errors. Declining
-leaves everything untouched. Mounted host files remain; sandbox-local data is
-lost. Deletion does not recreate sandboxes. List and delete cannot be combined
-with each other, `--name`, or positional workspaces.
+all of them. Pass `-y` or `--yes` with `--delete` to skip the prompt for automation.
+Directory and metadata validation still apply. No matches, missing/invalid directories, or EOF at the prompt are errors.
+Declining leaves everything untouched. Mounted host files remain; sandbox-local
+data is lost. Deletion does not recreate sandboxes. List and delete cannot be
+combined with each other, `--name`, or positional workspaces.
 
 On an existing-sandbox/workspace conflict during a normal launch, the launcher offers:
 
@@ -138,6 +140,20 @@ On an existing-sandbox/workspace conflict during a normal launch, the launcher o
 
 Letters are case-insensitive. Deletion requires explicit consent and exits
 without recreating. EOF aborts; invalid input retries.
+
+Pass `-y` or `--yes` on a normal launch to choose Pi automatically if this conflict
+occurs. It never selects deletion. Flags may appear before, between, or after
+workspace arguments; the first workspace stays primary:
+
+```bash
+pissbox --yes . /path/to/other
+pissbox . --yes /path/to/other
+pissbox . /path/to/other -y
+```
+
+New launches forward all workspaces as usual. Attaching to an existing sandbox
+keeps its existing mounts; `--yes` does not add or change them. After `--`, all
+arguments are workspace paths, not flags.
 
 Workspaces and copied kit files are fixed at creation. Use a **new sandbox
 name** for changed mounts, kit setup, or images; attaching does not update them.

@@ -8,6 +8,7 @@ PISSBOX_PI_DIR=${PISSBOX_PI_DIR:-}
 PISSBOX_STATE_DIR=${PISSBOX_STATE_DIR:-}
 SANDBOX_NAME=""
 DELETE_DIRECTORY=""
+ASSUME_YES=false
 LIST_SANDBOXES=false
 WORKSPACES=()
 BRIDGE_ID=""
@@ -18,13 +19,14 @@ BRIDGE_ENV_ARGS=()
 show_help() {
 	cat <<EOF
 Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
-       ${0##*/} -d DIR
+       ${0##*/} -d DIR [-y]
        ${0##*/} -l
 
 Start Pi in an SBX sandbox with sandbox-only configuration.
 
 Options:
-  -d, --delete DIR     Confirm deletion of all sandboxes with DIR as a workspace
+  -d, --delete DIR     Delete all sandboxes with DIR as a workspace
+  -y, --yes            Open existing Pi without a menu; skip --delete confirmation
   -l, --ls             List sandboxes, current-directory matches first
   --name NAME          Pass an explicit sandbox name to SBX
   --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
@@ -40,7 +42,8 @@ Directory flags override environment variables; relative paths use the caller's 
 Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
 If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
-Deletion requires a separate confirmation [y/N].
+With --yes, open Pi in the existing sandbox without prompting; existing mounts stay.
+Deletion requires a separate confirmation [y/N], unless --delete uses --yes.
 An optional prebuilt host bridge enables agent messaging and Herd lifecycle state.
 Build it with bin/build-bridge; bridge failures never prevent launching Pi.
 Deletion removes sandbox-local data and exits; mounted host files remain.
@@ -67,6 +70,10 @@ while [[ $# -gt 0 ]]; do
 			echo "--delete requires a directory" >&2
 			exit 1
 		fi
+		shift
+		;;
+	-y | --yes)
+		ASSUME_YES=true
 		shift
 		;;
 	-l | --ls)
@@ -289,7 +296,7 @@ if [[ -n $DELETE_DIRECTORY || $LIST_SANDBOXES == true ]]; then
 	printf 'Sandboxes associated with %s:\n' "$DIRECTORY" >&2
 	print_sandbox_group true >&2
 	echo "Deletion loses sandbox-local data. Mounted host files remain." >&2
-	if confirm "Delete all ${#SANDBOX_NAMES[@]} matching sandboxes? [y/N]" n; then
+	if [[ $ASSUME_YES == true ]] || confirm "Delete all ${#SANDBOX_NAMES[@]} matching sandboxes? [y/N]" n; then
 		exec sbx rm --force "${SANDBOX_NAMES[@]}"
 	fi
 	exit 0
@@ -417,7 +424,8 @@ if [[ ! $SBX_ERROR =~ $CONFLICT_PATTERN ]]; then
 fi
 SANDBOX_NAME=${BASH_REMATCH[1]}
 
-cat >&2 <<EOF
+if [[ $ASSUME_YES == false ]]; then
+	cat >&2 <<EOF
 Sandbox '$SANDBOX_NAME' already exists.
 
   p) Open Pi [default]
@@ -426,12 +434,16 @@ Sandbox '$SANDBOX_NAME' already exists.
   q) Quit
 
 EOF
+fi
 
 while true; do
-	printf 'Choose [P/s/d/q]: ' >&2
-	if ! IFS= read -r CHOICE; then
-		printf '\n' >&2
-		exit 1
+	CHOICE=p
+	if [[ $ASSUME_YES == false ]]; then
+		printf 'Choose [P/s/d/q]: ' >&2
+		if ! IFS= read -r CHOICE; then
+			printf '\n' >&2
+			exit 1
+		fi
 	fi
 	case ${CHOICE:-p} in
 	[Pp])
