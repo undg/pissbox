@@ -268,17 +268,20 @@ load_sandboxes() {
 	listing=$(sbx ls --json)
 	# Validate before selecting names: malformed metadata must never drive deletion.
 	SANDBOXES=$(printf '%s\n' "$listing" | jq -ce --arg directory "$directory" '
+		def invalid($field):
+			error("Invalid sandbox metadata for \(.name | tojson): \($field); refusing to continue");
 		if type != "array" then error("Expected a sandbox array")
 		else map(
+			if type != "object" then error("Expected a sandbox object; refusing to continue") else . end |
 			# SBX reports null for a sandbox created without workspace mounts.
 			if has("workspaces") and .workspaces == null then .workspaces = [] else . end |
-			if ((.name | type == "string") and
-				(.name | test("^[A-Za-z0-9][A-Za-z0-9_.-]*$")) and
-				(.agent | type == "string") and (.status | type == "string") and
-				(.workspaces | type == "array") and
-				(.workspaces | all(.[]; type == "string" and startswith("/"))))
-			then . + {associated: (.workspaces | index($directory) != null)}
-			else error("Invalid sandbox metadata; refusing to continue") end
+			if (.name | type != "string") then invalid("name must be a string")
+			elif (.name | test("^[A-Za-z0-9][A-Za-z0-9_.-]*$") | not) then invalid("name contains unsupported characters")
+			elif (.agent | type != "string") then invalid("agent must be a string")
+			elif (.status | type != "string") then invalid("status must be a string")
+			elif (.workspaces | type != "array") then invalid("workspaces must be an array or explicit null")
+			elif (.workspaces | all(.[]; type == "string" and startswith("/")) | not) then invalid("workspaces must contain absolute path strings")
+			else . + {associated: (.workspaces | index($directory) != null)} end
 		) end
 	')
 }

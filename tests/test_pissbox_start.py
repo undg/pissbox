@@ -302,6 +302,19 @@ class LauncherTests(unittest.TestCase):
                 self.assertNotIn("[y/N]", result.stderr)
                 self.assertEqual(calls, [["ls", "--json"]])
 
+    def test_management_identifies_rejected_sandbox_and_field_without_deleting(self):
+        valid = {"name": "project", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}
+        for field, value in (("name", "-unsafe"), ("agent", None), ("status", 1),
+                             ("workspaces", False), ("workspaces", ["relative/path"])):
+            invalid = {**valid, "name": "broken", field: value}
+            for args in (("-l",), ("-d", ".", "--yes")):
+                with self.subTest(field=field, value=value, args=args):
+                    result, calls = self.manage(*args, listing=[valid, invalid])
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(f'Invalid sandbox metadata for {json.dumps(invalid["name"])}: {field}', result.stderr)
+                    self.assertNotIn("[y/N]", result.stderr)
+                    self.assertEqual(calls, [["ls", "--json"]])
+
     def test_management_rejects_empty_null_and_malformed_json(self):
         for raw_listing in ("", "null", "not json", "[{}"):
             with self.subTest(raw_listing=raw_listing):
