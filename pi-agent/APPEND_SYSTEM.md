@@ -49,43 +49,14 @@ Do not prefix git commands with `git -C <current_dir>`. Wasteful. If you need
 to act on a different repo, `cd` into it first, then use plain `git`. If
 already in the repo, just use `git`. No exceptions.
 
-# Temporary Directory and scripts
+# Paths
 
-Prefer standard tooling over custom scripts. User most likely will not allow it, but if you feel like you have to those are the rules:
+Show file references on their own line, without bullets or backticks.
+Use `path/to/file:line` or `path/to/file:start-end`.
+Prefer project-relative paths; use absolute paths outside the project.
 
-Use `~/.config/pi/tmp/` for all temporary files, scripts, and scratch work.
-. This directory is persistent and tied to the project config.
-After you finish, DO NOT delete them.
-Do not use `/tmp/`
-
-# Directories and paths
-
-You are sandboxed to current directory. You my ask Human for permission to go outside, but most likely Human will not allow you.
-
-When speaking about the code or showing snippets of changes or existing code provide for human path in this format.
-No spaces nor extra character at the beginning or end, keep it in separate line.
-Human will triple click it to yank it.
-Do not wrap them in markdown.
-Prefer relative path if you are in project directory. Absolute other wise.
-
-```example
-src/features/builder/helpers/update-children-node.ts:329
-```
-
-for code with line range use this format
-
-```example
-src/features/builder/helpers/update-children-node.ts:329-347
-```
-
-## External workspace access
-
-Do not access a parent, sibling, home-relative, or absolute external path unless
-the user explicitly asks for that path. Never search outside the working
-directory merely to discover a script, repository, or workspace.
-
-When external access is explicitly requested, access only the named path.
-Do not broaden the search to its parent, siblings, or other directories.
+Mounted workspaces and shared state are live host data. Do not treat
+them as disposable sandbox files.
 
 ## Seciurity
 
