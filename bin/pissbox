@@ -13,6 +13,7 @@ LIST_SANDBOXES=false
 BRIDGE_STOP=false
 IGNORE_CONFIG_WORKSPACES=false
 WORKSPACES=()
+PI_ARGS=()
 RESOLVED_WORKSPACES=()
 WORKSPACE_KEYS=()
 BRIDGE_ID=""
@@ -31,6 +32,7 @@ Usage: ${0##*/} [OPTIONS] [WORKSPACE ...]
 Start Pi in an SBX sandbox with sandbox-only configuration.
 
 Options:
+  -c, --continue       Continue the previous Pi session for the workspace
   -d, --delete DIR     Delete all sandboxes with DIR as a workspace
   -y, --yes            Open existing Pi without a menu; skip --delete confirmation
   -l, --ls             List sandboxes, current-directory matches first
@@ -55,7 +57,7 @@ Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
 Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
-If it already exists, choose Pi (default), shell, delete, or quit [P/s/d/q].
+If it already exists, choose Pi (default), continue, shell, delete, or quit [P/c/s/d/q].
 With --yes, open Pi in the existing sandbox without prompting; existing mounts stay.
 Deletion requires a separate confirmation [y/N], unless --delete uses --yes.
 An optional prebuilt host bridge enables agent messaging and Herd lifecycle state.
@@ -70,6 +72,10 @@ EOF
 # --- Argument parsing -------------------------------------------------------
 while [[ $# -gt 0 ]]; do
 	case $1 in
+	-c | --continue)
+		PI_ARGS=(-- --continue)
+		shift
+		;;
 	-d | --delete)
 		if [[ -z ${2:-} || ${2:-} == -* ]]; then
 			echo "$1 requires a directory" >&2
@@ -518,17 +524,21 @@ else
 	start_bridge
 fi
 
+SBX_ARGS+=(${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
+	"$SCRIPT_DIR/../sbx-kit" "${WORKSPACES[@]}")
+if [[ ${SBX_ARGS[0]} == run ]]; then
+	SBX_ARGS+=(${PI_ARGS[@]+"${PI_ARGS[@]}"})
+fi
+
 # Keep stdin/stdout on the terminal and stream stderr while capturing SBX's error.
 exec 3>&1
-if SBX_ERROR=$(sbx "${SBX_ARGS[@]}" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"} \
-	"$SCRIPT_DIR/../sbx-kit" "${WORKSPACES[@]}" \
-	2>&1 1>&3 | tee -a /dev/stderr); then
+if SBX_ERROR=$(sbx "${SBX_ARGS[@]}" 2>&1 1>&3 | tee -a /dev/stderr); then
 	# Do not let a bridge daemon started below inherit the saved terminal/pipe.
 	exec 3>&-
 	if [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 ]]; then
 		finish_isolated_creation
 		start_bridge
-		sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
+		sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"} ${PI_ARGS[@]+"${PI_ARGS[@]}"}
 		exit $?
 	fi
 	exit 0
@@ -575,6 +585,7 @@ if [[ $ASSUME_YES == false ]]; then
 Sandbox '$SANDBOX_NAME' already exists.
 
   p) Open Pi [default]
+  c) Continue previous Pi session
   s) Open shell
   d) Delete sandbox
   q) Quit
@@ -585,21 +596,25 @@ fi
 while true; do
 	CHOICE=p
 	if [[ $ASSUME_YES == false ]]; then
-		printf 'Choose [P/s/d/q]: ' >&2
-		if ! IFS= read -r CHOICE; then
+		printf 'Choose [P/c/s/d/q]: ' >&2
+		if ! IFS= read -rsn 1 CHOICE; then
 			printf '\n' >&2
 			exit 1
 		fi
+		printf '\n' >&2
 	fi
 	case ${CHOICE:-p} in
-	[Pp])
+	[Pp] | [Cc])
+		if [[ $CHOICE == [Cc] ]]; then
+			PI_ARGS=(-- --continue)
+		fi
 		require_ready_sandbox
 		start_bridge
 		if [[ -n $BRIDGE_ID ]]; then
-			sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
+			sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"} ${PI_ARGS[@]+"${PI_ARGS[@]}"}
 			exit $?
 		fi
-		exec sbx run --name "$SANDBOX_NAME"
+		exec sbx run --name "$SANDBOX_NAME" ${PI_ARGS[@]+"${PI_ARGS[@]}"}
 		;;
 	[Ss])
 		require_ready_sandbox
@@ -613,6 +628,6 @@ while true; do
 		exit 0
 		;;
 	[Qq]) exit 0 ;;
-	*) echo "Please choose p, s, d, or q." >&2 ;;
+	*) echo "Please choose p, c, s, d, or q." >&2 ;;
 	esac
 done

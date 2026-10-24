@@ -24,7 +24,10 @@ checks/builds preserve the old link. Keep the checkout in place. Missing
 dependencies, login, and PATH changes remain manual (`bin/install --help`).
 
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
-on first use. Workspace edits persist on the host after sandbox removal.
+on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
+existing-sandbox menu, to resume the previous Pi session for that workspace.
+Menu letters act without Enter; `pissbox -y -c` skips the menu.
+Workspace edits persist on the host after sandbox removal.
 `make build` builds without installing the launcher link; `make build-image`
 builds only the image and needs no host Go or bridge.
 

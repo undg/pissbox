@@ -760,8 +760,41 @@ class LauncherTests(unittest.TestCase):
         result, calls = self.conflict("\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[1:], [["readiness", "pi-existing"], ["run", "--name", "pi-existing"]])
-        self.assertIn("Choose [P/s/d/q]:", result.stderr)
+        self.assertIn("Choose [P/c/s/d/q]:", result.stderr)
         self.assertNotIn("Do you want to delete", result.stderr)
+
+    def test_continue_menu_choice_resumes_previous_pi_session_without_enter(self):
+        for answer in ("c", "C"):
+            with self.subTest(answer=answer):
+                result, calls = self.conflict(answer)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls[1:], [["readiness", "pi-existing"],
+                                            ["run", "--name", "pi-existing", "--", "--continue"]])
+                self.assertNotIn("--continue", calls[0])
+                self.assertIn("c) Continue previous Pi session", result.stderr)
+
+    def test_continue_flags_follow_workspaces_and_work_with_yes(self):
+        for flag in ("-c", "--continue"):
+            for args in ((flag, ".", "workspace with spaces"),
+                         (".", flag, "workspace with spaces"),
+                         (".", "workspace with spaces", flag, flag)):
+                with self.subTest(args=args):
+                    result, calls = self.launch(*args)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls[0][-6:], [".", "workspace with spaces", str(PI_DIR),
+                                                    str(STATE_DIR), "--", "--continue"])
+            for extra, answers in (((), "p"), (("-y",), "")):
+                with self.subTest(flag=flag, extra=extra):
+                    result, calls = self.launch(flag, *extra, answers=answers, TEST_SBX_MODE="conflict")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(calls[1:], [["readiness", "pi-existing"],
+                                                ["run", "--name", "pi-existing", "--", "--continue"]])
+
+    def test_continue_flag_after_separator_is_a_workspace(self):
+        result, calls = self.launch("--", "--continue")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("--", calls[0])
+        self.assertEqual(calls[0][-3:], ["--continue", str(PI_DIR), str(STATE_DIR)])
 
     def test_yes_opens_existing_pi_without_reading_menu_input(self):
         for flag in ("-y", "--yes"):
@@ -773,7 +806,7 @@ class LauncherTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(calls[1:], [["readiness", "actual-name"], ["run", "--name", "actual-name"]])
-                    self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+                    self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
                     self.assertNotIn("d) Delete sandbox", result.stderr)
                     self.assertNotIn("[y/N]", result.stderr)
 
@@ -798,7 +831,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(len(calls), 1)
         self.assertIn("--yes", calls[0])
-        self.assertIn("Choose [P/s/d/q]", result.stderr)
+        self.assertIn("Choose [P/c/s/d/q]", result.stderr)
 
     def test_yes_preserves_launch_and_attach_failures(self):
         for env, status, call_count in (
@@ -810,7 +843,7 @@ class LauncherTests(unittest.TestCase):
                 result, calls = self.launch("--yes", **env)
                 self.assertEqual(result.returncode, status, result.stderr)
                 self.assertEqual(len(calls), call_count)
-                self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+                self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
 
     def test_pi_choice(self):
         for answer in ("p", "P"):
@@ -847,28 +880,28 @@ class LauncherTests(unittest.TestCase):
     def test_declining_deletion_leaves_sandbox_untouched(self):
         for answer in ("n", "N", "no", "NO", "No", "nO"):
             with self.subTest(answer=answer):
-                result, calls = self.conflict(f"d\n{answer}\n")
+                result, calls = self.conflict(f"d{answer}\n")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(len(calls), 1)
 
     def test_explicit_yes_deletes_and_exits(self):
         for answer in ("y", "Y", "yes", "YES", "Yes", "yEs"):
             with self.subTest(answer=answer):
-                result, calls = self.conflict(f"d\n{answer}\n")
+                result, calls = self.conflict(f"d{answer}\n")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(calls[1:], [["rm", "--force", "pi-existing"]])
 
     def test_invalid_answers_repeat_the_question(self):
-        result, calls = self.conflict("maybe\ny\nd\nsure\n\n")
+        result, calls = self.conflict("xydsure\n\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(result.stderr.count("Please choose p, s, d, or q."), 2)
-        self.assertEqual(result.stderr.count("Choose [P/s/d/q]:"), 3)
+        self.assertEqual(result.stderr.count("Please choose p, c, s, d, or q."), 2)
+        self.assertEqual(result.stderr.count("Choose [P/c/s/d/q]:"), 3)
         self.assertEqual(result.stderr.count("Please answer yes or no."), 1)
         self.assertEqual(result.stderr.count("Do you want to delete it? [y/N]"), 2)
 
     def test_eof_never_attaches_opens_shell_or_deletes(self):
-        for answers in ("", "p", "s", "q", "invalid\n", "d\n", "d\ny"):
+        for answers in ("", "x", "d", "dy"):
             with self.subTest(answers=answers):
                 result, calls = self.conflict(answers)
                 self.assertEqual(result.returncode, 1, result.stderr)
@@ -878,7 +911,8 @@ class LauncherTests(unittest.TestCase):
         for answers, expected in (
             ("\n", ["run", "--name", "actual-name"]),
             ("s\n", ["exec", "-it", "actual-name", "bash"]),
-            ("d\ny\n", ["rm", "--force", "actual-name"]),
+            ("dy\n", ["rm", "--force", "actual-name"]),
+            ("c", ["run", "--name", "actual-name", "--", "--continue"]),
         ):
             with self.subTest(answers=answers):
                 result, calls = self.launch(
@@ -905,7 +939,8 @@ class LauncherTests(unittest.TestCase):
         for answers, env in (
             ("\n", {"TEST_SBX_ATTACH_STATUS": "9"}),
             ("s\n", {"TEST_SBX_EXEC_STATUS": "9"}),
-            ("d\ny\n", {"TEST_SBX_REMOVE_STATUS": "9"}),
+            ("dy\n", {"TEST_SBX_REMOVE_STATUS": "9"}),
+            ("c", {"TEST_SBX_ATTACH_STATUS": "9"}),
         ):
             with self.subTest(env=env):
                 result, _ = self.conflict(answers, **env)
@@ -927,7 +962,7 @@ class LauncherTests(unittest.TestCase):
             os.close(slave)
 
     def test_menu_preserves_terminal_stdin_and_stdout(self):
-        for answer in (b"\n", b"p\n", b"s\n"):
+        for answer in (b"\n", b"p", b"c", b"s"):
             with self.subTest(answer=answer):
                 master, slave = pty.openpty()
                 try:
@@ -941,7 +976,7 @@ class LauncherTests(unittest.TestCase):
                         text=True, timeout=5,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn("Choose [P/s/d/q]:", result.stderr)
+                    self.assertIn("Choose [P/c/s/d/q]:", result.stderr)
                 finally:
                     os.close(master)
                     os.close(slave)
@@ -953,7 +988,7 @@ class LauncherTests(unittest.TestCase):
                     *args, PISSBOX_PI_DIR="missing", PISSBOX_STATE_DIR=str(LAUNCHER / "missing"),
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("[P/s/d/q]", result.stdout)
+                self.assertIn("[P/c/s/d/q]", result.stdout)
                 self.assertEqual(calls, [])
 
     def test_help_only_needs_cat_not_runtime_commands(self):

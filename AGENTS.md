@@ -110,8 +110,9 @@ dependencies but never installs them automatically.
   its existing startup hooks. Old kits without that environment pass. Quit/delete
   never require readiness; failures need a new sandbox or explicit user deletion.
 - On the known existing-sandbox conflict, use the name reported by SBX. Enter
-  or `p` runs `sbx run --name NAME`; `s` runs `sbx exec -it NAME bash`; `q` exits.
-  Choices are case-insensitive. `d` warns about local data loss, requires a
+  or `p` runs `sbx run --name NAME`; `c` adds `-- --continue` to resume Pi;
+  `s` runs `sbx exec -it NAME bash`; `q` exits.
+  Choices are case-insensitive single keypresses; Enter selects Pi. `d` warns about local data loss, requires a
   separate explicit yes, then runs `sbx rm --force NAME` without recreating.
   Invalid input retries; EOF aborts. Other errors preserve output and status.
 - The optional host bridge provides agent messaging without Herd and lifecycle

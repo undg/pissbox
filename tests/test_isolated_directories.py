@@ -77,6 +77,34 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertEqual((self.root / "home/.pissbox/isolation-ready").read_text().strip(),
                          data["env"]["PISSBOX_ISOLATION_DIR"])
 
+    def test_continue_menu_choice_attaches_without_replaying_isolation(self):
+        self.configure()
+        result, calls = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("--continue", calls[-1])
+        (self.project / "setup-marker").unlink()
+        (self.root / "calls.jsonl").unlink()
+
+        result, calls = self.launch(answers="C")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[0] for call in calls], ["create", "exec", "run"])
+        self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed", "--", "--continue"])
+        self.assertFalse((self.project / "setup-marker").exists())
+
+    def test_continue_flag_applies_after_isolation_setup_and_on_yes_attach(self):
+        self.configure()
+        result, calls = self.launch("-c")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("--continue", calls[0])
+        self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed", "--", "--continue"])
+        self.assertTrue((self.project / "setup-marker").exists())
+        (self.root / "calls.jsonl").unlink()
+
+        result, calls = self.launch("--continue", "-y")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[0] for call in calls], ["create", "exec", "run"])
+        self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed", "--", "--continue"])
+
     def test_explicit_name_is_optional_and_forwarded_only_when_requested(self):
         self.configure()
         result, calls = self.launch("--name", "second-instance")
@@ -216,7 +244,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         result, calls = self.launch(TEST_ISOLATION_RUN_STATUS="42")
         self.assertEqual(result.returncode, 42, result.stderr)
         self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed"])
-        self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+        self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
         self.assertTrue((self.root / "home/.pissbox/isolation-ready").exists())
 
     def test_setup_failure_blocks_pi_and_shell_even_after_config_removal(self):
@@ -224,7 +252,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         result, _ = self.launch()
         self.assertEqual(result.returncode, 23, result.stderr)
         self.config.unlink()
-        for answers in ("p\n", "s\n"):
+        for answers in ("p", "c", "s"):
             with self.subTest(answers=answers):
                 (self.root / "calls.jsonl").unlink()
                 result, calls = self.launch(answers=answers)
@@ -237,7 +265,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["run"])
         (self.root / "calls.jsonl").unlink()
-        result, calls = self.launch(answers="d\ny\n")
+        result, calls = self.launch(answers="dy\n")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["run", "rm"])
 
@@ -296,7 +324,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("different-instance", result.stderr)
         self.assertEqual([call[0] for call in calls], ["create"])
-        self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+        self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
         self.assertFalse((self.project / "node_modules").exists())
 
     def test_named_conflict_wording_is_not_used_for_nameless_creation(self):
@@ -305,7 +333,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
                                     TEST_ISOLATION_FORCE_NAMED_WORDING="1")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual([call[0] for call in calls], ["create"])
-        self.assertNotIn("Choose [P/s/d/q]", result.stderr)
+        self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
         self.assertFalse((self.project / "node_modules").exists())
 
     def test_old_sandbox_conflict_is_not_staged_and_quit_delete_remain_available(self):

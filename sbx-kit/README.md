@@ -281,12 +281,14 @@ On an existing-sandbox/workspace conflict during a normal launch, the launcher o
 | Choice | Action |
 | --- | --- |
 | Enter or `p` | Open Pi with existing mounts |
+| `c` | Continue the previous Pi session with existing mounts |
 | `s` | Open an interactive Bash shell |
 | `d` | Ask `Do you want to delete it? [y/N]` |
 | `q` | Exit without changes |
 
-Letters are case-insensitive. Deletion requires explicit consent and exits
-without recreating. EOF aborts; invalid input retries.
+Letters are case-insensitive and act immediately, without Enter. Enter still
+selects the default Pi action. Deletion requires a separate explicit yes-and-Enter
+confirmation and exits without recreating. EOF aborts; invalid input retries.
 
 Pass `-y` or `--yes` on a normal launch to choose Pi automatically if this conflict
 occurs. It never selects deletion. Flags may appear before, between, or after
@@ -297,6 +299,12 @@ pissbox --yes . /path/to/other
 pissbox . --yes /path/to/other
 pissbox . /path/to/other -y
 ```
+
+The menu's `c` choice and the launcher's `-c` / `--continue` flags forward Pi's
+`--continue` to resume the previous session for the workspace, including
+dependency-isolated sandboxes. Flags apply on new launches and existing Pi
+attaches, not shell attaches. Use `pissbox -y -c` to continue without the menu;
+`--yes` alone still selects the ordinary Pi action.
 
 New launches forward all workspaces as usual. Attaching to an existing sandbox
 keeps its existing mounts; `--yes` does not add or change them. After `--`, all

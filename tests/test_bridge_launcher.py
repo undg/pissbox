@@ -93,6 +93,21 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertEqual(calls[1], ["readiness", "pi-existing"])
         self.assertEqual(calls[2], ["run", "--name", "pi-existing", "--env", "PISSBOX_BRIDGE_DIR=" + second])
 
+    def test_continue_menu_choice_preserves_bridge_registration(self):
+        result, calls, events = self.launch("c", TEST_SBX_MODE="conflict")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([event["kind"] for event in events], ["register", "unregister", "register", "unregister"])
+        self.assertEqual(calls[-1], ["run", "--name", "pi-existing", "--env",
+                                     "PISSBOX_BRIDGE_DIR=" + events[-2]["mailbox"], "--", "--continue"])
+
+    def test_continue_flag_follows_bridge_environment(self):
+        for mode, extra in (("success", ()), ("conflict", ("-y",))):
+            with self.subTest(mode=mode):
+                result, calls, events = self.launch(args=("--continue", *extra), TEST_SBX_MODE=mode)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("PISSBOX_BRIDGE_DIR=" + events[-2]["mailbox"], calls[-1])
+                self.assertEqual(calls[-1][-2:], ["--", "--continue"])
+
     def test_shell_choice_unregisters_without_registering_another(self):
         result, calls, events = self.launch("s\n", TEST_SBX_MODE="conflict")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -100,7 +115,7 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertEqual([event["kind"] for event in events], ["register", "unregister"])
 
     def test_quit_and_delete_do_not_register_another_mailbox(self):
-        for answers in ("q\n", "d\ny\n"):
+        for answers in ("q", "dy\n"):
             with self.subTest(answers=answers):
                 self.log.unlink(missing_ok=True)
                 result, calls, events = self.launch(answers, TEST_SBX_MODE="conflict")
