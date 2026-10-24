@@ -120,17 +120,26 @@ bin/pissbox
 ```
 
 The bridge adds `agent_list` and `agent_send` for discovery and addressed
-Pi-to-Pi messaging across active launches. Herd is not required; when launched
-inside Herd, the bridge also reports working, idle, and blocked states.
-`make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64.
-See the [bridge guide](go-bridge/README.md) for setup and daemon lifecycle.
+Pi-to-Pi messaging across active launches. Each session gets a stable callsign
+from two different entries in the editable 50-name list at
+`pi-agent/extensions/agent-names.txt`. That gives 2,450 ordered pairs. The
+bridge keeps `name` as the session title and adds a separate `agentName`
+callsign; `agent_list` always returns all peers. Use `agent_send({ to })` with
+the callsign or exact agent ID. Herd is not
+required; when launched inside Herd, the bridge also reports working, idle, and
+blocked states.
+`bin/pissbox --bridge-stop` explicitly stops the host bridge without removing
+sandboxes; use it when upgrading or recovering from a protocol mismatch.
+`make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64. See the
+[bridge guide](go-bridge/README.md) for setup and daemon lifecycle.
 
 New interactive sessions also generate a title from the first prompt. Use
 `/skill:session-name` to refresh it from the conversation, or `/name My title`
 for a manual rename. Automatic naming makes a small additional model request.
 
-A third footer line shows a live activity timer on the left: `working 2m14s`
-during a run, then `idle 12m0s` for time since it finished (including interrupted
+A third footer line starts with the agent callsign, then shows a live activity
+timer: `Aiden Jasper · working 2m14s` during a run, then
+`Aiden Jasper · idle 12m0s` for time since it finished (including interrupted
 runs). The right side shows `sent 14:30 · done 14:32 · took 2m14s`; `done` and
 `took` stay unknown during a run. Timing covers tools and automatic continuations
 until the agent settles; `sent` tracks the latest user message, not terminal focus.

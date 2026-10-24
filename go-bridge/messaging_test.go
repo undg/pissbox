@@ -35,7 +35,7 @@ func newSimulatedAgent(t *testing.T, mailbox string) simulatedAgent {
 }
 func (a simulatedAgent) refresh(t *testing.T) {
 	t.Helper()
-	if err := publishRecord(a.root, "presence.json", presenceRecord{1, agentIdentity{ID: a.id, SessionID: "session-" + a.id, Name: "peer", Cwd: "/workspace", State: "idle"}}); err != nil {
+	if err := publishRecord(a.root, "presence.json", presenceRecord{1, agentIdentity{ID: a.id, SessionID: "session-" + a.id, Name: "peer task", AgentName: "Peer Name", Cwd: "/workspace", State: "idle"}}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -119,6 +119,12 @@ func TestMessagingRoutesAcrossRootsAndWithinOneMailboxWithoutHerd(t *testing.T) 
 	queue(t, deadHerd, 1, `{"version":1,"kind":"state","state":"working"}`)
 	c := newSimulatedAgent(t, deadHerd)
 	awaitPeers(t, a, 2)
+	listID := a.request(t, agentRequest{Op: "list"})
+	listed := a.response(t, listID)
+	if listed.Self.Name != "peer task" || listed.Self.AgentName != "Peer Name" ||
+		len(listed.Peers) != 2 || listed.Peers[0].AgentName != "Peer Name" {
+		t.Fatalf("session name and agentName were not kept separate: %+v", listed)
+	}
 	for _, recipient := range []simulatedAgent{b, c} {
 		requestID := a.request(t, agentRequest{Op: "send", To: recipient.id, Text: "/not-a-command"})
 		incoming := recipient.incoming(t)

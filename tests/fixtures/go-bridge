@@ -8,7 +8,7 @@ import secrets
 import sys
 
 parser = argparse.ArgumentParser()
-parser.add_argument("operation", choices=("register", "unregister"))
+parser.add_argument("operation", choices=("register", "unregister", "stop"))
 parser.add_argument("--mailbox")
 parser.add_argument("--herdr-socket")
 parser.add_argument("--herdr-pane")
@@ -21,13 +21,16 @@ if os.environ.get("TEST_BRIDGE_START_FAIL") == "1":
 log = Path(os.environ["TEST_BRIDGE_LOG"])
 if args.operation == "register":
     registration = {"kind": "register", **vars(args), "id": secrets.token_hex(16)}
-    (Path(args.mailbox) / "ready").write_text("2\n")
+    (Path(args.mailbox) / "ready").write_text("3\n")
     with log.open("a") as output:
         output.write(json.dumps(registration) + "\n")
     print(registration["id"])
-else:
+elif args.operation == "unregister":
     registrations = [json.loads(line) for line in log.read_text().splitlines()]
     registration = next(event for event in registrations if event["id"] == args.id)
     (Path(registration["mailbox"]) / "ready").unlink(missing_ok=True)
     with log.open("a") as output:
         output.write(json.dumps({**registration, "kind": "unregister"}) + "\n")
+else:
+    with log.open("a") as output:
+        output.write(json.dumps({"kind": "stop"}) + "\n")

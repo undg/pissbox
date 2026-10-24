@@ -16,6 +16,7 @@ const jiti = createJiti(import.meta.url, {
 	alias: { "@earendil-works/pi-tui": piRequire.resolve("@earendil-works/pi-tui") },
 });
 const extension = await jiti.import("./turn-timing.js", { default: true });
+const { getAgentCallsign } = await import("./lib/agent-identity.js");
 const sent = new Date(2026, 5, 12, 14, 30).getTime();
 
 function session(t, { mode = "tui", width = 100, manager = SessionManager.inMemory(process.cwd()) } = {}) {
@@ -51,9 +52,11 @@ function session(t, { mode = "tui", width = 100, manager = SessionManager.inMemo
 		getAvailableProviderCount: () => 1,
 	};
 	const footer = new FooterComponent({ sessionManager: manager, state: {}, getContextUsage: () => undefined }, footerData);
+	const callsign = getAgentCallsign(manager.getSessionId());
+	const rawLine = () => stripTerminalSequences(footer.render(process.stdout.columns).at(-1)).replaceAll("\u00a0", " ");
 	return {
-		emit, manager, writes,
-		line: () => stripTerminalSequences(footer.render(process.stdout.columns).at(-1)).replaceAll("\u00a0", " "),
+		emit, manager, writes, callsign, rawLine,
+		line: () => rawLine().slice(callsign.length + 3),
 		lines: () => footer.render(process.stdout.columns),
 		prompt(timestamp = Date.now()) {
 			emit("before_agent_start", { messageType: "user", prompt: "Fix this" });
@@ -70,6 +73,7 @@ test("adds a right-aligned third line without changing Pi's two built-in lines",
 	s.emit("session_start");
 	assert.deepEqual(s.lines().slice(0, 2), original);
 	assert.equal(s.lines().length, 3);
+	assert.ok(s.rawLine().startsWith(`${s.callsign} · `), "footer must display the agent callsign");
 	assert.match(s.line(), /^idle — +sent — · done — · took —$/);
 	assert.equal(visibleWidth(s.lines()[2]), 100, "Pi's real status sanitizer must preserve the padding");
 });
@@ -148,7 +152,7 @@ test("keeps timing right-aligned on resize and truncates without overflowing nar
 	process.stdout.columns = 60;
 	process.stdout.emit("resize");
 	assert.equal(visibleWidth(s.lines()[2]), 60);
-	assert.match(s.line(), /^working 0s +sent 14:30 · done — · took —$/);
+	assert.ok(s.rawLine().startsWith(`${s.callsign} · working 0s`));
 	process.stdout.columns = 20;
 	process.stdout.emit("resize");
 	assert.ok(visibleWidth(s.lines()[2]) <= 20);

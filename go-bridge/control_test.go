@@ -169,6 +169,37 @@ func TestIncompatibleLiveDaemonIsNotReplacedOrStopped(t *testing.T) {
 	}
 }
 
+func TestExplicitStopFallsBackToPreviousProtocol(t *testing.T) {
+	p := processFixture(t)
+	listener, err := net.Listen("unix", filepath.Join(p.dir, "control.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	requests := make(chan controlRequest, 2)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			var req controlRequest
+			json.NewDecoder(conn).Decode(&req)
+			requests <- req
+			json.NewEncoder(conn).Encode(controlResponse{Version: 2})
+			conn.Close()
+		}
+	}()
+	if out, err := p.command("stop").CombinedOutput(); err != nil {
+		t.Fatalf("stop did not fall back to the previous protocol: %v: %s", err, out)
+	}
+	current, previous := <-requests, <-requests
+	if current.Version != protocolVersion || previous.Version != protocolVersion-1 ||
+		current.Op != "stop" || previous.Op != "stop" {
+		t.Fatalf("wrong stop protocol attempts: current=%+v previous=%+v", current, previous)
+	}
+}
+
 func herdFixture(t *testing.T, socket string) <-chan request {
 	t.Helper()
 	listener, err := net.Listen("unix", socket)

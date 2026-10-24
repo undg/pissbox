@@ -26,6 +26,7 @@ class BridgeLauncherTests(unittest.TestCase):
         for name in ("settings-co.json", "settings-go.json"):
             (pi / name).write_text("{}")
         shutil.copy2(ROOT / "pi-agent/extensions/pissbox-bridge.js", pi / "extensions")
+        shutil.copy2(ROOT / "pi-agent/extensions/agent-names.txt", pi / "extensions")
         shutil.copytree(ROOT / "pi-agent/extensions/lib", pi / "extensions/lib")
         os_name = platform.system().lower()
         arch = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}[platform.machine()]
@@ -59,6 +60,15 @@ class BridgeLauncherTests(unittest.TestCase):
                  for args in calls]
         events = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
         return result, calls, events
+
+    def test_bridge_stop_uses_matching_binary_without_starting_sandbox(self):
+        result, calls, events = self.launch(
+            args=("--bridge-stop",), TEST_SBX_CALL_LOG=str(self.checkout / "sbx.jsonl"),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(events, [{"kind": "stop"}])
+        self.assertFalse((self.checkout / "sbx.jsonl").exists())
 
     def test_registration_uses_host_pane_and_passes_only_mailbox_to_sandbox(self):
         result, calls, events = self.launch()
@@ -129,6 +139,21 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertIn("extension missing", result.stderr)
         self.assertEqual(len(calls), 1)
         self.assertEqual(events, [])
+
+    def test_missing_callsign_resources_warn_but_launches_pi(self):
+        resources = (
+            (self.checkout / "pi-agent/extensions/lib/agent-identity.js", ROOT / "pi-agent/extensions/lib/agent-identity.js"),
+            (self.checkout / "pi-agent/extensions/agent-names.txt", ROOT / "pi-agent/extensions/agent-names.txt"),
+        )
+        for missing, source in resources:
+            with self.subTest(missing=missing.name):
+                missing.unlink()
+                result, calls, events = self.launch()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("extension missing", result.stderr)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(events, [])
+                shutil.copy2(source, missing)
 
     def test_launcher_crash_unregisters_but_leaves_real_daemon_alive(self):
         if not shutil.which("go"):

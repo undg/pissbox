@@ -10,7 +10,7 @@ mkdirSync(fixtures, { recursive: true });
 
 function session(mode = "tui", ready = true) {
 	const mailbox = mkdtempSync(path.join(fixtures, "extension-"));
-	if (ready) writeFileSync(path.join(mailbox, "ready"), "2\n");
+	if (ready) writeFileSync(path.join(mailbox, "ready"), "3\n");
 	const previous = process.env.PISSBOX_BRIDGE_DIR;
 	process.env.PISSBOX_BRIDGE_DIR = mailbox;
 	const handlers = new Map();

@@ -30,10 +30,12 @@ and `HERDR_PANE_ID` when `HERDR_ENV=1`. An incomplete Herd binding warns but lea
 messaging enabled. Missing binaries/extensions and startup failures warn without
 preventing Pi from starting.
 
-The selected Pi directory must contain `extensions/pissbox-bridge.js` and its
-`extensions/lib/agent-messaging.js` helper. The repository's default `pi-agent/`
-already does; alternate Pi directories need both. Pi discovers the root extension
-automatically. Both files are plain JS; tests use Node and Go, not a TS compiler.
+The selected Pi directory must contain `extensions/pissbox-bridge.js`,
+`extensions/lib/agent-messaging.js`, `extensions/lib/agent-identity.js`, and
+`extensions/agent-names.txt`. The repository's default `pi-agent/` already does;
+alternate Pi directories need all four. The footer and bridge share the identity
+helper and callsign list. Pi discovers the root extension automatically. These
+files are plain JS/text; tests use Node and Go, not a TS compiler.
 
 ```text
 launchers → host control socket → persistent Go daemon
@@ -87,9 +89,12 @@ Use the matching binary for your host (example: macOS arm64):
 `register --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]`
 ensures the daemon, then prints an opaque ID after mailbox readiness is installed.
 The Herd arguments must either both be present or both be absent. Host control
-protocol **2** rejects older live daemons; stop one with its matching old binary
-before upgrading. Lifecycle envelopes remain version 1. The readiness marker
-contains `2`; messaging refuses fresh legacy markers too, including after an
+protocol **3** rejects older live daemons for normal operations. Run
+`pissbox --bridge-stop` to explicitly stop a protocol-2 or protocol-3 daemon;
+this command tries the current protocol and its immediate predecessor. This
+version bump is required because the strict presence schema now carries a
+separate `agentName`. Lifecycle envelopes remain version 1. The readiness
+marker contains `3`; messaging refuses older markers too, including after an
 extension reload inside an old still-running launch.
 `unregister --id ID` drains/releases that registration only; it never starts or
 stops a daemon. The launcher uses these operations automatically. Control messages
@@ -97,7 +102,9 @@ are capped at 16 KiB with 2-second IO deadlines; startup readiness has a 3-secon
 retry window. Socket paths are limited to 103 bytes for macOS compatibility.
 `PISSBOX_BRIDGE_RUNTIME_DIR` overrides the private runtime directory for isolated
 tests; setting different overrides intentionally creates separate daemons. Do not
-mount the runtime directory into SBX.
+mount the runtime directory into SBX. `pissbox --bridge-stop` stops the compatible
+host daemon without touching sandboxes; use it before rebuilding the bridge, then
+reattach Pi sessions through the launcher to register fresh mailboxes.
 
 Registrations exist only in memory. After daemon death, mailbox readiness becomes
 stale within five seconds and Pi stops publishing as before. Starting another
@@ -157,11 +164,20 @@ remain limited to reporting/releasing the bound Herd agent.
 
 ## Agent messaging
 
-`agent_list` returns `self` and live `peers` across all registered mailboxes and
-state roots. `agent_send({ to, text, inReplyTo? })` addresses one exact live agent
-ID. Session names are display metadata, not addresses. A peer can reply by sending
-to the incoming `from.id` and optionally referencing its `id` as `inReplyTo`.
-There is no broadcast, automatic reply, or automatic resend.
+`agent_list` returns `self` and every live `peer` across all registered
+mailboxes and state roots; it does not filter. Each identity keeps `name` as the
+Pi session title and has a separate `agentName` callsign, shown in the footer.
+The editable 50-name pool is
+`pi-agent/extensions/agent-names.txt`. Each callsign combines two different
+entries from the 50-name pool. Pair order matters, giving 50 × 49 = 2,450
+possible callsigns; collisions are possible. The bridge keeps the task title in
+the identity name and the project directory in `cwd`, so peers with the same
+callsign can be distinguished in `agent_list` using its session title and
+`cwd`. Use `agent_send({ to: agentName, text, inReplyTo? })` to address one live
+peer by callsign. Exact agent IDs remain supported and are required if a
+callsign is ambiguous. A peer can reply by sending to the incoming `from.id` and
+optionally referencing its `id` as `inReplyTo`. There is no broadcast, automatic reply, or
+automatic resend.
 
 The recipient inserts a displayed `agent-peer` custom message through
 `pi.sendMessage(..., { deliverAs: "followUp", triggerTurn: true })`. Idle Pi wakes;
@@ -175,7 +191,8 @@ cancellation after publishing a request is likewise potentially indeterminate.
 
 Each session startup (including new/resume/fork/reload) creates a random 128-bit
 live ID; shutdown removes presence, cancels local requests, and clears the poll
-timer. Rename updates metadata without changing the ID. Messaging runs in TUI,
+timer. The callsign stays stable for the Pi session and does not change when its
+task title changes. Messaging runs in TUI,
 RPC, JSON, and print modes while Pi is alive; Herd reporting stays TUI-only.
 Presence refreshes every second and expires after 10 seconds. An expired or
 retired ID never revives within this daemon lifetime. After a long process pause,
@@ -189,7 +206,7 @@ launch mailbox, never the host control socket. Each agent has independent queues
 
 ```text
 bridge-launch.*/
-  ready                          # Host writes 2; refreshes every second
+  ready                          # Host writes 3; refreshes every second
   <lifecycle-event>.json          # Existing lifecycle transport
   agents/<live-agent-id>/
     presence.json                # Pi publishes identity atomically
@@ -203,7 +220,7 @@ bridge-launch.*/
 Presence (file mtime is the lease; names/cwd are metadata, not routing paths):
 
 ```json
-{"version":1,"agent":{"id":"<agent-id>","sessionId":"<Pi-session-id>","name":"Example","cwd":"/workspace","state":"idle"}}
+{"version":1,"agent":{"id":"<agent-id>","sessionId":"<Pi-session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle"}}
 ```
 
 Requests contain no caller-selected sender identity. The daemon resolves the
@@ -218,7 +235,7 @@ List responses contain `self` and, when nonempty, `peers` identity objects. Send
 responses carry a bridge-generated `messageId`. Failures use `error`:
 
 ```json
-{"version":1,"id":"<request-id>","status":"ok","self":{"id":"<self-id>","sessionId":"<session-id>","name":"Example","cwd":"/workspace","state":"idle"}}
+{"version":1,"id":"<request-id>","status":"ok","self":{"id":"<self-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle"}}
 {"version":1,"id":"<request-id>","status":"queued","messageId":"<message-id>"}
 {"version":1,"id":"<request-id>","status":"failed","error":"unknown or expired recipient"}
 {"version":1,"id":"<request-id>","status":"indeterminate","messageId":"<message-id>","error":"receipt timeout; queue insertion may have occurred; do not resend automatically"}
@@ -236,16 +253,16 @@ validated filename. Do not rely on directory enumeration for host-to-sandbox
 notification: observed virtiofs listings omitted host-created files even while
 those files were readable by exact path. The index holds at most 64 unique live
 message IDs; malformed indexes, traversal IDs, and mismatched recipients are
-rejected. For compatibility, an absent index falls back to directory scanning
-with older protocol-2 daemons; this fallback is not reliable on affected mounts.
-Updating binaries alone does not change an already-running compatible daemon:
+rejected. If the index is absent, the extension falls back to directory
+scanning on filesystems where directory scanning works. Updating binaries alone
+does not change an already-running compatible daemon:
 explicitly stop/start it and reattach affected launches to activate the fix.
 
 Inbox records include the exact recipient, sender identity, and deadline as Unix
 milliseconds. Optional `inReplyTo` is copied from the send request:
 
 ```json
-{"version":1,"id":"<message-id>","to":"<recipient-id>","from":{"id":"<sender-id>","sessionId":"<session-id>","name":"Sender","cwd":"/workspace","state":"working"},"text":"Hello","expires":1780000000000}
+{"version":1,"id":"<message-id>","to":"<recipient-id>","from":{"id":"<sender-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"working"},"text":"Hello","expires":1780000000000}
 {"version":1,"id":"<message-id>","to":"<recipient-id>","status":"queued"}
 ```
 

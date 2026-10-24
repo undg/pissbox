@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const protocolVersion = 2
+const protocolVersion = 3
 const controlTimeout = 2 * time.Second
 
 // Control is host-only. The sandbox only receives its mailbox directory.
@@ -74,6 +74,7 @@ func runtimeDirectory() (string, error) {
 
 var errUnavailable = errors.New("bridge daemon unavailable")
 var errHandshake = errors.New("invalid bridge handshake")
+var errIncompatibleDaemon = errors.New("incompatible bridge daemon; stop it explicitly before restarting")
 
 func previousOwnerDead(lock *os.File) bool {
 	data, err := io.ReadAll(io.LimitReader(lock, 32))
@@ -94,6 +95,10 @@ func staleLock(dir string) bool {
 }
 
 func controlCall(dir string, req controlRequest) (controlResponse, error) {
+	return controlCallVersion(dir, req, protocolVersion)
+}
+
+func controlCallVersion(dir string, req controlRequest, version int) (controlResponse, error) {
 	var response controlResponse
 	conn, err := net.DialTimeout("unix", filepath.Join(dir, "control.sock"), controlTimeout)
 	if err != nil {
@@ -106,15 +111,15 @@ func controlCall(dir string, req controlRequest) (controlResponse, error) {
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(controlTimeout))
-	req.Version = protocolVersion
+	req.Version = version
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
 		return response, fmt.Errorf("%w: %v", errHandshake, err)
 	}
 	if err := json.NewDecoder(io.LimitReader(conn, 16384)).Decode(&response); err != nil {
 		return response, fmt.Errorf("%w: %v", errHandshake, err)
 	}
-	if response.Version != protocolVersion {
-		return response, errors.New("incompatible bridge daemon; close launches, stop it with its matching binary, then restart")
+	if response.Version != version {
+		return response, errIncompatibleDaemon
 	}
 	if response.Error != "" {
 		return response, errors.New(response.Error)
@@ -229,6 +234,11 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		}
 	}
 	response, err := controlCall(dir, req)
+	if op == "stop" && errors.Is(err, errIncompatibleDaemon) {
+		// Stopping is always explicit. Try the immediately previous protocol so
+		// an upgraded CLI can gracefully stop its old live daemon.
+		response, err = controlCallVersion(dir, req, protocolVersion-1)
+	}
 	if err != nil {
 		return err
 	}

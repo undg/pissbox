@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import extension from "../pissbox-bridge.js";
+import { getAgentCallsign } from "./agent-identity.js";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const fixtures = process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR || path.join(root, ".cache/test-fixtures");
@@ -23,7 +24,7 @@ function nativeSession(mailbox, mode = "rpc") {
 	const tools = new Map();
 	const messages = [];
 	let idle = true;
-	let sessionID = "first-session";
+	let sessionID = path.basename(mailbox);
 	let sessionName = "First";
 	const ctx = {
 		mode, hasUI: false, cwd: "/workspace", isIdle: () => idle,
@@ -48,7 +49,7 @@ function nativeSession(mailbox, mode = "rpc") {
 		call(name, params = {}, signal) { return tools.get(name).execute("call", params, signal); },
 		busy(value) { idle = !value; },
 		rename(value) { sessionName = value; this.emit("session_info_changed"); },
-		replace() { this.emit("session_shutdown"); sessionID = "replacement"; this.emit("session_start"); },
+		replace() { this.emit("session_shutdown"); sessionID = `${path.basename(mailbox)}-replacement`; this.emit("session_start"); },
 		identity() {
 			for (const id of readdirSync(path.join(mailbox, "agents"))) {
 				try {
@@ -98,7 +99,13 @@ test("Pi tools exchange acknowledged messages, native queue options, replies and
 		const result = (await a.call("agent_list")).details;
 		selfA = result.self; selfB = result.peers?.[0]; return !!selfB;
 	});
-	const receipt = (await a.call("agent_send", { to: selfB.id, text: "/not-a-command" })).details;
+	const callsign = getAgentCallsign(selfB.sessionId);
+	assert.equal(selfB.name, "First", "name remains the Pi session title");
+	assert.equal(selfB.agentName, callsign, "agentName carries the stable callsign separately");
+	const listing = (await a.call("agent_list")).details;
+	assert.deepEqual(listing.peers.map((peer) => peer.id), [selfB.id], "agent_list returns peers without a name filter");
+	assert.equal(listing.peers[0].agentName, callsign);
+	const receipt = (await a.call("agent_send", { to: callsign, text: "/not-a-command" })).details;
 	assert.equal(receipt.status, "queued");
 	assert.equal(b.messages.length, 1);
 	assert.equal(b.messages[0].wasIdle, true);
@@ -118,10 +125,11 @@ test("Pi tools exchange acknowledged messages, native queue options, replies and
 	assert.deepEqual(b.messages[1].options, { deliverAs: "followUp", triggerTurn: true });
 	assert.equal(a.messages[0].message.details.inReplyTo, receipt.messageId);
 	assert.equal(a.messages[0].message.details.from.id, selfB.id);
-	b.rename("Renamed peer");
+	b.rename("Renamed task title");
 	const renamed = (await b.call("agent_list")).details.self;
 	assert.equal(renamed.id, selfB.id);
-	assert.equal(renamed.name, "Renamed peer");
+	assert.equal(renamed.name, "Renamed task title", "name remains the session title");
+	assert.equal(renamed.agentName, callsign, "renaming the session title does not change agentName");
 });
 
 test("replacement fences stale inboxes, cancels requests and retires the old address", async (t) => {
@@ -151,7 +159,7 @@ test("replacement fences stale inboxes, cancels requests and retires the old add
 
 test("indexed inbox delivery opens known paths without directory enumeration", async (t) => {
 	const mailbox = mkdtempSync(path.join(fixtures, "indexed-inbox-"));
-	writeFileSync(path.join(mailbox, "ready"), "2\n");
+	writeFileSync(path.join(mailbox, "ready"), "3\n");
 	const s = nativeSession(mailbox);
 	s.emit("session_start");
 	const self = s.identity();
@@ -185,11 +193,14 @@ test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t
 	t.mock.method(globalThis, "clearInterval", (timer) => { liveTimers.delete(timer); originalClear(timer); });
 	const s = nativeSession(mailbox);
 	t.after(() => s.emit("session_shutdown"));
-	// A fresh legacy worker cannot serve messaging, even though lifecycle works.
-	s.emit("session_start");
-	await assert.rejects(s.call("agent_list"), /unavailable/);
-	assert.equal(liveTimers.size, 0);
-	writeFileSync(path.join(mailbox, "ready"), "2\n");
+	// Old marker versions cannot serve the new strict agent identity schema.
+	for (const marker of ["1\n", "2\n"]) {
+		writeFileSync(path.join(mailbox, "ready"), marker);
+		s.emit("session_start");
+		await assert.rejects(s.call("agent_list"), /unavailable/);
+		assert.equal(liveTimers.size, 0);
+	}
+	writeFileSync(path.join(mailbox, "ready"), "3\n");
 	s.emit("session_start");
 	const self = s.identity();
 	const message = { version: 1, id: "b".repeat(32), to: self.id, from: self, text: "once", expires: Date.now() + 10000 };

@@ -32,6 +32,7 @@ type agentIdentity struct {
 	ID        string `json:"id"`
 	SessionID string `json:"sessionId"`
 	Name      string `json:"name"`
+	AgentName string `json:"agentName"`
 	Cwd       string `json:"cwd"`
 	State     string `json:"state"`
 }
@@ -181,7 +182,8 @@ func recordNames(root *os.Root, limit int) ([]string, error) {
 	return names, nil
 }
 func validIdentity(a agentIdentity) bool {
-	return messagingID.MatchString(a.ID) && a.SessionID != "" && len(a.SessionID) <= 512 && len(a.Name) <= 512 && len(a.Cwd) <= 4096 &&
+	return messagingID.MatchString(a.ID) && a.SessionID != "" && len(a.SessionID) <= 512 && len(a.Name) <= 512 &&
+		a.AgentName != "" && len(a.AgentName) <= 80 && len(a.Cwd) <= 4096 &&
 		(a.State == "idle" || a.State == "working" || a.State == "blocked")
 }
 func (r *messageRouter) discover(d *daemon, now time.Time) {

@@ -4,16 +4,18 @@ import {
 	readSync, opendirSync, renameSync, unlinkSync, writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { getAgentCallsign } from "./agent-identity.js";
 
 const MAX_RECORD = 32 * 1024;
 const MAX_TEXT = 16 * 1024;
 const ID = /^[0-9a-f]{32}$/;
 const newID = () => randomBytes(16).toString("hex");
 const identitySchema = {
-	type: "object", required: ["id", "sessionId", "name", "cwd", "state"],
+	type: "object", required: ["id", "sessionId", "name", "agentName", "cwd", "state"],
 	properties: {
 		id: { type: "string" }, sessionId: { type: "string" }, name: { type: "string" },
-		cwd: { type: "string" }, state: { type: "string", enum: ["idle", "working", "blocked"] },
+		agentName: { type: "string", minLength: 1, maxLength: 80 }, cwd: { type: "string" },
+		state: { type: "string", enum: ["idle", "working", "blocked"] },
 	},
 };
 
@@ -67,7 +69,7 @@ function remove(file) {
 function ready(mailbox) {
 	try {
 		const marker = lstatSync(path.join(mailbox, "ready"));
-		return marker.isFile() && Date.now() - marker.mtimeMs < 5000 && readRecord(mailbox, "ready") === 2;
+		return marker.isFile() && Date.now() - marker.mtimeMs < 5000 && readRecord(mailbox, "ready") === 3;
 	} catch { return false; }
 }
 function names(dir, limit) {
@@ -88,7 +90,7 @@ function incomingNames(instance) {
 	try {
 		index = readRecord(instance.dir, "inbox-index.json");
 	} catch (error) {
-		// Keep compatibility with an older protocol-2 daemon on ordinary filesystems.
+		// Fall back when an inbox index is absent on filesystems that support directory scans.
 		if (error.code === "ENOENT") return names(instance.inbox, 64);
 		throw error;
 	}
@@ -101,7 +103,8 @@ function incomingNames(instance) {
 }
 function validIdentity(agent) {
 	return agent && ID.test(agent.id) && typeof agent.sessionId === "string" &&
-		typeof agent.name === "string" && typeof agent.cwd === "string" &&
+		typeof agent.name === "string" && typeof agent.agentName === "string" &&
+		agent.agentName.length > 0 && agent.agentName.length <= 80 && typeof agent.cwd === "string" &&
 		["idle", "working", "blocked"].includes(agent.state);
 }
 
@@ -129,6 +132,7 @@ export function registerMessaging(pi, mailbox) {
 			id: instance.id,
 			sessionId: ctx.sessionManager.getSessionId(),
 			name: ctx.sessionManager.getSessionName() ?? "",
+			agentName: getAgentCallsign(ctx.sessionManager.getSessionId()),
 			cwd: ctx.cwd,
 			state: prompts ? "blocked" : busy ? "working" : "idle",
 		};
@@ -258,7 +262,7 @@ export function registerMessaging(pi, mailbox) {
 	// JSON Schema is also the wire representation used by Pi's TypeBox tools.
 	pi.registerTool({
 		name: "agent_list", label: "Agent list",
-		description: "List your live agent address and live peers across launch mailboxes. Addresses expire; list again before sending to an old peer.",
+		description: "List your live agent address and all live peers across launch mailboxes. Each peer has a session name, separate agentName callsign, project directory, and expiring ID. Addresses expire; list again before sending to an old peer.",
 		parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 		outputSchema: {
 			type: "object", required: ["version", "id", "status", "self"],
@@ -271,11 +275,11 @@ export function registerMessaging(pi, mailbox) {
 	});
 	pi.registerTool({
 		name: "agent_send", label: "Agent send",
-		description: "Send text to one exact live agent ID. Success means inserted in the recipient's native follow-up queue, not answered. Reply explicitly using the sender ID and optional inReplyTo message ID. Never automatically resend after an indeterminate result.",
+		description: "Send text to one exact live agent ID or exact agentName callsign. A callsign must resolve to one live peer; use agent_list and the task name/project directory if several peers share it. Success means inserted in the recipient's native follow-up queue, not answered. Reply explicitly using the sender ID and optional inReplyTo message ID. Never automatically resend after an indeterminate result.",
 		parameters: {
 			type: "object", required: ["to", "text"], additionalProperties: false,
 			properties: {
-				to: { type: "string", pattern: "^[0-9a-f]{32}$" },
+				to: { type: "string", minLength: 1, maxLength: 80 },
 				text: { type: "string", minLength: 1, maxLength: MAX_TEXT },
 				inReplyTo: { type: "string", pattern: "^[0-9a-f]{32}$" },
 			},
@@ -288,11 +292,20 @@ export function registerMessaging(pi, mailbox) {
 			},
 		},
 		async execute(_id, params, signal) {
-			if (!ID.test(params.to) || typeof params.text !== "string" || !params.text ||
+			if (typeof params.to !== "string" || !params.to || params.to.length > 80 ||
+				typeof params.text !== "string" || !params.text ||
 				Buffer.byteLength(params.text) > MAX_TEXT || (params.inReplyTo !== undefined && !ID.test(params.inReplyTo))) {
 				throw new Error("Invalid recipient, reply ID, or message text (maximum 16 KiB)");
 			}
-			return request("send", { to: params.to, text: params.text, inReplyTo: params.inReplyTo }, signal);
+			let recipient = params.to;
+			if (!ID.test(recipient)) {
+				const listing = await request("list", {}, signal);
+				const matches = (listing.structuredContent.peers ?? []).filter((peer) => peer.agentName === recipient);
+				if (matches.length === 0) throw new Error(`No live agent named ${JSON.stringify(recipient)}`);
+				if (matches.length > 1) throw new Error(`Agent name ${JSON.stringify(recipient)} is ambiguous; use its exact ID`);
+				recipient = matches[0].id;
+			}
+			return request("send", { to: recipient, text: params.text, inReplyTo: params.inReplyTo }, signal);
 		},
 	});
 }

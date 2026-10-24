@@ -10,6 +10,7 @@ SANDBOX_NAME=""
 DELETE_DIRECTORY=""
 ASSUME_YES=false
 LIST_SANDBOXES=false
+BRIDGE_STOP=false
 IGNORE_CONFIG_WORKSPACES=false
 WORKSPACES=()
 RESOLVED_WORKSPACES=()
@@ -33,6 +34,7 @@ Options:
   -d, --delete DIR     Delete all sandboxes with DIR as a workspace
   -y, --yes            Open existing Pi without a menu; skip --delete confirmation
   -l, --ls             List sandboxes, current-directory matches first
+  --bridge-stop        Stop this checkout's compatible host bridge daemon
   --name NAME          Pass an explicit sandbox name to SBX
   --ignore-config-workspaces
                        Skip configured mounts; keep CLI paths and setup
@@ -90,6 +92,14 @@ while [[ $# -gt 0 ]]; do
 		;;
 	-l | --ls)
 		LIST_SANDBOXES=true
+		shift
+		;;
+	--bridge-stop)
+		if [[ $# -ne 1 ]]; then
+			echo "--bridge-stop must be used by itself" >&2
+			exit 1
+		fi
+		BRIDGE_STOP=true
 		shift
 		;;
 	--ignore-config-workspaces)
@@ -346,6 +356,30 @@ while [[ -L $SCRIPT_PATH ]]; do
 	fi
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+
+bridge_binary_path() {
+	local os arch
+	case $(uname -s) in
+	Darwin) os=darwin ;;
+	Linux) os=linux ;;
+	*) return 1 ;;
+	esac
+	case $(uname -m) in
+	arm64 | aarch64) arch=arm64 ;;
+	x86_64 | amd64) arch=amd64 ;;
+	*) return 1 ;;
+	esac
+	printf '%s\n' "$SCRIPT_DIR/../.cache/bin/go-bridge-$os-$arch"
+}
+
+if [[ $BRIDGE_STOP == true ]]; then
+	if ! binary=$(bridge_binary_path) || [[ ! -x $binary ]]; then
+		echo "Matching host bridge binary is missing or unsupported." >&2
+		exit 1
+	fi
+	exec "$binary" stop
+fi
+
 PISSBOX_PI_DIR="${PISSBOX_PI_DIR:-"$SCRIPT_DIR/../pi-agent"}"
 PISSBOX_STATE_DIR="${PISSBOX_STATE_DIR:-"$SCRIPT_DIR/../.cache"}"
 
@@ -438,7 +472,7 @@ stop_bridge() {
 }
 
 start_bridge() {
-	local os arch binary mailbox
+	local binary mailbox
 	local herd_args=()
 	BRIDGE_ENV_ARGS=()
 	if [[ ${HERDR_ENV:-} == 1 ]]; then
@@ -448,29 +482,18 @@ start_bridge() {
 			echo "Warning: Herd reporting disabled; missing socket or pane environment. Agent messaging remains available." >&2
 		fi
 	fi
-	case $(uname -s) in
-	Darwin) os=darwin ;;
-	Linux) os=linux ;;
-	*)
-		echo "Warning: Host bridge disabled; unsupported host OS." >&2
+	if ! binary=$(bridge_binary_path); then
+		echo "Warning: Host bridge disabled; unsupported host platform." >&2
 		return 0
-		;;
-	esac
-	case $(uname -m) in
-	arm64 | aarch64) arch=arm64 ;;
-	x86_64 | amd64) arch=amd64 ;;
-	*)
-		echo "Warning: Host bridge disabled; unsupported host architecture." >&2
-		return 0
-		;;
-	esac
-	binary="$SCRIPT_DIR/../.cache/bin/go-bridge-$os-$arch"
+	fi
 	if [[ ! -x $binary ]]; then
 		echo "Warning: Host bridge binary missing; run bin/build-bridge. Continuing without it." >&2
 		return 0
 	fi
 	if [[ ! -f $PISSBOX_PI_DIR/extensions/pissbox-bridge.js ||
-		! -f $PISSBOX_PI_DIR/extensions/lib/agent-messaging.js ]]; then
+		! -f $PISSBOX_PI_DIR/extensions/lib/agent-messaging.js ||
+		! -f $PISSBOX_PI_DIR/extensions/lib/agent-identity.js ||
+		! -f $PISSBOX_PI_DIR/extensions/agent-names.txt ]]; then
 		echo "Warning: Host bridge extension missing from selected Pi directory. Continuing without it." >&2
 		return 0
 	fi

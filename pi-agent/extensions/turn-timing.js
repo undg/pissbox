@@ -1,6 +1,7 @@
 // @ts-check
 
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { getAgentCallsign } from "./lib/agent-identity.js";
 
 const key = "turn-timing";
 
@@ -62,14 +63,17 @@ export default function (pi) {
 		const width = process.stdout.columns || 80;
 		const now = Date.now();
 		const elapsed = timing.started === undefined ? "—" : duration((timing.done ?? now) - timing.started);
-		const right = `sent ${clock(timing.sent)} · done ${clock(timing.done)} · took ${running ? "—" : elapsed}`;
+		const rightText = `sent ${clock(timing.sent)} · done ${clock(timing.done)} · took ${running ? "—" : elapsed}`;
 		const activity = running ? `working ${elapsed}`
 			: `idle ${timing.done === undefined ? "—" : duration(now - timing.done)}`;
-		const left = truncateToWidth(activity, Math.max(0, width - visibleWidth(right) - 2), "");
+		const callsign = getAgentCallsign(ctx.sessionManager.getSessionId());
+		const leftText = `${callsign} · ${activity}`;
+		// Keep the callsign and activity visible before spending space on timings.
+		const left = truncateToWidth(leftText, width, "");
+		const right = truncateToWidth(rightText, Math.max(0, width - visibleWidth(left) - 2), "");
 		const gap = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
 		// Pi collapses ordinary spaces in status text. Non-breaking spaces preserve alignment.
-		const text = visibleWidth(right) >= width ? truncateToWidth(right, width, "")
-			: left + "\u00a0".repeat(gap) + right;
+		const text = left + "\u00a0".repeat(gap) + right;
 		ctx.ui.setStatus(key, text);
 	}
 
