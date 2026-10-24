@@ -15,6 +15,13 @@ ALLOWED_ROOTS = {"home", "workspace"}
 
 
 class KitLayoutTests(unittest.TestCase):
+    def test_kit_does_not_request_sbx_instruction_scaffolding(self):
+        self.assertNotRegex(
+            SPEC.read_text(),
+            r"(?m)^agentInstructions\s*:",
+            "Keep sandbox guidance in pi-agent/AGENTS.md, not SBX-generated workspace files",
+        )
+
     def test_static_files_only_live_under_mapped_roots(self):
         misplaced = sorted(
             str(path.relative_to(FILES))

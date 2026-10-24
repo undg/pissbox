@@ -9,8 +9,6 @@ sandbox:
   entrypoint:
     - pi
     - --offline
-agentInstructions:
-  filename: AGENTS.md
 permissions:
   network:
     allow:

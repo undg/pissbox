@@ -200,6 +200,20 @@ launch does not restore old registrations. Direct SBX launches bypass this
 integration. See the [bridge guide](../go-bridge/README.md) for control commands,
 limitations, shared-state security, testing, and future packaging.
 
+## Agent instructions
+
+Keep brief sandbox-wide guidance in the shared
+[`pi-agent/AGENTS.md`](../pi-agent/AGENTS.md), and project rules in each project's
+own `AGENTS.md`. The kit deliberately omits `agentInstructions`: enabling it
+makes SBX generate its full sandbox boilerplate as `AGENTS.md` in the primary
+workspace's parent directory, which can be a live host mount.
+
+Use a new sandbox name to pick up this kit change; no image rebuild is needed.
+Existing sandboxes retain their old kit configuration. Previously generated
+files are not removed automatically: review them before explicitly deleting
+unchanged SBX boilerplate. Existing ancestor `AGENTS.md` files may still be
+loaded by Pi until cleaned up.
+
 ## Configuration and login
 
 The launcher mounts `pi-agent/`; kit setup links it to `$HOME/.pi/agent`.
