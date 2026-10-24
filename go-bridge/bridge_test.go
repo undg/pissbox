@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -23,9 +25,20 @@ func fixture(t *testing.T) (string, *os.Root) {
 	if err := os.MkdirAll(base, 0700); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := os.MkdirTemp(base, "bridge-")
-	if err != nil {
-		t.Fatal(err)
+	// Eight characters leave room for control.sock in deep worktree checkouts.
+	var dir string
+	for {
+		var token [4]byte
+		if _, err := rand.Read(token[:]); err != nil {
+			t.Fatal(err)
+		}
+		dir = filepath.Join(base, hex.EncodeToString(token[:]))
+		if err := os.Mkdir(dir, 0700); os.IsExist(err) {
+			continue
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		break
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {

@@ -17,6 +17,8 @@ WORKSPACE_KEYS=()
 BRIDGE_ID=""
 BRIDGE_BINARY=""
 BRIDGE_ENV_ARGS=()
+ISOLATED_DIRECTORIES=()
+PROJECT_JSON=""
 
 # --- Help -------------------------------------------------------------------
 show_help() {
@@ -46,6 +48,7 @@ Primary-workspace .pissbox.toml workspaces add mounts, relative to that project.
 CLI workspaces stay first; duplicate directories are removed.
 Reading .pissbox.toml requires tomljson and jq on the host.
 Its setup commands run inside the sandbox once during creation, before Pi.
+Opt-in isolated_directories keeps Linux dependencies separate from host directories.
 Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
 Settings profile follows the host name; unknown hosts use settings-co.json.
@@ -251,6 +254,8 @@ load_sandboxes() {
 	SANDBOXES=$(printf '%s\n' "$listing" | jq -ce --arg directory "$directory" '
 		if type != "array" then error("Expected a sandbox array")
 		else map(
+			# SBX reports null for a sandbox created without workspace mounts.
+			if has("workspaces") and .workspaces == null then .workspaces = [] else . end |
 			if ((.name | type == "string") and
 				(.name | test("^[A-Za-z0-9][A-Za-z0-9_.-]*$")) and
 				(.agent | type == "string") and (.status | type == "string") and
@@ -386,6 +391,16 @@ if [[ -e $PROJECT_CONFIG || -L $PROJECT_CONFIG ]]; then
 	fi
 fi
 
+if [[ -n ${PROJECT_JSON:-} ]]; then
+	while IFS= read -r -d '' DIRECTORY; do
+		ISOLATED_DIRECTORIES+=("$DIRECTORY")
+	done < <(printf '%s\n' "$PROJECT_JSON" | jq -j '.isolated_directories[] | ., "\u0000"')
+fi
+if [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 ]]; then
+	source "$SCRIPT_DIR/lib/isolated-directories.sh"
+	validate_isolated_paths "$PISSBOX_WORKSPACE_DIR"
+fi
+
 # --- Pi directory and settings ----------------------------------------------
 if [[ ! -d $PISSBOX_PI_DIR ]]; then
 	echo "Pi directory does not exist: $PISSBOX_PI_DIR" >&2
@@ -405,6 +420,7 @@ append_workspace "$PISSBOX_STATE_DIR"
 WORKSPACES=("${RESOLVED_WORKSPACES[@]}")
 
 # --- SBX invocation ---------------------------------------------------------
+REQUESTED_SANDBOX_NAME=$SANDBOX_NAME
 SBX_ARGS=(run --env "PISSBOX_PI_DIR=$PISSBOX_PI_DIR"
 	--env "PISSBOX_STATE_DIR=$PISSBOX_STATE_DIR"
 	--env "PISSBOX_WORKSPACE_DIR=$PISSBOX_WORKSPACE_DIR")
@@ -473,13 +489,25 @@ start_bridge() {
 }
 
 trap stop_bridge EXIT
-start_bridge
+if [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 ]]; then
+	prepare_isolated_creation
+else
+	start_bridge
+fi
 
 # Keep stdin/stdout on the terminal and stream stderr while capturing SBX's error.
 exec 3>&1
 if SBX_ERROR=$(sbx "${SBX_ARGS[@]}" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"} \
 	"$SCRIPT_DIR/../sbx-kit" "${WORKSPACES[@]}" \
 	2>&1 1>&3 | tee -a /dev/stderr); then
+	# Do not let a bridge daemon started below inherit the saved terminal/pipe.
+	exec 3>&-
+	if [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 ]]; then
+		finish_isolated_creation
+		start_bridge
+		sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
+		exit $?
+	fi
 	exit 0
 else
 	SBX_STATUS=$?
@@ -489,10 +517,35 @@ stop_bridge
 
 # --- Existing sandbox handling ----------------------------------------------
 CONFLICT_PATTERN="sandbox '([^']+)' already exists and can't be given new workspaces"
-if [[ ! $SBX_ERROR =~ $CONFLICT_PATTERN ]]; then
+CREATE_CONFLICT_PATTERN='sandbox "([A-Za-z0-9][A-Za-z0-9_.-]*)" already exists for this workspace; pass --name to create another, or start the existing sandbox'
+NAMED_CREATE_CONFLICT_PATTERN="sandbox '([A-Za-z0-9][A-Za-z0-9_.-]*)' already exists; connect to the existing sandbox"
+if [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 && -n $REQUESTED_SANDBOX_NAME &&
+	$SBX_ERROR =~ $NAMED_CREATE_CONFLICT_PATTERN ]]; then
+	SANDBOX_NAME=${BASH_REMATCH[1]}
+	if [[ $SANDBOX_NAME != "$REQUESTED_SANDBOX_NAME" ]]; then
+		exit "$SBX_STATUS"
+	fi
+elif [[ ${#ISOLATED_DIRECTORIES[@]} -gt 0 && -z $REQUESTED_SANDBOX_NAME &&
+	$SBX_ERROR =~ $CREATE_CONFLICT_PATTERN ]]; then
+	SANDBOX_NAME=${BASH_REMATCH[1]}
+elif [[ ${#ISOLATED_DIRECTORIES[@]} -eq 0 && $SBX_ERROR =~ $CONFLICT_PATTERN ]]; then
+	SANDBOX_NAME=${BASH_REMATCH[1]}
+else
 	exit "$SBX_STATUS"
 fi
-SANDBOX_NAME=${BASH_REMATCH[1]}
+
+# Inline for compatibility with existing sandboxes whose kit predates isolation.
+require_ready_sandbox() {
+	sbx exec --user 1000 "$SANDBOX_NAME" sh -eu -c '
+		if [ -n "${PISSBOX_ISOLATION_DIR:-}" ]; then
+			if [ ! -f "$HOME/.pissbox/isolation-ready" ] ||
+				[ "$(cat "$HOME/.pissbox/isolation-ready")" != "$PISSBOX_ISOLATION_DIR" ]; then
+				echo "Isolation setup is incomplete; use a new sandbox or explicitly delete this one. Setup will not be replayed." >&2
+				exit 1
+			fi
+		fi
+	' pissbox-readiness
+}
 
 if [[ $ASSUME_YES == false ]]; then
 	cat >&2 <<EOF
@@ -517,6 +570,7 @@ while true; do
 	fi
 	case ${CHOICE:-p} in
 	[Pp])
+		require_ready_sandbox
 		start_bridge
 		if [[ -n $BRIDGE_ID ]]; then
 			sbx run --name "$SANDBOX_NAME" ${BRIDGE_ENV_ARGS[@]+"${BRIDGE_ENV_ARGS[@]}"}
@@ -524,7 +578,10 @@ while true; do
 		fi
 		exec sbx run --name "$SANDBOX_NAME"
 		;;
-	[Ss]) exec sbx exec -it "$SANDBOX_NAME" bash ;;
+	[Ss])
+		require_ready_sandbox
+		exec sbx exec -it "$SANDBOX_NAME" bash
+		;;
 	[Dd])
 		echo "Deletion loses sandbox-local data. Mounted host files remain." >&2
 		if confirm "Do you want to delete it? [y/N]" n; then

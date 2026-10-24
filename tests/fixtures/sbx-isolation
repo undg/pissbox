@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+
+args = sys.argv[1:]
+root = Path(os.environ["TEST_ISOLATION_ROOT"])
+metadata = root / "sandbox.json"
+with (root / "calls.jsonl").open("a") as log:
+    log.write(json.dumps(args) + "\n")
+
+
+def conflict(create):
+    name = json.loads(metadata.read_text())["name"] if metadata.exists() else "existing-sandbox"
+    name = os.environ.get("TEST_ISOLATION_REPORTED_NAME", name)
+    if create and ("--name" in args or os.environ.get("TEST_ISOLATION_FORCE_NAMED_WORDING")):
+        print(f"error: sandbox '{name}' already exists; connect to the existing sandbox", file=sys.stderr)
+    elif create:
+        print(f'error: sandbox "{name}" already exists for this workspace; pass --name to create another, or start the existing sandbox', file=sys.stderr)
+    else:
+        print(f"error: sandbox '{name}' already exists and can't be given new workspaces", file=sys.stderr)
+    sys.exit(1)
+
+
+if args[0] == "create":
+    if os.environ.get("TEST_ISOLATION_UNKNOWN_CREATE_CONFLICT"):
+        print("error: explicitly named sandbox already exists (unrecognized test wording)", file=sys.stderr)
+        sys.exit(8)
+    if metadata.exists() or os.environ.get("TEST_ISOLATION_CONFLICT"):
+        conflict(True)
+    if os.environ.get("TEST_ISOLATION_CREATE_STATUS"):
+        print("creation failed", file=sys.stderr)
+        sys.exit(int(os.environ["TEST_ISOLATION_CREATE_STATUS"]))
+    env = {}
+    for i, arg in enumerate(args[:-1]):
+        if arg == "--env":
+            key, value = args[i + 1].split("=", 1)
+            env[key] = value
+    home = root / "home"
+    scripts = home / ".pissbox/scripts"
+    scripts.mkdir(parents=True)
+    source = Path(__file__).resolve().parents[2] / "sbx-kit/files/home/.pissbox/scripts/project-setup.sh"
+    (scripts / source.name).symlink_to(source)
+    name = args[args.index("--name") + 1] if "--name" in args else "sbx-assigned-not-guessed"
+    env.update(HOME=str(home), SANDBOX_NAME=name)
+    metadata.write_text(json.dumps({"name": name, "env": env, "mounts": {}}))
+    if os.environ.get("TEST_ISOLATION_NEW_SYMLINK"):
+        (Path(env["PISSBOX_WORKSPACE_DIR"]) / "node_modules").symlink_to(root, target_is_directory=True)
+    if os.environ.get("TEST_ISOLATION_NO_IDENTITY"):
+        sys.exit(0)
+    if os.environ.get("TEST_ISOLATION_INVALID_IDENTITY"):
+        (Path(env["PISSBOX_ISOLATION_DIR"]) / "name").write_text("bad/name\n")
+        sys.exit(0)
+    sys.exit(subprocess.run(["bash", str(source)], env={**os.environ, **env}).returncode)
+
+if args[0] == "mount":
+    if os.environ.get("TEST_ISOLATION_MOUNT_STATUS"):
+        print("mount failed", file=sys.stderr)
+        sys.exit(int(os.environ["TEST_ISOLATION_MOUNT_STATUS"]))
+    data = json.loads(metadata.read_text())
+    source, target = args[2].split(":", 1)
+    assert Path(target).is_dir() and not Path(target).is_symlink()
+    data["mounts"][target] = source
+    metadata.write_text(json.dumps(data))
+    sys.exit(0)
+
+if args[0] == "exec":
+    if args[1:2] == ["-it"]:
+        sys.exit(0)
+    data = json.loads(metadata.read_text()) if metadata.exists() else {"env": {"HOME": str(root / "old-home")}, "mounts": {}}
+    assert args[1:3] == ["--user", "1000"]
+    command = args[4:]
+    if "--finalize-isolation" in command[-1] and os.environ.get("TEST_ISOLATION_PAUSE_FINALIZE"):
+        (root / "finalize-waiting").touch()
+        while not (root / "allow-finalize").exists():
+            time.sleep(0.01)
+    if "isolation-mount" in command:
+        if os.environ.get("TEST_ISOLATION_WRITE_STATUS"):
+            print("UID1000 writable probe failed", file=sys.stderr)
+            sys.exit(int(os.environ["TEST_ISOLATION_WRITE_STATUS"]))
+        target_index = command.index("isolation-mount") + 1
+        if not os.environ.get("TEST_ISOLATION_BAD_MOUNT"):
+            # Simulate resolution through a mount without replacing the live host directory.
+            command[target_index] = data["mounts"][command[target_index]]
+    sys.exit(subprocess.run(command, env={**os.environ, **data["env"]}).returncode)
+
+if args[0] == "run":
+    if args[1:2] != ["--name"] and (metadata.exists() or os.environ.get("TEST_ISOLATION_CONFLICT")):
+        conflict(False)
+    if os.environ.get("TEST_ISOLATION_EXPECT_BRIDGE"):
+        mailbox_args = [arg for arg in args if arg.startswith("PISSBOX_BRIDGE_DIR=")]
+        assert len(mailbox_args) == 1, "final run did not receive exactly one bridge mailbox"
+        mailbox = Path(mailbox_args[0].split("=", 1)[1])
+        assert (mailbox / "ready").is_file(), "real bridge mailbox not ready during final run"
+        with (root / "bridge-observed.jsonl").open("a") as log:
+            log.write(json.dumps(str(mailbox)) + "\n")
+    if os.environ.get("TEST_ISOLATION_WAIT_RUN"):
+        time.sleep(60)
+    sys.exit(int(os.environ.get("TEST_ISOLATION_RUN_STATUS", "0")))
+
+if args[0] == "rm":
+    sys.exit(0)
+
+raise AssertionError(args)

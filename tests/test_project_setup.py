@@ -33,15 +33,16 @@ class ProjectSetupTests(unittest.TestCase):
         self.workspace.mkdir()
         self.config = self.workspace / ".pissbox.toml"
 
-    def run_setup(self, workspace=None):
+    def run_setup(self, workspace=None, args=(), **env):
         # Exercise the kit command with the real TOML parser and an isolated home.
         command = next(line.split("command: '", 1)[1][:-1]
                        for line in SPEC.read_text().splitlines()
                        if SCRIPT.name in line)
         return subprocess.run(
-            ["sh", "-c", command], cwd=self.root,
+            ["sh", "-c", command + ' "$@"', "project-setup", *args], cwd=self.root,
             env={**os.environ, "HOME": str(self.home), "PATH": TOOL_PATH,
-                 "PISSBOX_WORKSPACE_DIR": str(self.workspace) if workspace is None else workspace},
+                 "PISSBOX_WORKSPACE_DIR": str(self.workspace) if workspace is None else workspace,
+                 **env},
             text=True, capture_output=True, timeout=5,
         )
 
@@ -54,7 +55,7 @@ class ProjectSetupTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout),
-                         {"workspaces": [".."], "setup": ["touch host-marker"]})
+                         {"workspaces": [".."], "setup": ["touch host-marker"], "isolated_directories": []})
         self.assertFalse((self.workspace / "host-marker").exists())
         self.config.write_text("")
         result = subprocess.run(
@@ -62,7 +63,7 @@ class ProjectSetupTests(unittest.TestCase):
             env={"PATH": TOOL_PATH}, text=True, capture_output=True, timeout=5,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout), {"setup": [], "workspaces": []})
+        self.assertEqual(json.loads(result.stdout), {"setup": [], "workspaces": [], "isolated_directories": []})
 
     def test_invalid_validation_arguments_fail_without_workspace_access(self):
         for args in (("--validate",), ("--validate", ""), ("--validate", "--unknown"), ("extra",)):
@@ -161,6 +162,85 @@ printf "%s\n" "$HOME" >> message
             with self.subTest(workspace=workspace):
                 result = self.run_setup(workspace)
                 self.assertNotEqual(result.returncode, 0)
+
+    def test_isolated_directory_schema_rejects_unsafe_or_overlapping_paths(self):
+        invalid = [None, "node_modules", [7], [""], ["/node_modules"], ["."], [".."],
+                   ["a/../node_modules"], ["a/./node_modules"], ["a//node_modules"],
+                   ["node_modules/"], ["a:b"], ["a\nb"], ["a\tb"], ["a\x00b"],
+                   ["a\x7fb"], ["a\x85b"], ["a", "a"], ["a", "a/b"], ["a/b", "a"]]
+        for paths in invalid:
+            with self.subTest(paths=paths):
+                # JSON arrays/strings are valid TOML values except null, represented as a table.
+                value = "{}" if paths is None else json.dumps(paths)
+                self.config.write_text('setup = ["touch marker"]\nisolated_directories = ' + value)
+                result = self.run_setup()
+                self.assertNotEqual(result.returncode, 0, result.stderr)
+                self.assertFalse((self.workspace / "marker").exists())
+        self.config.write_text('isolated_directories = ["node_modules", "packages/app/node_modules"]')
+        result = self.run_setup(args=("--validate", str(self.config)))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_direct_launch_refuses_isolation_before_project_setup(self):
+        self.config.write_text('isolated_directories = ["node_modules"]\nsetup = ["touch marker"]')
+        result = self.run_setup(PISSBOX_ISOLATION_DIR="")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("pissbox isolation adapter", result.stderr)
+        self.assertFalse((self.workspace / "marker").exists())
+        result = self.run_setup(args=("--validate", str(self.config)), PISSBOX_ISOLATION_DIR="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["isolated_directories"], ["node_modules"])
+        self.assertFalse((self.workspace / "marker").exists())
+
+    def test_deferred_creation_records_identity_without_running_project_setup(self):
+        state = self.root / "isolation"
+        state.mkdir()
+        self.config.write_text('setup = ["touch marker"]')
+        env = {"PISSBOX_ISOLATION_DIR": str(state), "SANDBOX_NAME": "assigned-name"}
+        result = self.run_setup(**env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((state / "name").read_text(), "assigned-name\n")
+        self.assertFalse((state / "name.next").exists())
+        self.assertFalse((self.workspace / "marker").exists())
+        self.assertFalse((self.home / ".pissbox/isolation-ready").exists())
+        result = self.run_setup(args=("--finalize-isolation",), **env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.workspace / "marker").exists())
+        self.assertEqual((self.home / ".pissbox/isolation-ready").read_text(), str(state) + "\n")
+        (self.workspace / "marker").unlink()
+        result = self.run_setup(args=("--finalize-isolation",), **env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.workspace / "marker").exists())
+
+    def test_failed_finalization_stays_unready_and_cannot_replay(self):
+        state = self.root / "isolation"
+        state.mkdir()
+        env = {"PISSBOX_ISOLATION_DIR": str(state), "SANDBOX_NAME": "assigned-name"}
+        self.config.write_text('setup = ["touch started", "exit 23"]')
+        result = self.run_setup(args=("--finalize-isolation",), **env)
+        self.assertEqual(result.returncode, 23, result.stderr)
+        self.assertFalse((self.home / ".pissbox/isolation-ready").exists())
+        self.config.write_text('setup = ["touch replayed"]')
+        result = self.run_setup(args=("--finalize-isolation",), **env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.workspace / "replayed").exists())
+
+    def test_isolation_requires_runtime_identity_and_finalize_requires_persisted_env(self):
+        state = self.root / "isolation"
+        state.mkdir()
+        for name in ("", "-unsafe", "bad/name", "bad\nname"):
+            with self.subTest(name=name):
+                result = self.run_setup(PISSBOX_ISOLATION_DIR=str(state), SANDBOX_NAME=name)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((state / "name").exists())
+        result = self.run_setup(args=("--finalize-isolation",), PISSBOX_ISOLATION_DIR="")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_empty_or_removed_config_finalizes_ready(self):
+        state = self.root / "isolation"
+        state.mkdir()
+        result = self.run_setup(args=("--finalize-isolation",), PISSBOX_ISOLATION_DIR=str(state))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.home / ".pissbox/isolation-ready").read_text(), str(state) + "\n")
 
     def test_hook_is_last_creation_step_and_not_the_pi_entrypoint(self):
         spec = SPEC.read_text()

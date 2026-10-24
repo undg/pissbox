@@ -19,6 +19,9 @@ if args[:1] == ["ls"]:
     print(os.environ.get("TEST_SBX_LISTING", "[]"))
     sys.exit(0)
 
+if args[-1:] == ["pissbox-readiness"]:
+    sys.exit(int(os.environ.get("TEST_SBX_READINESS_STATUS", "0")))
+
 if os.environ.get("TEST_SBX_REQUIRE_TTY") == "1":
     assert sys.stdin.isatty(), "stdin is no longer a terminal"
     assert sys.stdout.isatty(), "stdout is no longer a terminal"

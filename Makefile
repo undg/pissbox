@@ -73,7 +73,9 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	bash -n bin/pissbox bin/install bin/build-image bin/build-bridge sbx-kit/files/home/.pissbox/scripts/*.sh
+	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/lib/*.sh sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+		bash -n "$$script" || exit; \
+	done
 
 ## check: Run tests, vet, syntax and whitespace checks without modifying source
 check: test vet syntax

@@ -63,6 +63,9 @@ class LauncherTests(unittest.TestCase):
             if not line.startswith("sbx:"):
                 continue
             args = json.loads(line.removeprefix("sbx:"))
+            if args[-1:] == ["pissbox-readiness"]:
+                self.assertEqual(args[:3], ["exec", "--user", "1000"])
+                args = ["readiness", args[3]]
             # Optional launch mailbox arguments vary with installed host binary.
             calls.append([arg for i, arg in enumerate(args)
                           if not arg.startswith("PISSBOX_BRIDGE_DIR=")
@@ -120,6 +123,28 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("child  [running]", others)
                 self.assertNotIn("  primary ", others)
                 self.assertNotIn("  secondary ", others)
+
+    def test_null_or_empty_workspaces_are_unassociated_for_listing_and_deletion(self):
+        unmounted = [
+            {"name": "probe-null", "agent": "volume-diag-a", "status": "stopped", "workspaces": None},
+            {"name": "probe-empty", "agent": "pi", "status": "stopped", "workspaces": []},
+        ]
+        mounted = {"name": "project", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}
+        result, calls = self.manage("-l", listing=[*unmounted, mounted])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [["ls", "--json"]])
+        current, others = result.stdout.split("Other sandboxes")
+        self.assertIn("project  [running]", current)
+        self.assertNotIn("probe-", current)
+        self.assertIn("probe-null  [stopped]", others)
+        self.assertIn("probe-empty  [stopped]", others)
+        result, calls = self.manage("-d", ".", "-y", listing=[*unmounted, mounted])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [["ls", "--json"], ["rm", "--force", "project"]])
+        result, calls = self.manage("-d", ".", "-y", listing=unmounted)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("No sandboxes associated", result.stderr)
+        self.assertEqual(calls, [["ls", "--json"]])
 
     def test_list_empty_groups_and_uses_callers_directory(self):
         cwd = ROOT / "tests"
@@ -266,6 +291,9 @@ class LauncherTests(unittest.TestCase):
             {}, [None],
             [{"name": "-unsafe", "agent": "pi", "status": "running", "workspaces": [str(ROOT)]}],
             [{"name": "match", "agent": "pi", "status": "running", "workspaces": str(ROOT)}],
+            [{"name": "match", "agent": "pi", "status": "running", "workspaces": False}],
+            [{"name": "match", "agent": "pi", "status": "running"}],
+            [{"name": "match", "agent": "pi", "status": "running", "workspaces": ["relative/path"]}],
         )
         for listing in invalid_listings:
             with self.subTest(listing=listing):
@@ -426,7 +454,7 @@ class LauncherTests(unittest.TestCase):
             result, calls = self.launch("--ignore-config-workspaces", "-y", cwd=project,
                                         TEST_SBX_MODE="conflict", TEST_SBX_NAME="actual-name")
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+            self.assertEqual(calls[1:], [["readiness", "actual-name"], ["run", "--name", "actual-name"]])
 
     def test_ignore_config_workspaces_is_documented_in_help(self):
         result, calls = self.launch("--ignore-config-workspaces", "--help")
@@ -578,7 +606,7 @@ class LauncherTests(unittest.TestCase):
             result, calls = self.launch("-y", cwd=project, TEST_SBX_MODE="conflict",
                                         TEST_SBX_NAME="actual-name")
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+            self.assertEqual(calls[1:], [["readiness", "actual-name"], ["run", "--name", "actual-name"]])
 
     def test_launch_from_another_directory(self):
         cwd = ROOT / "tests" / "fixtures"
@@ -731,7 +759,7 @@ class LauncherTests(unittest.TestCase):
     def test_menu_defaults_to_pi(self):
         result, calls = self.conflict("\n")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls[1:], [["run", "--name", "pi-existing"]])
+        self.assertEqual(calls[1:], [["readiness", "pi-existing"], ["run", "--name", "pi-existing"]])
         self.assertIn("Choose [P/s/d/q]:", result.stderr)
         self.assertNotIn("Do you want to delete", result.stderr)
 
@@ -744,7 +772,7 @@ class LauncherTests(unittest.TestCase):
                         TEST_SBX_NAME="actual-name",
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(calls[1:], [["run", "--name", "actual-name"]])
+                    self.assertEqual(calls[1:], [["readiness", "actual-name"], ["run", "--name", "actual-name"]])
                     self.assertNotIn("Choose [P/s/d/q]", result.stderr)
                     self.assertNotIn("d) Delete sandbox", result.stderr)
                     self.assertNotIn("[y/N]", result.stderr)
@@ -776,7 +804,7 @@ class LauncherTests(unittest.TestCase):
         for env, status, call_count in (
             ({"TEST_SBX_MODE": "error"}, 7, 1),
             ({"TEST_SBX_RUN_STATUS": "42"}, 42, 1),
-            ({"TEST_SBX_MODE": "conflict", "TEST_SBX_ATTACH_STATUS": "9"}, 9, 2),
+            ({"TEST_SBX_MODE": "conflict", "TEST_SBX_ATTACH_STATUS": "9"}, 9, 3),
         ):
             with self.subTest(env=env):
                 result, calls = self.launch("--yes", **env)
@@ -789,14 +817,14 @@ class LauncherTests(unittest.TestCase):
             with self.subTest(answer=answer):
                 result, calls = self.conflict(answer + "\n")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls[1:], [["run", "--name", "pi-existing"]])
+                self.assertEqual(calls[1:], [["readiness", "pi-existing"], ["run", "--name", "pi-existing"]])
 
     def test_shell_choice(self):
         for answer in ("s", "S"):
             with self.subTest(answer=answer):
                 result, calls = self.conflict(answer + "\n")
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls[1:], [["exec", "-it", "pi-existing", "bash"]])
+                self.assertEqual(calls[1:], [["readiness", "pi-existing"], ["exec", "-it", "pi-existing", "bash"]])
                 self.assertNotIn("Do you want to delete", result.stderr)
 
     def test_quit_leaves_sandbox_untouched(self):
@@ -858,7 +886,8 @@ class LauncherTests(unittest.TestCase):
                     TEST_SBX_MODE="conflict", TEST_SBX_NAME="actual-name",
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(calls[1:], [expected])
+                probes = [["readiness", "actual-name"]] if expected[0] != "rm" else []
+                self.assertEqual(calls[1:], probes + [expected])
 
     def test_unrelated_failure_is_not_a_conflict(self):
         result, calls = self.launch(TEST_SBX_MODE="error")

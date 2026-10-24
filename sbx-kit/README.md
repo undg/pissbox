@@ -101,6 +101,65 @@ Use a **new sandbox name** for changed mounts or kit files; no image rebuild
 is needed if the image has the parser. Reattaching with `-y` keeps existing
 mounts, although the host still validates the current config.
 
+## Optional dependency isolation
+
+Keep source and lockfiles live on the host, but give Linux its own dependency
+contents at the same project paths:
+
+```toml
+isolated_directories = ["node_modules", "packages/app/node_modules"]
+setup = ["pnpm install --frozen-lockfile"]
+```
+
+Omit the key or use `[]` for the original launch behavior. List each needed
+workspace dependency directory; there is no monorepo discovery. Entries must be
+normalized relative directories: no absolute paths, empty/dot/traversal segments,
+colons, control characters, duplicates, or overlapping directories. Existing
+files and symlink components are refused, including symlinks staying inside the
+project. Primary/state mount paths cannot contain colons or control characters.
+Validation happens before settings, state creation, or SBX actions.
+
+On a **new** sandbox, the launcher creates with project setup deferred. Its kit
+hook reports SBX's assigned identity through a unique launch mailbox, so plain
+`pissbox` works without `--name`. The launcher creates missing host mountpoint
+folders as empty directories, preserving existing directories and contents, then
+mounts fresh Linux backing directories over them. It verifies each unique mount
+marker before testing UID-1000 writability. Only then does project setup run as
+UID 1000 and mark the sandbox ready for Pi. Source and lockfile edits still reach
+the host; host dependencies stay separate. Each sandbox/worktree gets fresh
+backing directories; installing separately per platform is expected.
+
+The adapter lives in `bin/lib/isolated-directories.sh`, uses SBX's hidden
+`sbx mount NAME SOURCE:TARGET` command, and is
+**experimental**. Hidden mounts and install-time `SANDBOX_NAME` were tested on
+macOS with SBX v0.49.1, not promised by upstream documentation. Nameless and
+explicit-name duplicate creation conflicts were also tested on that version.
+An explicit-name conflict must report the exact requested name. Unrecognized
+creation errors are preserved rather than matched broadly or used to mutate an
+existing sandbox. The ordinary
+installer still checks SBX v0.39.0+; it does not certify this optional feature.
+No new tools, image build, or entrypoint changes are needed. New kit files require
+a new sandbox. Native-addon compatibility is not covered by the host experiment.
+
+Attachments never remount directories or replay setup, and current config cannot
+retrofit an old sandbox. Use a new name when enabling/changing isolation. A small
+readiness check before existing Pi **and shell** attaches blocks unfinished
+isolated sandboxes, including after the config is removed. It only reads readiness
+state, but `sbx exec` starts stopped sandboxes and can run their existing startup
+hooks before opening Pi or shell. Old sandboxes without the persisted isolation
+environment pass. Quit and explicit deletion still work.
+Failed or interrupted staging leaves evidence and backing data in
+`PISSBOX_STATE_DIR/isolation.*`; it does not fall back to host dependencies,
+resume setup, roll back, or delete anything. Recover with a new sandbox name or
+explicitly delete the failed sandbox. Backing data survives sandbox deletion and
+is never removed automatically. Do not remove or move it while a sandbox uses it.
+
+Disabling the key only changes future creations; existing mounts remain. Once
+SBX has native isolation, replace the adapter while retaining this intent key.
+Direct `sbx run` kit launches are **refused before project setup** when the config
+requests isolation without the persisted staging environment. Use `pissbox` for
+projects opting in; otherwise setup could overwrite host dependencies.
+
 ## First-time project setup
 
 `setup` runs **once during creation, before Pi**, after built-in kit setup.
@@ -110,7 +169,7 @@ Bash uses `errexit`, `nounset`, and `pipefail`: unhandled failures prevent the
 initial Pi launch. Completed work is not rolled back; keep commands repeat-safe
 for failed-creation retries. Restarts and attachments never rerun setup.
 
-Both keys (`setup`, `workspaces`) must be arrays of strings. The entire config
+All three keys (`setup`, `workspaces`, `isolated_directories`) must be arrays of strings. The entire config
 is validated before launch; unknown keys, wrong types, and NUL bytes fail.
 TOML literal (`'...'`) and multiline strings work for shell quoting. The old
 executable `.pissbox` format is not read.

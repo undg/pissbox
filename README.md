@@ -96,6 +96,20 @@ Symlink targets must be mounted too; use a new sandbox name for changed mounts.
 See [project configuration](sbx-kit/README.md#project-configuration-and-additional-workspaces)
 for setup behavior and symlink rules.
 
+To keep macOS and Linux dependencies separate while sharing source and lockfiles,
+opt in for each dependency directory explicitly:
+
+```toml
+isolated_directories = ["node_modules", "packages/app/node_modules"]
+setup = ["pnpm install --frozen-lockfile"]
+```
+
+Nameless `pissbox` still works; use `--name` only for an additional instance or
+changed mounts. This experimental adapter uses SBX's hidden mount command,
+version-tested on macOS with SBX v0.49.1. See
+[dependency isolation](sbx-kit/README.md#optional-dependency-isolation)
+for lifecycle, failure recovery, and backing-state details.
+
 ## Optional agent tools
 
 `make build` already includes the host bridge. To rebuild only the bridge:

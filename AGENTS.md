@@ -92,7 +92,23 @@ dependencies but never installs them automatically.
 - Pass the local kit, workspaces, Pi directory, and state root to `sbx run`, with
   `--env PISSBOX_PI_DIR=...`, `--env PISSBOX_STATE_DIR=...`, and
   `--env PISSBOX_WORKSPACE_DIR=...` for the primary project. SBX selects the
-  sandbox unless `--name` is supplied; do not add custom discovery/bootstrap.
+  sandbox unless `--name` is supplied; do not add custom discovery/bootstrap
+  except the narrow opted-in isolation handshake below.
+- `isolated_directories` is opt-in intent, relative to the primary workspace.
+  Omitted/empty keeps the ordinary `sbx run` creation path. Keep the replaceable
+  hidden-mount mechanism in `bin/lib/isolated-directories.sh`: create with project
+  setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
+  mailbox, mount fresh per-instance backing directories, verify markers before
+  writable probes, then finalize the same project setup as UID 1000 before Pi.
+  Never guess names, parse creation summaries, discover unrelated sandboxes,
+  remount existing instances, or automatically replay failed setup. The mailbox
+  contract and hidden mounts are version-tested behavior, not upstream guarantees.
+  Preserve nameless creation; `--name` remains optional.
+  Existing Pi/shell attaches run a small inline readiness probe using persisted
+  isolation environment plus a sandbox-local ready marker, even if current config
+  removed isolation. The probe's `sbx exec` can start a stopped sandbox and run
+  its existing startup hooks. Old kits without that environment pass. Quit/delete
+  never require readiness; failures need a new sandbox or explicit user deletion.
 - On the known existing-sandbox conflict, use the name reported by SBX. Enter
   or `p` runs `sbx run --name NAME`; `s` runs `sbx exec -it NAME bash`; `q` exits.
   Choices are case-insensitive. `d` warns about local data loss, requires a
