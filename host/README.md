@@ -2,6 +2,8 @@
 
 The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
 and its implementation and colocated tests together in `internal/bridge`.
+The candidate Go launcher lives in `cmd/pissbox` and `internal/launcher`.
+`bin/pissbox` remains the Bash default until the migration's cutover phase.
 
 Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar
 state and Herd's existing completion/attention notifications.
@@ -24,6 +26,29 @@ for another target does not test its runtime behavior.
 
 The launcher selects the binary from this checkout, independently of a custom
 `PISSBOX_STATE_DIR`. It never compiles or installs tools automatically.
+
+## Candidate launcher verification
+
+```bash
+make build-launcher      # Explicit native candidate build; does not switch defaults
+make build-launcher-all  # darwin/linux × arm64/amd64
+PISSBOX_TEST_LAUNCHER=bash make test-python
+PISSBOX_TEST_LAUNCHER=go make test-python
+```
+
+Launcher candidates use `.cache/bin/pissbox-<os>-<arch>`. Python acceptance tests
+build one fresh isolated Go candidate per run and copy it into fixture checkouts;
+they never depend on these installed artifacts. Both implementations use public
+fixture resources, not the developer checkout's project config or Pi credentials.
+The Go launcher locates resources relative to its resolved executable under
+`.cache/bin/`, preserves the caller's directory, and invokes the bridge as a
+separate CLI process. No production dependencies were added; host Bash, jq and
+tomljson remain necessary for the shared project-schema validator.
+
+Go subprocess tests re-execute the instrumented test binary, including signal
+forwarding and bridge cleanup. Linux PTY tests check single-key mode, terminal
+restoration, and descriptor identity; Python PTY cases also run against the real
+candidate. See the migration plan for remaining platform/manual verification.
 
 ## Use
 

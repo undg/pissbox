@@ -137,6 +137,9 @@ def mutation_go(args, selected):
         # Copies live too deep for Unix socket paths. Use the real checkout's
         # unique test fixtures, never the user's actual daemon runtime directory.
         "PISSBOX_BRIDGE_TEST_FIXTURE_DIR": os.environ.get("PISSBOX_BRIDGE_TEST_FIXTURE_DIR") or str(ROOT / ".cache/test-fixtures"),
+        # Launcher subprocess tests use the shared validator from this checkout,
+        # not an assumed resource directory outside Gremlins' module copy.
+        "PISSBOX_LAUNCHER_TEST_RESOURCE_DIR": os.environ.get("PISSBOX_LAUNCHER_TEST_RESOURCE_DIR") or str(ROOT),
     }
     run(command, cwd=ROOT / "host", env=env)
 

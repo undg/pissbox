@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BUILD_ALL=false
+
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [--all]
+
+Build the host Go launcher. Requires Go 1.25 or newer on the build machine only.
+
+Options:
+  --all       Cross-compile macOS/Linux, each for arm64 and amd64
+  -h, --help  Show this help
+
+Without --all, build for the current host OS and architecture.
+Writes .cache/bin/pissbox-<os>-<arch> in this checkout.
+Uses pure Go with CGO disabled; no target SDK or Docker is required.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	--all) BUILD_ALL=true ;;
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	*)
+		echo "Unexpected argument: $1. Use --help for usage." >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+build_target() {
+	local os=$1 arch=$2
+	local target="$OUTPUT_DIR/pissbox-$os-$arch"
+	echo "Building pissbox for $os/$arch" >&2
+	CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -o "$target" ./cmd/pissbox
+}
+
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+OUTPUT_DIR="$ROOT_DIR/.cache/bin"
+
+if ! command -v go >/dev/null 2>&1; then
+	echo "Building the launcher requires Go 1.25 or newer; packaged hosts do not need Go." >&2
+	exit 1
+fi
+mkdir -p "$OUTPUT_DIR"
+cd "$ROOT_DIR/host"
+
+if [[ $BUILD_ALL == true ]]; then
+	for OS in darwin linux; do
+		for ARCH in arm64 amd64; do
+			build_target "$OS" "$ARCH"
+		done
+	done
+else
+	OS=$(go env GOHOSTOS)
+	ARCH=$(go env GOHOSTARCH)
+	case "$OS/$ARCH" in
+	darwin/arm64 | darwin/amd64 | linux/arm64 | linux/amd64) ;;
+	*)
+		echo "Unsupported launcher host: $OS/$ARCH" >&2
+		exit 1
+		;;
+	esac
+	build_target "$OS" "$ARCH"
+fi

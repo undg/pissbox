@@ -9,6 +9,8 @@ import tempfile
 import time
 import unittest
 
+from launcher_harness import materialize_launcher
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,8 +21,7 @@ class BridgeLauncherTests(unittest.TestCase):
         fixtures.mkdir(parents=True, exist_ok=True)
         self.checkout = Path(tempfile.mkdtemp(prefix="bridge launcher-", dir=fixtures))
         (self.checkout / "bin").mkdir()
-        self.launcher = self.checkout / "bin/pissbox"
-        shutil.copy2(ROOT / "bin/pissbox", self.launcher)
+        self.launcher = materialize_launcher(self.checkout)
         pi = self.checkout / "pi-agent"
         (pi / "extensions").mkdir(parents=True)
         for name in ("settings-co.json", "settings-go.json"):
@@ -31,7 +32,7 @@ class BridgeLauncherTests(unittest.TestCase):
         os_name = platform.system().lower()
         arch = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}[platform.machine()]
         self.binary = self.checkout / f".cache/bin/go-bridge-{os_name}-{arch}"
-        self.binary.parent.mkdir(parents=True)
+        self.binary.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / "tests/fixtures/go-bridge", self.binary)
         self.binary.chmod(0o755)
         self.log = self.checkout / "helper.jsonl"

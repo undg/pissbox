@@ -19,8 +19,10 @@ or directory name. User guides start at [README.md](README.md).
   during environment work. Use the `bash-cli-style` skill for Bash changes.
 - `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
 - `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
-  and tests in `internal/bridge`. Requires Go 1.25+ to build. Build matching bridge
-  binaries with `bin/build-bridge` or cross-compile all four targets with `--all`.
+  and tests in `internal/bridge`. Candidate launcher entrypoint in `cmd/pissbox`,
+  implementation/tests in `internal/launcher`; Bash remains the default during
+  migration. Requires Go 1.25+ to build. Use `bin/build-bridge` / `bin/build-launcher`
+  for native binaries, or `--all` for all four supported targets.
 - `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
   Keep JS suites beside their extension/library as `*.test.mjs`; Make, coverage,
   and mutation runners discover them recursively. Go tests stay beside Go source.
@@ -181,6 +183,7 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make build` | Build the host bridge and build/save/import the host image |
 | `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
 | `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |
+| `make build-launcher` / `make build-launcher-all` | Candidate launcher build / all supported cross-builds; Bash remains default |
 | `make tools` | Explicit network installation of pinned quality tools |
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |
@@ -214,6 +217,13 @@ not read-only checks.
 The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
 removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
 validation; installing the CLI or reading help is not validation.
+
+During migration, `PISSBOX_TEST_LAUNCHER=bash make test-python` runs the reference;
+`PISSBOX_TEST_LAUNCHER=go make test-python` builds one fresh isolated Go candidate.
+Both use fixture checkouts without ambient project configuration or credentials.
+Go launcher process tests re-execute their instrumented test binary. Copied-module
+tests need `PISSBOX_LAUNCHER_TEST_RESOURCE_DIR` pointing at this checkout for the
+shared schema validator; the mutation wrapper sets it explicitly.
 
 Tests stub Docker/SBX and use isolated homes for link scripts. Fixtures stay
 under ignored `.cache/test-fixtures/`. Bridge process tests must set an isolated

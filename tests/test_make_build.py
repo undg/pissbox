@@ -17,7 +17,7 @@ class MakeBuildTests(unittest.TestCase):
         self.directory = Path(directory.name)
         (self.directory / "bin").mkdir()
         self.log = self.directory / "calls"
-        for name in ("install", "build-image", "build-bridge", "artifacts"):
+        for name in ("install", "build-image", "build-bridge", "build-launcher", "artifacts"):
             script = self.directory / "bin" / name
             script.write_text(
                 '#!/bin/sh\n'
@@ -42,6 +42,8 @@ class MakeBuildTests(unittest.TestCase):
             ("build-image-all", ["bin/build-image", "--amd64", "--arm64"]),
             ("build-bridge", ["bin/build-bridge"]),
             ("build-bridge-all", ["bin/build-bridge", "--all"]),
+            ("build-launcher", ["bin/build-launcher"]),
+            ("build-launcher-all", ["bin/build-launcher", "--all"]),
         ):
             with self.subTest(target=target):
                 (self.directory / target).touch()
@@ -89,7 +91,8 @@ class MakeBuildTests(unittest.TestCase):
                 self.assertIn("Error 37", result.stderr)
 
     def test_wrapper_failures_fail_make(self):
-        for target in ("install", "build-image", "build-image-all", "build-bridge", "build-bridge-all"):
+        for target in ("install", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+                       "build-launcher", "build-launcher-all"):
             with self.subTest(target=target):
                 result = self.run_make(target, status="37")
                 self.assertNotEqual(result.returncode, 0)
@@ -99,7 +102,8 @@ class MakeBuildTests(unittest.TestCase):
         result = self.run_make("help")
         self.assertEqual(result.returncode, 0, result.stderr)
         names = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("  ")]
-        for target in ("install", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all"):
+        for target in ("install", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+                       "build-launcher", "build-launcher-all"):
             self.assertIn(target, names)
         self.assertNotIn("build-all", names)
         for target in ("export-artifacts", "import-artifacts"):

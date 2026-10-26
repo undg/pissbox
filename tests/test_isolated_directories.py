@@ -6,8 +6,10 @@ import subprocess
 import tempfile
 import unittest
 
+from launcher_harness import checkout_root, implementation
 
-ROOT = Path(__file__).resolve().parents[1]
+
+ROOT = checkout_root()
 LAUNCHER = ROOT / "bin/pissbox"
 TOOL_PATH = os.environ["PATH"] + os.pathsep + str(ROOT / ".cache/bin")
 
@@ -202,16 +204,28 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertFalse((self.root / "home/.pissbox/isolation-ready").exists())
 
     def test_mountpoint_mkdir_failure_stops_before_mount_or_setup(self):
-        self.configure()
-        mkdir = self.tools / "mkdir"
-        mkdir.write_text('#!/usr/bin/env bash\nfor arg in "$@"; do\n'
-                         f'if [[ $arg == "{self.project}/node_modules" ]]; then exit 17; fi\n'
-                         'done\nexec ' + shutil.which("mkdir") + ' "$@"\n')
-        mkdir.chmod(0o755)
+        path = "node_modules"
+        if implementation() == "go":
+            # Go creates directories directly, so fail at the filesystem boundary.
+            parent = self.project / "read-only"
+            parent.mkdir(mode=0o555)
+            self.addCleanup(parent.chmod, 0o755)
+            path = "read-only/node_modules"
+        else:
+            mkdir = self.tools / "mkdir"
+            mkdir.write_text('#!/usr/bin/env bash\nfor arg in "$@"; do\n'
+                             f'if [[ $arg == "{self.project}/node_modules" ]]; then exit 17; fi\n'
+                             'done\nexec ' + shutil.which("mkdir") + ' "$@"\n')
+            mkdir.chmod(0o755)
+        self.configure([path])
         result, calls = self.launch()
-        self.assertEqual(result.returncode, 17, result.stderr)
+        if implementation() == "bash":
+            self.assertEqual(result.returncode, 17, result.stderr)
+        else:
+            self.assertNotEqual(result.returncode, 0, result.stderr)
+            self.assertIn("permission denied", result.stderr.lower())
         self.assertEqual([call[0] for call in calls], ["create"])
-        self.assertFalse((self.project / "node_modules").exists())
+        self.assertFalse((self.project / path).exists())
         self.assertFalse((self.project / "setup-marker").exists())
 
     def test_symlink_introduced_during_creation_is_refused_before_mount(self):

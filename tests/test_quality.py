@@ -29,7 +29,8 @@ class QualityTests(unittest.TestCase):
         self.commit("base")
         self.base = self.git("rev-parse", "HEAD").stdout.strip()
         self.env = {key: value for key, value in os.environ.items()
-                    if not key.startswith("QUALITY_") and key != "PISSBOX_BRIDGE_TEST_FIXTURE_DIR"}
+                    if not key.startswith("QUALITY_")
+                    and key not in ("PISSBOX_BRIDGE_TEST_FIXTURE_DIR", "PISSBOX_LAUNCHER_TEST_RESOURCE_DIR")}
         self.env["PYTHONDONTWRITEBYTECODE"] = "1"
 
     def write(self, name, text):
@@ -133,6 +134,7 @@ from pathlib import Path
 Path(os.environ['CALL_LOG']).write_text(json.dumps({
     'args': sys.argv[1:], 'cwd': os.getcwd(), 'flags': os.environ['GOFLAGS'],
     'fixtures': os.environ['PISSBOX_BRIDGE_TEST_FIXTURE_DIR'],
+    'resources': os.environ['PISSBOX_LAUNCHER_TEST_RESOURCE_DIR'],
 }))
 sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
 """)
@@ -150,6 +152,7 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
         self.assertIn("-count=1", call["flags"])
         self.assertEqual(call["cwd"], str(self.root / "host"))
         self.assertEqual(call["fixtures"], str(self.root / ".cache/test-fixtures"))
+        self.assertEqual(call["resources"], str(self.root))
         patterns = [arg.split("=", 1)[1] for arg in call["args"] if arg.startswith("--exclude-files=")]
         self.assertFalse(any(re.search(pattern, "internal/bridge/my [worker].go") for pattern in patterns))
         self.assertTrue(any(re.search(pattern, "internal/bridge/main.go") for pattern in patterns))
@@ -161,9 +164,12 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
         fixtures = str(self.root / ".cache/test-fixtures/override")
         result = self.quality("mutation-go", selected, "--dry-run",
                               PATH=str(stub_bin) + os.pathsep + self.env["PATH"],
-                              CALL_LOG=str(log), PISSBOX_BRIDGE_TEST_FIXTURE_DIR=fixtures)
+                              CALL_LOG=str(log), PISSBOX_BRIDGE_TEST_FIXTURE_DIR=fixtures,
+                              PISSBOX_LAUNCHER_TEST_RESOURCE_DIR=str(ROOT))
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(log.read_text())["fixtures"], fixtures)
+        call = json.loads(log.read_text())
+        self.assertEqual(call["fixtures"], fixtures)
+        self.assertEqual(call["resources"], str(ROOT))
 
     @unittest.skipUnless(
         shutil.which("node") and (ROOT / ".cache/quality-tools/js/node_modules/@stryker-mutator/core/package.json").is_file(),

@@ -35,6 +35,23 @@ For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
 
+## Go launcher migration
+
+`bin/pissbox` still uses Bash. A separate Go candidate is available for development
+without changing the installed launcher:
+
+```bash
+make build-launcher      # Explicit native build
+make build-launcher-all  # All four supported OS/architecture targets
+PISSBOX_TEST_LAUNCHER=go make test-python
+```
+
+Acceptance tests build a fresh candidate in isolated fixture storage, rather than
+trusting a previously built executable. `make check` keeps the Bash compatibility
+reference and also runs instrumented Go launcher tests. See
+[host development](host/README.md#candidate-launcher-verification) and
+[the migration plan](plan-launcher-migration.md) for the cutover gates.
+
 ## Transfer built artifacts
 
 Git carries the launcher, kit, and configuration. `bin/artifacts` transfers only

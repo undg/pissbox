@@ -89,8 +89,11 @@ For deeply nested worktrees, set it to a shorter absolute directory beneath a
 checkout's `.cache/test-fixtures/`; Go/JS tests, real-daemon launcher tests, and
 mutation adapters honor it.
 Tests still create unique fixture directories, and their daemons use isolated
-runtime directories. The
-wrapper disables the Go test-result cache with `GOFLAGS=-count=1` (preserving
+runtime directories. Launcher process tests also need the shared project-schema
+validator outside the copied module. The wrapper sets
+`PISSBOX_LAUNCHER_TEST_RESOURCE_DIR` to the real checkout, preserving an explicit
+override; this variable is consumed only by tests, not the production launcher.
+The wrapper disables the Go test-result cache with `GOFLAGS=-count=1` (preserving
 other GOFLAGS).
 
 Coverage and mutation eligibility depend on what Go's coverage instrumentation

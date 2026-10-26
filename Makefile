@@ -8,7 +8,7 @@ export QUALITY_BASE = $(BASE)
 export QUALITY_DRY_RUN = $(DRY_RUN)
 export ARTIFACT_ARCHIVE = $(ARCHIVE)
 
-.PHONY: help install build build-image build-image-all build-bridge build-bridge-all export-artifacts import-artifacts tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
+.PHONY: help install build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
 
 ## help: Show available commands (default)
 help:
@@ -37,6 +37,14 @@ build-bridge:
 ## build-bridge-all: Cross-compile the bridge for macOS/Linux on amd64/arm64
 build-bridge-all:
 	bin/build-bridge --all
+
+## build-launcher: Build the candidate Go launcher for this host (Bash remains default)
+build-launcher:
+	bin/build-launcher
+
+## build-launcher-all: Cross-compile the candidate launcher for macOS/Linux on amd64/arm64
+build-launcher-all:
+	bin/build-launcher --all
 
 ## export-artifacts: Package runtime artifacts as .tar.gz (ARCHIVE=path required; needs Python 3)
 export-artifacts:
@@ -73,7 +81,7 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/lib/*.sh sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher bin/lib/*.sh sbx-kit/files/home/.pissbox/scripts/*.sh; do \
 		bash -n "$$script" || exit; \
 	done
 
