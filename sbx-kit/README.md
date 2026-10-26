@@ -132,11 +132,13 @@ UID 1000 and mark the sandbox ready for Pi. Source and lockfile edits still reac
 the host; host dependencies stay separate. Each sandbox/worktree gets fresh
 backing directories; installing separately per platform is expected.
 
-The adapter lives in `bin/lib/isolated-directories.sh`, uses SBX's hidden
+The host adapter lives in `host/internal/launcher/isolation.go`, uses SBX's hidden
 `sbx mount NAME SOURCE:TARGET` command, and is
 **experimental**. Hidden mounts and install-time `SANDBOX_NAME` were tested on
-macOS with SBX v0.49.1, not promised by upstream documentation. Nameless and
-explicit-name duplicate creation conflicts were also tested on that version.
+macOS with SBX v0.49.1 for the original Bash launcher, not promised by upstream
+documentation. Nameless and explicit-name duplicate creation conflicts were also
+tested on that version. Real-SBX acceptance of the Go port remains on the
+[post-merge human checklist](../plan-launcher-migration.md#final-human-checklist--after-merge-to-main).
 An explicit-name conflict must report the exact requested name. Unrecognized
 creation errors are preserved rather than matched broadly or used to mutate an
 existing sandbox. The ordinary

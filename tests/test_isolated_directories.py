@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-from launcher_harness import checkout_root, implementation
+from launcher_harness import checkout_root
 
 
 ROOT = checkout_root()
@@ -204,26 +204,15 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertFalse((self.root / "home/.pissbox/isolation-ready").exists())
 
     def test_mountpoint_mkdir_failure_stops_before_mount_or_setup(self):
-        path = "node_modules"
-        if implementation() == "go":
-            # Go creates directories directly, so fail at the filesystem boundary.
-            parent = self.project / "read-only"
-            parent.mkdir(mode=0o555)
-            self.addCleanup(parent.chmod, 0o755)
-            path = "read-only/node_modules"
-        else:
-            mkdir = self.tools / "mkdir"
-            mkdir.write_text('#!/usr/bin/env bash\nfor arg in "$@"; do\n'
-                             f'if [[ $arg == "{self.project}/node_modules" ]]; then exit 17; fi\n'
-                             'done\nexec ' + shutil.which("mkdir") + ' "$@"\n')
-            mkdir.chmod(0o755)
+        # Fail at the filesystem boundary, not by stubbing a mkdir subprocess.
+        parent = self.project / "read-only"
+        parent.mkdir(mode=0o555)
+        self.addCleanup(parent.chmod, 0o755)
+        path = "read-only/node_modules"
         self.configure([path])
         result, calls = self.launch()
-        if implementation() == "bash":
-            self.assertEqual(result.returncode, 17, result.stderr)
-        else:
-            self.assertNotEqual(result.returncode, 0, result.stderr)
-            self.assertIn("permission denied", result.stderr.lower())
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("permission denied", result.stderr.lower())
         self.assertEqual([call[0] for call in calls], ["create"])
         self.assertFalse((self.project / path).exists())
         self.assertFalse((self.project / "setup-marker").exists())

@@ -15,22 +15,16 @@ class LauncherHarnessTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
 
-    def test_explicit_bash_selection_materializes_the_legacy_script(self):
-        with patch.dict(os.environ, {"PISSBOX_TEST_LAUNCHER": "bash"}, clear=True):
-            self.assertEqual(harness.implementation(), "bash")
-            checkout = harness.checkout_root()
-            self.assertNotEqual(checkout, harness.SOURCE_ROOT)
-            self.assertFalse((checkout / ".pissbox.toml").exists())
-            self.assertEqual((checkout / "bin/pissbox").read_bytes(),
-                             (harness.SOURCE_ROOT / "bin/pissbox-legacy").read_bytes())
-            launcher = harness.materialize_launcher(self.root)
-        self.assertFalse(launcher.is_symlink())
-        self.assertEqual(launcher.read_bytes(), (harness.SOURCE_ROOT / "bin/pissbox-legacy").read_bytes())
-        self.assertTrue(os.access(launcher, os.X_OK))
-
-    def test_go_is_default(self):
-        with patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(harness.implementation(), "go")
+    def test_checkout_is_reused_without_private_or_ambient_project_state(self):
+        checkout = harness.checkout_root()
+        self.assertEqual(harness.checkout_root(), checkout)
+        self.assertNotEqual(checkout, harness.SOURCE_ROOT)
+        for name in (".pissbox.toml", "pi-agent/auth.json", "pi-agent/sessions", "pi-agent/settings.json"):
+            self.assertFalse((checkout / name).exists(), name)
+        self.assertTrue(os.access(checkout / ".cache/bin" / harness.binary_name(), os.X_OK))
+        self.assertEqual((checkout / "bin/pissbox").read_bytes(),
+                         (harness.SOURCE_ROOT / "bin/pissbox").read_bytes())
+        self.assertTrue((checkout / "sbx-kit/files/home/.pissbox/scripts/project-setup.sh").is_file())
 
     def test_go_candidate_and_production_wrapper_are_copied_into_each_checkout(self):
         candidate = self.root / "fresh-candidate"
@@ -38,9 +32,7 @@ class LauncherHarnessTests(unittest.TestCase):
         binary.parent.mkdir(parents=True)
         binary.write_text("#!/bin/sh\nexit 0\n")
         binary.chmod(0o755)
-        with patch.dict(os.environ, {"PISSBOX_TEST_LAUNCHER": "go"}), patch.object(
-            harness, "candidate_checkout", return_value=candidate,
-        ):
+        with patch.object(harness, "checkout_root", return_value=candidate):
             for name in ("first checkout", "second checkout"):
                 checkout = self.root / name
                 launcher = harness.materialize_launcher(checkout)
@@ -53,11 +45,6 @@ class LauncherHarnessTests(unittest.TestCase):
                 link.symlink_to("bin/pissbox")
                 self.assertEqual(link.resolve(), launcher)
         self.assertTrue(binary.exists())
-
-    def test_unknown_selection_is_rejected_instead_of_falling_back(self):
-        with patch.dict(os.environ, {"PISSBOX_TEST_LAUNCHER": "typo"}):
-            with self.assertRaisesRegex(ValueError, "must be bash or go"):
-                harness.checkout_root()
 
 
 if __name__ == "__main__":

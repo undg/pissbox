@@ -4,7 +4,6 @@ The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
 and its implementation and colocated tests together in `internal/bridge`.
 The default Go launcher lives in `cmd/pissbox` and `internal/launcher`.
 `bin/pissbox` only resolves symlinks, selects the native binary, and execs it.
-The explicit `bin/pissbox-legacy` reference remains until manual acceptance.
 
 Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar
 state and Herd's existing completion/attention notifications.
@@ -33,19 +32,18 @@ The launcher selects the binary from this checkout, independently of a custom
 ```bash
 make build-launcher      # Explicit native build; also included in make build/install
 make build-launcher-all  # darwin/linux × arm64/amd64
-PISSBOX_TEST_LAUNCHER=bash make test-python
-PISSBOX_TEST_LAUNCHER=go make test-python
+make test-python         # Fresh Go acceptance executable and production wrapper
 ```
 
 Launcher binaries use `.cache/bin/pissbox-<os>-<arch>`. The wrapper never builds
 or falls back; a missing/non-executable binary reports `bin/build-launcher`.
 Both host build scripts select the native host despite inherited GOOS/GOARCH.
 Artifact export/import includes all four launcher and unchanged bridge filenames.
-Python acceptance tests default to Go, build one fresh isolated candidate per run,
-and copy it with the production wrapper into fixture checkouts; they never depend
-on installed artifacts. Explicit Bash selection uses `bin/pissbox-legacy`.
-Both implementations use public fixture resources, not the developer checkout's
-project config or Pi credentials.
+Python acceptance tests build one fresh isolated Go executable per run and copy
+it with the production wrapper into fixture checkouts; they never depend on
+installed artifacts. Fixtures use public resources, not the developer checkout's
+project config or Pi credentials. The legacy launcher and temporary
+implementation-selection harness have been removed.
 The Go launcher locates resources relative to its resolved executable under
 `.cache/bin/`, preserves the caller's directory, and invokes the bridge as a
 separate CLI process. No production dependencies were added; host Bash, jq and

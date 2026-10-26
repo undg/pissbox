@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import unittest
 
-from launcher_harness import checkout_root, implementation
+from launcher_harness import checkout_root
 
 
 ROOT = checkout_root()
@@ -716,51 +716,16 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("PISSBOX_STATE_DIR=" + str(STATE_DIR), calls[0])
                 self.assertIn("box", calls[0])
 
-    @unittest.skipIf(implementation() == "go", "Go hostname seam: TestSettingsProfilesAndRelinking")
-    def test_settings_profile_follows_hostname(self):
-        for host, profile in (
-            ("cm", "settings-go.json"),
-            ("di-7415", "settings-go.json"),
-            ("other-host", "settings-co.json"),
-            ("", "settings-co.json"),
-        ):
-            with self.subTest(host=host):
-                pi = self.pi_directory()
-                result, calls = self.launch(
-                    "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST=host,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertTrue((pi / "settings.json").is_symlink())
-                self.assertEqual(os.readlink(pi / "settings.json"), profile)
-                self.assertIn(f"PISSBOX_PI_DIR={pi}", calls[0])
-
-    @unittest.skipIf(implementation() == "go", "Go hostname seam: TestSettingsProfilesAndRelinking")
-    def test_switching_host_relinks_settings_profile(self):
-        pi = self.pi_directory()
-        for host, profile in (
-            ("cm", "settings-go.json"),
-            ("other-host", "settings-co.json"),
-            ("di-7415", "settings-go.json"),
-        ):
-            with self.subTest(host=host):
-                result, _ = self.launch(
-                    "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST=host,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(os.readlink(pi / "settings.json"), profile)
-
     def test_settings_profile_backs_up_a_regular_file(self):
         pi = self.pi_directory()
         settings = pi / "settings.json"
         settings.write_text("{}\n")
-        result, calls = self.launch(
-            "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST="cm",
-        )
+        result, calls = self.launch("--pissbox-pi-dir", str(pi))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Backing up existing Pi settings file", result.stderr)
         self.assertEqual((pi / "settings.json.replaced").read_text(), "{}\n")
         expected = "settings-go.json"
-        if implementation() == "go" and platform.node().split(".", 1)[0] not in ("cm", "di-7415"):
+        if platform.node().split(".", 1)[0] not in ("cm", "di-7415"):
             expected = "settings-co.json"
         self.assertEqual(os.readlink(settings), expected)
         self.assertEqual(len(calls), 1)
@@ -770,13 +735,11 @@ class LauncherTests(unittest.TestCase):
         fixtures.mkdir(parents=True, exist_ok=True)
         pi = Path(tempfile.mkdtemp(prefix="pi-missing-", dir=fixtures))
         missing = "settings-go.json"
-        if implementation() == "go" and platform.node().split(".", 1)[0] not in ("cm", "di-7415"):
+        if platform.node().split(".", 1)[0] not in ("cm", "di-7415"):
             missing = "settings-co.json"
         available = "settings-co.json" if missing == "settings-go.json" else "settings-go.json"
         shutil.copyfile(PI_DIR / available, pi / available)
-        result, calls = self.launch(
-            "--pissbox-pi-dir", str(pi), TEST_PISSBOX_HOST="cm",
-        )
+        result, calls = self.launch("--pissbox-pi-dir", str(pi))
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Settings profile does not exist", result.stderr)
         self.assertEqual(calls, [])
@@ -1025,7 +988,7 @@ class LauncherTests(unittest.TestCase):
         for args in (("-h",), ("workspace", "--help")):
             with self.subTest(args=args):
                 result = subprocess.run(
-                    ([shutil.which("bash")] if implementation() == "bash" else []) + [str(LAUNCHER), *args],
+                    [str(LAUNCHER), *args],
                     cwd=ROOT,
                     env=self.environment(PATH=str(commands)),
                     text=True,
@@ -1059,7 +1022,7 @@ class LauncherTests(unittest.TestCase):
         result, calls = self.launch(
             "workspace with spaces", "--name=first", "second workspace",
             "--name", "last", "--pissbox-pi-dir", str(pi), "--", "--path",
-            PISSBOX_PI_DIR="missing", TEST_PISSBOX_HOST="cm",
+            PISSBOX_PI_DIR="missing",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, [[

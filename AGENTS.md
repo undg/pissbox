@@ -6,8 +6,7 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Layout
 
-- `bin/pissbox`: native Go executable-selection wrapper; `bin/pissbox-legacy`:
-  explicit Bash compatibility reference until manual acceptance.
+- `bin/pissbox`: native Go executable-selection wrapper.
   `bin/build-image`: build, save, and SBX import.
 - `bin/install`: check host dependencies, build, and link `~/.local/bin/pissbox`.
   Repoint existing symlinks, but never overwrite regular files or directories.
@@ -88,8 +87,7 @@ dependencies but never installs them automatically.
   working directory. First workspace is primary; with none, use the current
   directory. Extra workspaces retain host absolute paths, not arbitrary Docker
   source/destination mappings. Mount symlink targets explicitly.
-- Keep linear option parsing (the legacy Bash reference uses `case`): options may
-  appear among workspaces; `--` ends parsing.
+- Keep linear option parsing: options may appear among workspaces; `--` ends parsing.
   Repeated settings use the last value. Directory precedence is CLI flag >
   `PISSBOX_PI_DIR` / `PISSBOX_STATE_DIR` > checkout defaults. Canonicalize before
   mounting; relative overrides use the caller's directory. Do not discover
@@ -101,9 +99,8 @@ dependencies but never installs them automatically.
   except the narrow opted-in isolation handshake below.
 - `isolated_directories` is opt-in intent, relative to the primary workspace.
   Omitted/empty keeps the ordinary `sbx run` creation path. Keep the replaceable
-  hidden-mount mechanism in `host/internal/launcher/isolation.go` (legacy reference
-  in `bin/lib/isolated-directories.sh`): create with project
-  setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
+  hidden-mount mechanism in `host/internal/launcher/isolation.go`: create with
+  project setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
   mailbox, mount fresh per-instance backing directories, verify markers before
   writable probes, then finalize the same project setup as UID 1000 before Pi.
   Never guess names, parse creation summaries, discover unrelated sandboxes,
@@ -222,10 +219,9 @@ The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
 removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
 validation; installing the CLI or reading help is not validation.
 
-During migration, `PISSBOX_TEST_LAUNCHER=bash make test-python` runs the explicit
-`bin/pissbox-legacy` reference; `make test-python` defaults to Go, building one
-fresh isolated candidate and exercising the production wrapper.
-Both use fixture checkouts without ambient project configuration or credentials.
+`make test-python` builds one fresh isolated Go launcher and exercises the
+production wrapper in fixture checkouts without ambient project configuration or
+credentials. There is no legacy launcher or implementation-selection switch.
 Go launcher process tests re-execute their instrumented test binary. Copied-module
 tests need `PISSBOX_LAUNCHER_TEST_RESOURCE_DIR` pointing at this checkout for the
 shared schema validator; the mutation wrapper sets it explicitly.

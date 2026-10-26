@@ -248,7 +248,6 @@ class BridgeLauncherTests(unittest.TestCase):
         self.binary.unlink()
         subprocess.run(["go", "build", "-o", str(self.binary), "./cmd/pissbox-bridge"], cwd=ROOT / "host",
                        check=True, capture_output=True, timeout=60)
-        shutil.copytree(ROOT / "bin/lib", self.checkout / "bin/lib")
         scripts = self.checkout / "sbx-kit/files/home/.pissbox/scripts"
         scripts.mkdir(parents=True)
         shutil.copy2(ROOT / "sbx-kit/files/home/.pissbox/scripts/project-setup.sh", scripts)

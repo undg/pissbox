@@ -36,7 +36,7 @@ For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
 
-## Go launcher migration
+## Go launcher
 
 `bin/pissbox` is a small Bash wrapper that selects the native Go launcher in
 `.cache/bin/pissbox-<os>-<arch>` and executes it without changing arguments or
@@ -46,17 +46,17 @@ rebuilds or falls back. A missing binary reports `bin/build-launcher`.
 ```bash
 make build-launcher      # Explicit native build
 make build-launcher-all  # All four supported OS/architecture targets
-make test-python                       # Fresh Go candidate (default)
-PISSBOX_TEST_LAUNCHER=bash make test-python  # Explicit legacy reference
+make test-python         # Fresh Go executable with the production wrapper
 ```
 
 Acceptance tests build a fresh candidate in isolated fixture storage and exercise
 the production wrapper, rather than trusting a previously built executable.
-`make check` defaults to Go and also runs instrumented Go launcher tests.
-`bin/pissbox-legacy` and its isolation helper remain an explicit compatibility
-reference until manual acceptance; they are never selected automatically. See
-[host development](host/README.md#launcher-verification) and
-[the migration plan](plan-launcher-migration.md) for pending manual checks.
+`make check` also runs instrumented Go launcher tests. The former Bash launcher,
+its host-side isolation helper, and dual-implementation test selection have been
+removed; sandbox setup and shared schema validation still use Bash. See
+[host development](host/README.md#launcher-verification) and the
+[post-merge human checklist](plan-launcher-migration.md#final-human-checklist--after-merge-to-main)
+for pending final verification.
 
 ## Transfer built artifacts
 
