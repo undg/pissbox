@@ -19,8 +19,8 @@ help:
 install:
 	bin/install
 
-## build: Build the host bridge and build, save and import the host sandbox image
-build: build-bridge build-image
+## build: Build the host launcher/bridge and build, save and import the host sandbox image
+build: build-launcher build-bridge build-image
 
 ## build-image: Build, save and import the sandbox image for this host
 build-image:
@@ -38,11 +38,11 @@ build-bridge:
 build-bridge-all:
 	bin/build-bridge --all
 
-## build-launcher: Build the candidate Go launcher for this host (Bash remains default)
+## build-launcher: Build the Go launcher for this host
 build-launcher:
 	bin/build-launcher
 
-## build-launcher-all: Cross-compile the candidate launcher for macOS/Linux on amd64/arm64
+## build-launcher-all: Cross-compile the launcher for macOS/Linux on amd64/arm64
 build-launcher-all:
 	bin/build-launcher --all
 
@@ -81,7 +81,7 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher bin/lib/*.sh sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+	for script in bin/pissbox bin/pissbox-legacy bin/install bin/build-image bin/build-bridge bin/build-launcher bin/lib/*.sh sbx-kit/files/home/.pissbox/scripts/*.sh; do \
 		bash -n "$$script" || exit; \
 	done
 

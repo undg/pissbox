@@ -6,7 +6,9 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Layout
 
-- `bin/pissbox`: host launcher; `bin/build-image`: build, save, and SBX import.
+- `bin/pissbox`: native Go executable-selection wrapper; `bin/pissbox-legacy`:
+  explicit Bash compatibility reference until manual acceptance.
+  `bin/build-image`: build, save, and SBX import.
 - `bin/install`: check host dependencies, build, and link `~/.local/bin/pissbox`.
   Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
@@ -19,9 +21,9 @@ or directory name. User guides start at [README.md](README.md).
   during environment work. Use the `bash-cli-style` skill for Bash changes.
 - `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
 - `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
-  and tests in `internal/bridge`. Candidate launcher entrypoint in `cmd/pissbox`,
-  implementation/tests in `internal/launcher`; Bash remains the default during
-  migration. Requires Go 1.25+ to build. Use `bin/build-bridge` / `bin/build-launcher`
+  and tests in `internal/bridge`. Default launcher entrypoint in `cmd/pissbox`,
+  implementation/tests in `internal/launcher`. Requires Go 1.25+ to build.
+  Use `bin/build-bridge` / `bin/build-launcher`
   for native binaries, or `--all` for all four supported targets.
 - `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
   Keep JS suites beside their extension/library as `*.test.mjs`; Make, coverage,
@@ -86,7 +88,8 @@ dependencies but never installs them automatically.
   working directory. First workspace is primary; with none, use the current
   directory. Extra workspaces retain host absolute paths, not arbitrary Docker
   source/destination mappings. Mount symlink targets explicitly.
-- Keep the `case` parser: options may appear among workspaces; `--` ends parsing.
+- Keep linear option parsing (the legacy Bash reference uses `case`): options may
+  appear among workspaces; `--` ends parsing.
   Repeated settings use the last value. Directory precedence is CLI flag >
   `PISSBOX_PI_DIR` / `PISSBOX_STATE_DIR` > checkout defaults. Canonicalize before
   mounting; relative overrides use the caller's directory. Do not discover
@@ -98,7 +101,8 @@ dependencies but never installs them automatically.
   except the narrow opted-in isolation handshake below.
 - `isolated_directories` is opt-in intent, relative to the primary workspace.
   Omitted/empty keeps the ordinary `sbx run` creation path. Keep the replaceable
-  hidden-mount mechanism in `bin/lib/isolated-directories.sh`: create with project
+  hidden-mount mechanism in `host/internal/launcher/isolation.go` (legacy reference
+  in `bin/lib/isolated-directories.sh`): create with project
   setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
   mailbox, mount fresh per-instance backing directories, verify markers before
   writable probes, then finalize the same project setup as UID 1000 before Pi.
@@ -140,9 +144,9 @@ dependencies but never installs them automatically.
 - If suspicious untracked or unstaged files could expose credentials, sessions,
   or other private data, alert the user before staging. Report paths, never
   secret contents. Do not delete files or change ignore rules without asking.
-- `pi-agent/settings.json` is an ignored generated link. The host-name map in
-  `settings_profile_for_host` selects `settings-go.json` for `cm`/`di-7415`,
-  otherwise `settings-co.json`, before every launch. Add hosts there and track
+- `pi-agent/settings.json` is an ignored generated link. The host-name map
+  `settingsProfile` in `host/internal/launcher/project.go` selects `settings-go.json`
+  for `cm`/`di-7415`, otherwise `settings-co.json`, before every launch. Add hosts there and track
   new `settings-*.json` profiles rather than editing the generated link.
   Regular settings files are backed up as `settings.json.replaced*`. Pi writes
   through the link into the tracked profile, including runtime defaults.
@@ -180,10 +184,10 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make vet syntax` | Go vet and Bash syntax only |
 | `make validate-kit` | SBX kit validation; requires Docker sign-in |
 | `make install` | Check host prerequisites, build, and install the launcher symlink |
-| `make build` | Build the host bridge and build/save/import the host image |
+| `make build` | Build the host launcher/bridge and build/save/import the host image |
 | `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
 | `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |
-| `make build-launcher` / `make build-launcher-all` | Candidate launcher build / all supported cross-builds; Bash remains default |
+| `make build-launcher` / `make build-launcher-all` | Go launcher build / all supported cross-builds |
 | `make tools` | Explicit network installation of pinned quality tools |
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |
@@ -218,8 +222,9 @@ The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
 removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
 validation; installing the CLI or reading help is not validation.
 
-During migration, `PISSBOX_TEST_LAUNCHER=bash make test-python` runs the reference;
-`PISSBOX_TEST_LAUNCHER=go make test-python` builds one fresh isolated Go candidate.
+During migration, `PISSBOX_TEST_LAUNCHER=bash make test-python` runs the explicit
+`bin/pissbox-legacy` reference; `make test-python` defaults to Go, building one
+fresh isolated candidate and exercising the production wrapper.
 Both use fixture checkouts without ambient project configuration or credentials.
 Go launcher process tests re-execute their instrumented test binary. Copied-module
 tests need `PISSBOX_LAUNCHER_TEST_RESOURCE_DIR` pointing at this checkout for the

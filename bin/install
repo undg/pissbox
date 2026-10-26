@@ -6,7 +6,7 @@ show_help() {
 	cat <<EOF
 Usage: ${0##*/} [-h | --help]
 
-Check host dependencies, run make build, and link pissbox into ~/.local/bin.
+Check host dependencies, build the Go launcher/bridge and image, and link pissbox into ~/.local/bin.
 
 Options:
   -h, --help  Show this help
@@ -17,6 +17,7 @@ Docker must be running; kit validation must pass with your Docker sign-in.
 Dependencies are checked, never installed automatically.
 Optional bin/artifacts transfers require Python 3; it is not checked here.
 Existing symlinks are updated; regular files and directories are never replaced.
+The link targets bin/pissbox, a wrapper for the explicitly built native Go launcher.
 The checkout must stay in place. Shell configuration is not modified.
 EOF
 }

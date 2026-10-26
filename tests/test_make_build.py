@@ -72,16 +72,17 @@ class MakeBuildTests(unittest.TestCase):
                 self.assertIn("Set ARCHIVE=", result.stderr)
                 self.assertFalse(self.log.exists())
 
-    def test_build_runs_both_host_wrappers_even_with_matching_file(self):
+    def test_build_runs_launcher_bridge_and_image_wrappers_even_with_matching_file(self):
         (self.directory / "build").touch()
         result = self.run_make("build")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.log.read_text().splitlines(), ["bin/build-bridge", "bin/build-image"])
+        self.assertEqual(self.log.read_text().splitlines(), ["bin/build-launcher", "bin/build-bridge", "bin/build-image"])
 
-    def test_build_fails_if_either_host_wrapper_fails(self):
+    def test_build_fails_if_any_wrapper_fails(self):
         for failed_tool, calls in (
-            ("build-bridge", ["bin/build-bridge"]),
-            ("build-image", ["bin/build-bridge", "bin/build-image"]),
+            ("build-launcher", ["bin/build-launcher"]),
+            ("build-bridge", ["bin/build-launcher", "bin/build-bridge"]),
+            ("build-image", ["bin/build-launcher", "bin/build-bridge", "bin/build-image"]),
         ):
             with self.subTest(failed_tool=failed_tool):
                 self.log.write_text("")

@@ -14,7 +14,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 
 
 def implementation():
-    selected = os.environ.get("PISSBOX_TEST_LAUNCHER", "bash")
+    selected = os.environ.get("PISSBOX_TEST_LAUNCHER", "go")
     if selected not in ("bash", "go"):
         raise ValueError("PISSBOX_TEST_LAUNCHER must be bash or go")
     return selected
@@ -51,10 +51,8 @@ def fixture_checkout(selected):
     for name in ("settings-co.json", "settings-go.json"):
         shutil.copy2(SOURCE_ROOT / "pi-agent" / name, pi / name)
     shutil.copytree(SOURCE_ROOT / "pi-agent/extensions", pi / "extensions")
-    if selected == "go":
-        (checkout / "bin/pissbox").symlink_to(Path("../.cache/bin") / binary.name)
-    else:
-        shutil.copy2(SOURCE_ROOT / "bin/pissbox", checkout / "bin/pissbox")
+    source = "bin/pissbox" if selected == "go" else "bin/pissbox-legacy"
+    shutil.copy2(SOURCE_ROOT / source, checkout / "bin/pissbox")
     return checkout
 
 
@@ -73,10 +71,10 @@ def materialize_launcher(checkout):
     launcher = checkout / "bin/pissbox"
     launcher.parent.mkdir(parents=True, exist_ok=True)
     if implementation() == "bash":
-        shutil.copy2(SOURCE_ROOT / "bin/pissbox", launcher)
+        shutil.copy2(SOURCE_ROOT / "bin/pissbox-legacy", launcher)
     else:
         binary = checkout / ".cache/bin" / binary_name()
         binary.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(candidate_checkout() / ".cache/bin" / binary.name, binary)
-        launcher.symlink_to(Path("../.cache/bin") / binary.name)
+        shutil.copy2(SOURCE_ROOT / "bin/pissbox", launcher)
     return launcher

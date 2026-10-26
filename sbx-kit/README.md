@@ -6,7 +6,10 @@ Build and import it first with `make build-image` from the checkout root; see th
 
 ## Launch
 
-Run the launcher on the host, from any project directory:
+Build the native Go launcher once with `make build-launcher` (Go 1.25+), or use
+`make install` to build it together with the bridge and image. The `bin/pissbox`
+wrapper selects `.cache/bin/pissbox-<os>-<arch>`; it never builds or falls back.
+Packaged hosts need the matching binary, not Go. Run from any project directory:
 
 ```bash
 /path/to/pissbox/bin/pissbox
@@ -225,8 +228,8 @@ Do not print or commit credentials.
 This kit does not use upstream Anthropic credential injection: it can overwrite
 Pi's shared auth store at startup.
 
-Before every launch, the host-name map in `bin/pissbox` selects a tracked
-`settings-*.json` profile and links `pi-agent/settings.json` to it. Hosts `cm`
+Before every launch, `settingsProfile` in `host/internal/launcher/project.go`
+selects a tracked `settings-*.json` profile and links `pi-agent/settings.json` to it. Hosts `cm`
 and `di-7415` use `settings-go.json`; others fall back to `settings-co.json`.
 Edit the map to add a host, or add another tracked profile. Do not edit the
 generated link directly. Pi's settings changes write through to the active

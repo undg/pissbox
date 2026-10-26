@@ -10,9 +10,10 @@
       another host of the same architecture loads and runs. Nothing tests real
       SBX imports on either architecture yet.
 - [x] **Portable runtime artifacts:** `bin/artifacts --export FILE` and
-      `--import FILE` transfer allowlisted image archives, host bridge binaries,
-      and installed Pi npm packages as `.tar.gz`; Git supplies the launcher, kit,
-      and configuration. Credentials, sessions, and general caches are excluded.
+      `--import FILE` transfer allowlisted image archives, host launcher/bridge
+      binaries, and installed Pi npm packages as `.tar.gz`; Git supplies the
+      executable-selection wrapper, kit, and configuration. Credentials, sessions,
+      and general caches are excluded.
       Import refuses existing artifacts; SBX image registration remains explicit.
       Isolated fixture tests cover transfer and rejection behavior. Real
       cross-machine/architecture transfers and offline startup remain unverified;

@@ -183,6 +183,8 @@ if call == ["sbx", "version"]:
                     self.assertIn("Usage:", result.stdout)
                     self.assertIn("Optional bin/artifacts transfers require Python 3", result.stdout)
                     self.assertIn("jq, and tomljson", result.stdout)
+                    self.assertIn("build the Go launcher/bridge and image", result.stdout)
+                    self.assertIn("wrapper for the explicitly built native Go launcher", result.stdout)
 
 
 if __name__ == "__main__":

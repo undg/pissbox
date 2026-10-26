@@ -51,6 +51,10 @@ class ArtifactTests(unittest.TestCase):
     def test_round_trip_preserves_files_modes_links_and_excludes_private_state(self):
         binary = self.write(self.source, ".cache/bin/go-bridge-linux-amd64", b"binary")
         binary.chmod(0o755)
+        launchers = [f".cache/bin/pissbox-{os_name}-{arch}"
+                     for os_name in ("darwin", "linux") for arch in ("amd64", "arm64")]
+        for name in launchers:
+            self.write(self.source, name, name.encode()).chmod(0o755)
         self.write(self.source, ".cache/images/pissbox-local-amd64.tar", b"image")
         image_link = self.source / ".cache/images/pissbox-local.tar"
         image_link.symlink_to("pissbox-local-amd64.tar")
@@ -71,6 +75,9 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         result = self.run_script(self.target, "--import", self.package)
         self.assertEqual(result.returncode, 0, result.stderr)
+        for name in launchers:
+            self.assertEqual((self.target / name).read_bytes(), name.encode())
+            self.assertEqual((self.target / name).stat().st_mode & 0o777, 0o755)
         self.assertEqual((self.target / ".cache/bin/go-bridge-linux-amd64").read_bytes(), b"binary")
         self.assertEqual((self.target / ".cache/bin/go-bridge-linux-amd64").stat().st_mode & 0o777, 0o755)
         self.assertEqual(os.readlink(self.target / image_link.relative_to(self.source)),
@@ -108,6 +115,17 @@ class ArtifactTests(unittest.TestCase):
         self.assertIn("Refusing to overwrite", result.stderr)
         self.assertEqual(existing.read_bytes(), b"keep me")
         self.assertFalse((self.target / ".cache").exists())
+
+    def test_launcher_conflict_prevents_importing_any_other_artifact(self):
+        self.write(self.source, ".cache/bin/go-bridge-linux-arm64", b"bridge")
+        self.write(self.source, ".cache/bin/pissbox-linux-arm64", b"new launcher")
+        existing = self.write(self.target, ".cache/bin/pissbox-linux-arm64", b"keep launcher")
+        self.assertEqual(self.run_script(self.source, "-e", self.package).returncode, 0)
+        result = self.run_script(self.target, "-i", self.package)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Refusing to overwrite", result.stderr)
+        self.assertEqual(existing.read_bytes(), b"keep launcher")
+        self.assertFalse((self.target / ".cache/bin/go-bridge-linux-arm64").exists())
 
     def test_rejects_unsafe_archives_before_writing(self):
         cases = [

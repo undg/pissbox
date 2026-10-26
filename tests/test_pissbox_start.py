@@ -329,7 +329,8 @@ class LauncherTests(unittest.TestCase):
         fixtures = STATE_DIR / "test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
         commands = Path(tempfile.mkdtemp(prefix="no-jq-", dir=fixtures))
-        (commands / "bash").symlink_to(shutil.which("bash"))
+        for command in ("bash", "dirname", "readlink", "uname"):
+            (commands / command).symlink_to(shutil.which(command))
         result, calls = self.manage("-l", PATH=str(commands))
         self.assertEqual(result.returncode, 1)
         self.assertIn("install jq", result.stderr)
@@ -588,7 +589,7 @@ class LauncherTests(unittest.TestCase):
                 with self.subTest(missing=missing):
                     tools = project / missing
                     tools.mkdir()
-                    for tool in ("bash", "dirname", "readlink", "tomljson", "jq"):
+                    for tool in ("bash", "dirname", "readlink", "uname", "tomljson", "jq"):
                         if tool != missing:
                             (tools / tool).symlink_to(shutil.which(tool))
                     result, calls = self.launch(cwd=project, PATH=str(tools))
@@ -1015,11 +1016,12 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("[P/c/s/d/q]", result.stdout)
                 self.assertEqual(calls, [])
 
-    def test_help_only_needs_cat_not_runtime_commands(self):
+    def test_help_needs_only_wrapper_utilities_not_runtime_commands(self):
         fixtures = STATE_DIR / "test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)
         commands = Path(tempfile.mkdtemp(prefix="help-path-", dir=fixtures))
-        (commands / "cat").symlink_to(shutil.which("cat"))
+        for command in ("bash", "cat", "dirname", "readlink", "uname"):
+            (commands / command).symlink_to(shutil.which(command))
         for args in (("-h",), ("workspace", "--help")):
             with self.subTest(args=args):
                 result = subprocess.run(

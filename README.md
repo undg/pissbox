@@ -17,8 +17,9 @@ go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
 make install
 ```
 
-`make install` checks prerequisites, validates the kit, builds the host bridge
-and imports the image, then links `~/.local/bin/pissbox` to this checkout.
+`make install` checks prerequisites, validates the kit, builds the Go launcher
+and host bridge, and builds/imports the image. It then links
+`~/.local/bin/pissbox` to this checkout's `bin/pissbox` wrapper.
 It updates existing symlinks but refuses regular files/directories; failed
 checks/builds preserve the old link. Keep the checkout in place. Missing
 dependencies, login, and PATH changes remain manual (`bin/install --help`).
@@ -37,20 +38,25 @@ read Pi's `auth.json` and environment variables passed directly into the sandbox
 
 ## Go launcher migration
 
-`bin/pissbox` still uses Bash. A separate Go candidate is available for development
-without changing the installed launcher:
+`bin/pissbox` is a small Bash wrapper that selects the native Go launcher in
+`.cache/bin/pissbox-<os>-<arch>` and executes it without changing arguments or
+the caller's directory. Build explicitly after source changes; the wrapper never
+rebuilds or falls back. A missing binary reports `bin/build-launcher`.
 
 ```bash
 make build-launcher      # Explicit native build
 make build-launcher-all  # All four supported OS/architecture targets
-PISSBOX_TEST_LAUNCHER=go make test-python
+make test-python                       # Fresh Go candidate (default)
+PISSBOX_TEST_LAUNCHER=bash make test-python  # Explicit legacy reference
 ```
 
-Acceptance tests build a fresh candidate in isolated fixture storage, rather than
-trusting a previously built executable. `make check` keeps the Bash compatibility
-reference and also runs instrumented Go launcher tests. See
-[host development](host/README.md#candidate-launcher-verification) and
-[the migration plan](plan-launcher-migration.md) for the cutover gates.
+Acceptance tests build a fresh candidate in isolated fixture storage and exercise
+the production wrapper, rather than trusting a previously built executable.
+`make check` defaults to Go and also runs instrumented Go launcher tests.
+`bin/pissbox-legacy` and its isolation helper remain an explicit compatibility
+reference until manual acceptance; they are never selected automatically. See
+[host development](host/README.md#launcher-verification) and
+[the migration plan](plan-launcher-migration.md) for pending manual checks.
 
 ## Transfer built artifacts
 
@@ -75,7 +81,8 @@ builds during transfers. Only import packages from trusted sources.
 The single allowlist in `bin/artifacts` defines archive paths and their placement:
 
 - `.cache/images/pissbox-local-{amd64,arm64}.tar` and `pissbox-local.tar` symlink.
-- `.cache/bin/go-bridge-{darwin,linux}-{amd64,arm64}` binaries.
+- `.cache/bin/go-bridge-{darwin,linux}-{amd64,arm64}` bridge binaries.
+- `.cache/bin/pissbox-{darwin,linux}-{amd64,arm64}` launcher binaries.
 - `pi-agent/npm/package.json`, `package-lock.json`, and `node_modules/`.
 
 Missing source artifacts are skipped; an empty export fails. The gzip archive
@@ -92,7 +99,8 @@ leave partial artifacts; inspect these before retrying. Nothing loads an image,
 recreates a sandbox, installs dependencies, or changes the launcher link
 automatically. The destination still needs Docker/SBX and the launcher's `jq`
 and `tomljson` dependencies. Supply the image and bridge binaries matching its
-architecture; installed sandbox npm dependencies must also support that architecture.
+architecture, including the launcher binary; installed sandbox npm dependencies
+must also support that architecture. A packaged host does not need Go to launch.
 
 ## Work across directories
 
