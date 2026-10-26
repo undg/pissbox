@@ -1,4 +1,7 @@
-# go-bridge
+# Host Go code
+
+The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
+and its implementation and colocated tests together in `internal/bridge`.
 
 Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar
 state and Herd's existing completion/attention notifications.
@@ -292,10 +295,11 @@ a trusted local transport, not an authorization boundary.
 
 ## Extend
 
-`mailbox.go` owns the envelope and safe file reads; `herdr.go` owns Herd requests;
-`main.go` owns mailbox polling, retries, readiness, and final drain;
-`control.go` owns the host CLI, singleton lock/socket, registrations, and owner
-liveness. `messaging.go` owns the separate presence/routing/receipt worker, so a
+Under `internal/bridge`, `mailbox.go` owns the envelope and safe file reads;
+`herdr.go` owns Herd requests; `main.go` owns mailbox polling, retries, readiness,
+and final drain; `control.go` owns the host CLI, singleton lock/socket,
+registrations, and owner liveness. `messaging.go` owns the separate
+presence/routing/receipt worker, so a
 stalled Herd adapter cannot delay peer messages. The small adapter
 interface separates transport from host integration. Add capabilities explicitly
 with validation and tests, not a generic host RPC passthrough.
@@ -312,7 +316,7 @@ and whitespace checks. Cross-build separately with `make build-bridge-all`. See
 testing and coverage/CRAP metrics.
 
 ```bash
-(cd go-bridge && go test -race ./... && go vet ./...)
+make test-go vet
 make test-js
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 make build-bridge-all

@@ -13,7 +13,7 @@ export ARTIFACT_ARCHIVE = $(ARCHIVE)
 ## help: Show available commands (default)
 help:
 	@awk '/^## / { line = substr($$0, 4); pos = index(line, ":"); printf "  %-18s %s\n", substr(line, 1, pos - 1), substr(line, pos + 2) }' $(MAKEFILE_LIST)
-	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047go-bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
+	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047host/internal/bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
 
 ## install: Check dependencies, build this host's environment and link ~/.local/bin/pissbox
 install:
@@ -57,7 +57,7 @@ test: test-go test-js test-python
 
 ## test-go: Run Go tests with race detection and no result cache
 test-go:
-	cd go-bridge && go test -race -count=1 ./...
+	cd host && go test -race -count=1 ./...
 
 ## test-js: Run extension lifecycle suites (requires installed Pi)
 test-js:
@@ -69,7 +69,7 @@ test-python:
 
 ## vet: Run Go vet
 vet:
-	cd go-bridge && go vet ./...
+	cd host && go vet ./...
 
 ## syntax: Check Bash syntax
 syntax:
@@ -128,8 +128,8 @@ mutation-all:
 
 ## fmt: Format Go source (modifies files)
 fmt:
-	cd go-bridge && go fmt ./...
+	cd host && go fmt ./...
 
 ## tidy: Tidy the Go module (modifies files)
 tidy:
-	cd go-bridge && go mod tidy -v
+	cd host && go mod tidy -v

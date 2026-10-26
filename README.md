@@ -134,7 +134,7 @@ blocked states.
 `bin/pissbox --bridge-stop` explicitly stops the host bridge without removing
 sandboxes; use it when upgrading or recovering from a protocol mismatch.
 `make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64. See the
-[bridge guide](go-bridge/README.md) for setup and daemon lifecycle.
+[bridge guide](host/README.md) for setup and daemon lifecycle.
 
 New interactive sessions also generate a title from the first prompt. Use
 `/skill:session-name` to refresh it from the conversation, or `/name My title`
@@ -166,7 +166,7 @@ make tools       # Explicit network install of pinned quality tools into .cache/
 make coverage    # Fresh Go and JavaScript coverage reports
 make metrics     # Fresh coverage plus complexity and CRAP risk reports
 make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
-make mutation-go FILES="go-bridge/mailbox.go"
+make mutation-go FILES="host/internal/bridge/mailbox.go"
 ```
 
 `make check` does not install quality tools or run mutation testing. `make tools`
@@ -191,7 +191,7 @@ validates the kit with SBX and requires Docker sign-in.
 - [Usage, settings, and sandbox lifecycle](sbx-kit/README.md)
 - [Image builds, optional CA, and bundled search model](sbx-kit/README.image.md)
 - [Shared Linux tool state](sbx-kit/SHARED-DIRECTORIES.md)
-- [Agent messaging, optional Herd lifecycle bridge, and Go cross-builds](go-bridge/README.md)
+- [Agent messaging, optional Herd lifecycle bridge, and Go cross-builds](host/README.md)
 - [Known issues](KNOWN_ISSUES.md)
 - [Development rules and verification](AGENTS.md)
 - [Make targets, scoped mutation testing, coverage, and CRAP metrics](tools/quality/README.md)

@@ -26,7 +26,7 @@ def git(*args):
 
 
 def source_files(language):
-    directory = ROOT / ("go-bridge" if language == "go" else "pi-agent/extensions")
+    directory = ROOT / ("host" if language == "go" else "pi-agent/extensions")
     suffix = ".go" if language == "go" else ".js"
     files = []
     for path in directory.rglob(f"*{suffix}"):
@@ -106,8 +106,8 @@ def require_tool(path):
 def exclusions(selected):
     # Gremlins has exclusion regexes, not inclusion globs. Exclude the exact
     # complement, relative to the Go module, with RE2-compatible literal escapes.
-    return ["--exclude-files=" + "^" + re.escape(path.relative_to(ROOT / "go-bridge").as_posix()) + "$"
-            for path in sorted((ROOT / "go-bridge").rglob("*.go"))
+    return ["--exclude-files=" + "^" + re.escape(path.relative_to(ROOT / "host").as_posix()) + "$"
+            for path in sorted((ROOT / "host").rglob("*.go"))
             if path.relative_to(ROOT).as_posix() not in selected]
 
 
@@ -115,8 +115,8 @@ def go_coverage():
     output = ROOT / ".cache/coverage/go"
     output.mkdir(parents=True, exist_ok=True)
     profile = output / "coverage.out"
-    run(["go", "test", "-race", "-count=1", "-coverprofile", profile, "./..."], cwd=ROOT / "go-bridge")
-    run(["go", "tool", "cover", "-html", profile, "-o", output / "index.html"], cwd=ROOT / "go-bridge")
+    run(["go", "test", "-race", "-count=1", "-coverprofile", profile, "./..."], cwd=ROOT / "host")
+    run(["go", "tool", "cover", "-html", profile, "-o", output / "index.html"], cwd=ROOT / "host")
     return profile
 
 
@@ -136,9 +136,9 @@ def mutation_go(args, selected):
         "TMPDIR": str(temporary),
         # Copies live too deep for Unix socket paths. Use the real checkout's
         # unique test fixtures, never the user's actual daemon runtime directory.
-        "PISSBOX_BRIDGE_TEST_FIXTURE_DIR": str(ROOT / ".cache/test-fixtures"),
+        "PISSBOX_BRIDGE_TEST_FIXTURE_DIR": os.environ.get("PISSBOX_BRIDGE_TEST_FIXTURE_DIR") or str(ROOT / ".cache/test-fixtures"),
     }
-    run(command, cwd=ROOT / "go-bridge", env=env)
+    run(command, cwd=ROOT / "host", env=env)
 
 
 def crap_go(selected):
@@ -148,12 +148,12 @@ def crap_go(selected):
     output.mkdir(parents=True, exist_ok=True)
     # go-crap matches absolute file paths, unlike Gremlins.
     excluded = []
-    for path in sorted((ROOT / "go-bridge").rglob("*.go")):
+    for path in sorted((ROOT / "host").rglob("*.go")):
         if path.relative_to(ROOT).as_posix() not in selected:
             excluded.extend(["--exclude", "^" + re.escape(str(path)) + "$"])
     command = [binary, "scan", "./...", "--coverage-profile", profile, "--no-progress", *excluded]
-    run([*command, "--format=json", "--output", output / "report.json"], cwd=ROOT / "go-bridge")
-    run(command, cwd=ROOT / "go-bridge")
+    run([*command, "--format=json", "--output", output / "report.json"], cwd=ROOT / "host")
+    run(command, cwd=ROOT / "host")
 
 
 def main():

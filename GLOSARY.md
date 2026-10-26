@@ -27,4 +27,4 @@ or resetting another agent's session. Only actual user command input should
 trigger those actions. This prevents accidental command execution; shared
 writable mailboxes remain a trusted local transport, not an isolation boundary.
 
-See [bridge usage and protocol](go-bridge/README.md#agent-messaging).
+See [bridge usage and protocol](host/README.md#agent-messaging).

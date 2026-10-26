@@ -67,7 +67,7 @@ function daemon(t) {
 	assert.ok(Buffer.byteLength(socket) <= 103,
 		`Private bridge socket needs ${Buffer.byteLength(socket)} bytes (limit 103): ${socket}; use a shorter checkout or fixture root`);
 	const binary = path.join(dir, "bridge");
-	execFileSync("go", ["build", "-o", binary, "."], { cwd: path.join(root, "go-bridge"), timeout: 60000 });
+	execFileSync("go", ["build", "-o", binary, "./cmd/pissbox-bridge"], { cwd: path.join(root, "host"), timeout: 60000 });
 	const env = { ...process.env, PISSBOX_BRIDGE_RUNTIME_DIR: dir };
 	const cli = (...args) => execFileSync(binary, args, { env, encoding: "utf8", timeout: 6000 });
 	cli("ensure");

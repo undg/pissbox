@@ -1,4 +1,4 @@
-package main
+package bridge
 
 import (
 	"bufio"
@@ -20,7 +20,7 @@ func fixture(t *testing.T) (string, *os.Root) {
 	t.Helper()
 	base := os.Getenv("PISSBOX_BRIDGE_TEST_FIXTURE_DIR")
 	if base == "" {
-		base = filepath.Join("..", ".cache", "test-fixtures")
+		base = filepath.Join("..", "..", "..", ".cache", "test-fixtures")
 	}
 	if err := os.MkdirAll(base, 0700); err != nil {
 		t.Fatal(err)

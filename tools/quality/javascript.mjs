@@ -41,15 +41,15 @@ async function mutation() {
 	const patterns = files.map((name) => escape(path.resolve(name), { windowsPathsNoEscape: true }));
 	// Messaging integration tests spawn an isolated bridge. Keep its socket
 	// paths outside Stryker's deeply nested workdirs (Unix has a short limit).
-	process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR = path.join(root, ".cache/test-fixtures");
+	process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR ||= path.join(root, ".cache/test-fixtures");
 	const stryker = new Stryker({
 		mutate: patterns,
 		// Whitelist source and test dependencies, including the Go messaging
 		// fixture. Never copy shared auth, sessions, caches or host binaries.
 		ignorePatterns: [
 			"**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs",
-			...tests.map((pattern) => `!${pattern}`), "!go-bridge/*.go",
-			"!go-bridge/go.mod", "!go-bridge/go.sum",
+			...tests.map((pattern) => `!${pattern}`), "!host/**/*.go",
+			"!host/go.mod", "!host/go.sum",
 		],
 		testRunner: "command",
 		commandRunner: { command: `node --test ${tests.map((pattern) => `'${pattern}'`).join(" ")}` },

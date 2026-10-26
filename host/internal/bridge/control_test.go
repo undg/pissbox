@@ -1,4 +1,4 @@
-package main
+package bridge
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ import (
 // Exercise the actual CLI and detached startup path, not an in-process daemon.
 func TestMain(m *testing.M) {
 	if os.Getenv("PISSBOX_BRIDGE_TEST_PROCESS") == "1" {
-		main()
+		Main()
 		return
 	}
 	os.Exit(m.Run())

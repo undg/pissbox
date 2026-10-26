@@ -175,10 +175,10 @@ class BridgeLauncherTests(unittest.TestCase):
             self.skipTest("real bridge process test requires Go")
         self.binary.unlink()
         subprocess.run(
-            ["go", "build", "-o", str(self.binary), "."], cwd=ROOT / "go-bridge",
+            ["go", "build", "-o", str(self.binary), "./cmd/pissbox-bridge"], cwd=ROOT / "host",
             check=True, capture_output=True, timeout=60,
         )
-        runtime = tempfile.mkdtemp(prefix="", dir=ROOT / ".cache/test-fixtures")
+        runtime = tempfile.mkdtemp(prefix="", dir=os.environ.get("PISSBOX_BRIDGE_TEST_FIXTURE_DIR") or ROOT / ".cache/test-fixtures")
         env = self.environment(PISSBOX_BRIDGE_RUNTIME_DIR=runtime, TEST_SBX_MODE="wait")
 
         def control(operation):
@@ -245,7 +245,7 @@ class BridgeLauncherTests(unittest.TestCase):
         if not shutil.which("go"):
             self.skipTest("real bridge process test requires Go")
         self.binary.unlink()
-        subprocess.run(["go", "build", "-o", str(self.binary), "."], cwd=ROOT / "go-bridge",
+        subprocess.run(["go", "build", "-o", str(self.binary), "./cmd/pissbox-bridge"], cwd=ROOT / "host",
                        check=True, capture_output=True, timeout=60)
         shutil.copytree(ROOT / "bin/lib", self.checkout / "bin/lib")
         scripts = self.checkout / "sbx-kit/files/home/.pissbox/scripts"
@@ -259,7 +259,7 @@ class BridgeLauncherTests(unittest.TestCase):
         tools = self.checkout / "tools"
         tools.mkdir()
         (tools / "sbx").symlink_to(ROOT / "tests/fixtures/sbx-isolation")
-        runtime = Path(tempfile.mkdtemp(prefix="", dir=ROOT / ".cache/test-fixtures"))
+        runtime = Path(tempfile.mkdtemp(prefix="", dir=os.environ.get("PISSBOX_BRIDGE_TEST_FIXTURE_DIR") or ROOT / ".cache/test-fixtures"))
         socket = runtime / "control.sock"
         self.assertLessEqual(len(os.fsencode(socket)), 103,
                              f"Private bridge socket exceeds 103 bytes; use a shorter checkout path: {socket}")

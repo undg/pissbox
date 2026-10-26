@@ -1,4 +1,4 @@
-package main
+package bridge
 
 import (
 	"context"
@@ -106,7 +106,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	return controlCLI(ctx, args, stdout, stderr)
 }
 
-func main() {
+// Main runs the bridge CLI and exits with status 1 on failure.
+func Main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "pissbox bridge:", err)
 		os.Exit(1)

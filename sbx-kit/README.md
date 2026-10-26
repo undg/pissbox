@@ -197,7 +197,7 @@ the host. Launcher exit unregisters only its mailbox, not the daemon. Explicit
 `stop` with the matching binary terminates the daemon. After daemon failure,
 existing sessions need launcher reattachment to register fresh mailboxes; a new
 launch does not restore old registrations. Direct SBX launches bypass this
-integration. See the [bridge guide](../go-bridge/README.md) for control commands,
+integration. See the [bridge guide](../host/README.md) for control commands,
 limitations, shared-state security, testing, and future packaging.
 
 ## Agent instructions

@@ -44,7 +44,7 @@
 
 Agent discovery, review feedback, session visibility, and completion notifications
 are related parts of the host/sandbox bridge gap. The initial
-[Go mailbox bridge](go-bridge/README.md) implements custom-agent lifecycle
+[Go mailbox bridge](host/README.md) implements custom-agent lifecycle
 reporting; real Herd/SBX behavior and notifications still need a host smoke test.
 Upstream's official Pi integration requires host Pi process detection, so merely
 forwarding its socket messages is insufficient for sandbox Pi. Review delivery

@@ -18,9 +18,9 @@ or directory name. User guides start at [README.md](README.md).
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
   during environment work. Use the `bash-cli-style` skill for Bash changes.
 - `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
-- `go-bridge/`: optional host-only messaging/lifecycle bridge; requires Go 1.25+
-  to build. Build matching binaries with `bin/build-bridge` or cross-compile all
-  four targets with `--all`.
+- `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
+  and tests in `internal/bridge`. Requires Go 1.25+ to build. Build matching bridge
+  binaries with `bin/build-bridge` or cross-compile all four targets with `--all`.
 - `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
   Keep JS suites beside their extension/library as `*.test.mjs`; Make, coverage,
   and mutation runners discover them recursively. Go tests stay beside Go source.
@@ -185,10 +185,10 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |
 | `make metrics BASE=origin/main` | Fresh coverage and scoped CRAP/complexity reports |
-| `make crap-go FILES="go-bridge/mailbox.go"` | CRAP report for one exact Go source file |
+| `make crap-go FILES="host/internal/bridge/mailbox.go"` | CRAP report for one exact Go source file |
 | `make crap-js FILES="pi-agent/extensions/session-name.js"` | CRAP report for one exact extension |
 | `make mutation BASE=origin/main` | Mutants for feature changes in both languages |
-| `make mutation-go FILES="go-bridge/mailbox.go go-bridge/herdr.go"` | Mutants for exact Go files |
+| `make mutation-go FILES="host/internal/bridge/mailbox.go host/internal/bridge/herdr.go"` | Mutants for exact Go files |
 | `make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"` | Mutants for one exact extension |
 
 Replace `origin/main` with the actual feature base; do not assume or fetch it.

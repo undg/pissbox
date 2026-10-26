@@ -27,8 +27,8 @@ class BuildBridgeTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(calls), 1)
         self.assertEqual((calls[0]["os"], calls[0]["arch"], calls[0]["cgo"]), ("linux", "arm64", "0"))
-        self.assertEqual(calls[0]["cwd"], str(ROOT / "go-bridge"))
-        self.assertEqual(calls[0]["args"], ["build", "-trimpath", "-o", str(ROOT / ".cache/bin/go-bridge-linux-arm64"), "."])
+        self.assertEqual(calls[0]["cwd"], str(ROOT / "host"))
+        self.assertEqual(calls[0]["args"], ["build", "-trimpath", "-o", str(ROOT / ".cache/bin/go-bridge-linux-arm64"), "./cmd/pissbox-bridge"])
 
     def test_all_builds_four_targets_without_cgo(self):
         result, calls = self.launch("--all")
@@ -46,7 +46,7 @@ class BuildBridgeTests(unittest.TestCase):
         link.symlink_to(BUILD)
         result, calls = self.launch(launcher=link)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls[0]["cwd"], str(ROOT / "go-bridge"))
+        self.assertEqual(calls[0]["cwd"], str(ROOT / "host"))
 
     def test_help_and_invalid_arguments_do_not_build(self):
         for args, status in ((["-h"], 0), (["--all", "--help"], 0), (["--unknown"], 1), (["workspace"], 1)):
