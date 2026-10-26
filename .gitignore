@@ -29,3 +29,4 @@ sbx-kit/ca.crt
 /.worktrees/
 .wk.toml
 /.wk/
+.pissbox.toml
