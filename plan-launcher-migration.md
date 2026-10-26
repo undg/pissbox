@@ -139,7 +139,7 @@ This is an inspection seed, not an exhaustive allowlist. Search the tracked tree
 
 ## Progress
 
-Checkboxes are the task-status source of truth: `[ ]` pending, `[!]` in progress, `[x]` verified complete. Phase completion includes its review/manual gate, not just finished code. Only planning is complete; no implementation phase has started.
+Checkboxes are the task-status source of truth: `[ ]` pending, `[!]` in progress, `[x]` verified complete. Phase completion includes its review/manual gate, not just finished code. Phase 1 implementation and automated verification are complete; its manual/review gate remains pending.
 
 - [x] Review current launcher, bridge entrypoint/process tests, build/test wiring, quality tooling, and working-tree behavior.
 - [x] Record shared contracts, behavior ledger, source-layout consumers, implementation defaults, and desired-architecture diagram.
@@ -155,19 +155,19 @@ Checkboxes are the task-status source of truth: `[ ]` pending, `[!]` in progress
 
 No launcher implementation or intended bridge behavior changes in this phase. The existing Bash launcher remains the default throughout.
 
-- [ ] Record an ordinary-check baseline before changing paths. Inspect the current diff so ongoing launcher work is preserved.
-- [ ] Move the Go module from `go-bridge/` to `host/`. Move bridge implementation and colocated tests into `internal/bridge`; introduce `cmd/pissbox-bridge/main.go` with a minimal entrypoint into that package.
-- [ ] Preserve signal handling, diagnostics, exit behavior, detached daemon startup, and self-executable invocation. Existing process tests re-execute their instrumented test binary through `TestMain`; adapt that mechanism without replacing real process tests with in-process mocks.
-- [ ] Update all source-layout consumers together: `bin/build-bridge`, Make test/vet/fmt/tidy targets, Python tests that build the bridge, JS messaging tests that build it, quality wrappers, Stryker copied-source allowlists, documentation, and repository instructions/examples. Search the whole tracked tree for old source paths; do not rename runtime binary paths indiscriminately.
-- [ ] Keep `.cache/bin/go-bridge-<os>-<arch>`, bridge protocol versions, host runtime directory selection, and launcher invocation of the bridge unchanged. Review artifact handling and installer checks; update them only where source-layout or dependency changes require it.
-- [ ] Make coverage, CRAP, and mutation discovery work recursively under the new module. Preserve exact-file selection, rename-destination selection, explicit-base behavior, and refusal to widen empty mutation scopes. Update quality-wrapper regression tests with nested source paths rather than merely renaming the old flat fixture directory.
-- [ ] Preserve isolated short fixture paths, including `PISSBOX_BRIDGE_TEST_FIXTURE_DIR`, daemon cleanup, and test-result-cache disabling. Verify an unmutated copied-module baseline before trusting mutation results; do not lose subprocess instrumentation while moving the entrypoint.
+- [x] Record an ordinary-check baseline before changing paths. Inspect the current diff so ongoing launcher work is preserved.
+- [x] Move the Go module from `go-bridge/` to `host/`. Move bridge implementation and colocated tests into `internal/bridge`; introduce `cmd/pissbox-bridge/main.go` with a minimal entrypoint into that package.
+- [x] Preserve signal handling, diagnostics, exit behavior, detached daemon startup, and self-executable invocation. Existing process tests re-execute their instrumented test binary through `TestMain`; adapt that mechanism without replacing real process tests with in-process mocks.
+- [x] Update all source-layout consumers together: `bin/build-bridge`, Make test/vet/fmt/tidy targets, Python tests that build the bridge, JS messaging tests that build it, quality wrappers, Stryker copied-source allowlists, documentation, and repository instructions/examples. Search the whole tracked tree for old source paths; do not rename runtime binary paths indiscriminately.
+- [x] Keep `.cache/bin/go-bridge-<os>-<arch>`, bridge protocol versions, host runtime directory selection, and launcher invocation of the bridge unchanged. Review artifact handling and installer checks; update them only where source-layout or dependency changes require it.
+- [x] Make coverage, CRAP, and mutation discovery work recursively under the new module. Preserve exact-file selection, rename-destination selection, explicit-base behavior, and refusal to widen empty mutation scopes. Update quality-wrapper regression tests with nested source paths rather than merely renaming the old flat fixture directory.
+- [x] Preserve isolated short fixture paths, including `PISSBOX_BRIDGE_TEST_FIXTURE_DIR`, daemon cleanup, and test-result-cache disabling. Verify an unmutated copied-module baseline before trusting mutation results; do not lose subprocess instrumentation while moving the entrypoint.
 
 Verification and review gate:
 
-- [ ] Run `make check`; record pre-existing/environmental failures separately from regressions.
-- [ ] Run `make build-bridge-all` and verify all four existing platform binaries. Cross-compilation is not runtime verification.
-- [ ] Run `make coverage-go`, exact-file CRAP selection, and a small explicitly selected bridge mutation assessment at the new paths. Inspect baseline failures and uncovered subprocess code rather than treating them as valid kills.
+- [x] Run `make check`; record pre-existing/environmental failures separately from regressions.
+- [x] Run `make build-bridge-all` and verify all four existing platform binaries. Cross-compilation is not runtime verification.
+- [x] Run `make coverage-go`, exact-file CRAP selection, and a small explicitly selected bridge mutation assessment at the new paths. Inspect baseline failures and uncovered subprocess code rather than treating them as valid kills.
 - [ ] With explicit authorization and isolated/disposable resources, manually exercise the old launcher with the relocated bridge: launch, messaging/registration, reattach, normal exit, and interruption/crash cleanup. Verify cleanup releases this launch's registration without terminating the persistent daemon. Record actual commands/results and unavailable platform checks; never use tests to contact the user's real bridge.
 - [ ] Record evidence and obtain human acceptance of the bridge move before starting phase 2. A manual check not yet performed remains pending; it is not satisfied by cross-compilation or mocked tests.
 
@@ -234,16 +234,126 @@ Cleanup follows accepted Go behavior, not merely a successful build. Do not rede
 - Use exact implementation files for initial metrics/mutation checks; preview selection first. Do not assume a feature base or fetch one automatically.
 - Never contact or stop the user's real bridge daemon during tests. Use isolated fixtures beneath `.cache/test-fixtures/`.
 - No full image build is inherently required for a host-only port that leaves kit scripts and contracts unchanged. If kit behavior changes, reassess image/new-sandbox verification separately.
-- Planning/review inspection ran `make help`, read source/tests/tooling, and inspected the working-tree diff. No test, build, coverage, or mutation baseline has been run for this migration.
+- Planning/review inspection ran `make help`, read source/tests/tooling, and inspected the working-tree diff. No test/build/metrics baseline had been run at planning time; phase 1 execution evidence is recorded below.
 
 ## Execution record
 
-Planning/review is complete; no implementation phases have started. Fill this in at phase boundaries and add detailed evidence below the table as needed. Later phases must read earlier results, decisions, and gaps. Keep one master plan; a fresh context window is optional, verified work and human approval are not.
+Planning/review is complete; phase 1 is in progress. Fill this in at phase boundaries and add detailed evidence below the table as needed. Later phases must read earlier results, decisions, and gaps. Keep one master plan; a fresh context window is optional, verified work and human approval are not.
 
 | Phase | Status | Commands/results | Remaining gaps or blockers |
 | --- | --- | --- | --- |
 | Planning/review | Complete | Source/tests/tooling inspected; `make help` and prior whitespace check run | No implementation or runtime verification performed |
-| 1. Bridge relocation + old-launcher verification | Pending | Not run | Baseline, moved-entrypoint instrumentation, and manual old-launcher/bridge gate |
+| 1. Bridge relocation + old-launcher verification | Automated work verified; awaiting manual/review gate | `make check`, four cross-builds, coverage, exact-file CRAP, copied-module baseline, and scoped mutation assessment passed with short fixture override; details below | Real SBX/Herd checks not authorized/performed; macOS and Linux amd64 runtime unverified; inherited mutation gaps recorded below |
 | 2. Go launcher implementation + automated verification | Pending | Not run | Harness, behavioral port, Go tests, copied-module baseline, and mutation assessment |
 | 3. Go cutover + manual acceptance | Pending | Not run | Build/install wiring and authorized real SBX checks; legacy reference retained |
 | 4. Cleanup + final verification | Pending | Not run | Accepted cutover required before old code/test removal |
+
+### Phase 1 execution — 2026-10-26
+
+**Checkpoint:** `9c6e18a` — `phase 1: relocate bridge into host module`.
+Started on `refactor/bash-to-go-migration` at `ee3d918` with a clean working tree.
+The earlier missing worktree-metadata mount was resolved before execution.
+Phase 2 has not started. Phase 1 completion remains unchecked until manual
+verification and human acceptance.
+
+Changed paths:
+
+- Relocated `go-bridge/go.mod`, guide, implementation, and tests to `host/`;
+  added `host/cmd/pissbox-bridge/main.go`. Module is `pissbox/host`, Go minimum
+  remains 1.25.0, and no dependencies were added.
+- Updated `bin/build-bridge`, `Makefile`, bridge-building Python/JS tests,
+  `tools/quality/run.py`, `tools/quality/javascript.mjs`, and nested quality
+  regression fixtures in `tests/test_quality.py`.
+- Updated current source links/examples in `AGENTS.md`, `README.md`,
+  `sbx-kit/README.md`, `KNOWN_ISSUES.md`, `GLOSARY.md`, and quality/bridge guides.
+- `bin/pissbox`, its isolation helper, kit behavior, runtime artifact names,
+  protocol versions, and `bin/install` are unchanged. Installer/artifact/build
+  consumers were reviewed; no prerequisite or artifact changes were needed.
+
+Baseline and environment:
+
+- `git status --short`, `git branch --show-current`, `git diff --stat`,
+  `git log -5 --oneline`, and `make help` ran before implementation.
+- Plain `make check` failed in existing Go process tests: the worktree's default
+  control socket paths are 113 bytes, beyond the existing 103-byte limit.
+- `make test-js test-python vet syntax` stopped at JS: 34 passed, 2 failed from
+  112-byte socket paths. Separately, `make test-python vet syntax` ran 213 Python
+  cases: 211 passed and the 2 real-daemon launcher cases failed from 113-byte
+  socket paths. `make vet syntax` then passed independently.
+- The existing fixture-root override was used with the main checkout's shorter,
+  repository-owned fixture directory, not a real bridge runtime:
+  `PISSBOX_BRIDGE_TEST_FIXTURE_DIR=/Users/bartek_laskowski/Code/pissbox/.cache/test-fixtures`.
+  Below, `FIXTURES` denotes exactly that value. Go was 1.27.3, Linux arm64.
+- Necessary test/tooling adaptation: Python real-daemon runtime fixtures now honor
+  that same override; both mutation adapters preserve explicit overrides rather
+  than replacing them with a too-long worktree path. Defaults remain local to
+  the checkout. Regression assertions cover the Go adapter's default and override.
+  No safety limits, test assertions, or production launcher contracts were weakened.
+
+Verification commands and results:
+
+```bash
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make test-go test-js
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make check
+make build-bridge-all
+for binary in .cache/bin/go-bridge-{darwin,linux}-{amd64,arm64}; do go version -m "$binary"; done
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make coverage-go
+python3 tools/quality/run.py mutation-go --list host/internal/bridge/mailbox.go
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make crap-go FILES=host/internal/bridge/mailbox.go
+python3 tools/quality/run.py mutation-go --list host/internal/bridge/herdr.go
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make mutation-go FILES=host/internal/bridge/herdr.go DRY_RUN=1
+PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make mutation-go FILES=host/internal/bridge/herdr.go
+```
+
+- `make check` passed: Go race tests without result caching, all 36 JS tests,
+  all 213 Python tests (including real-daemon crash/isolation cases), vet,
+  Bash syntax, and whitespace checks. The real Stryker literal-path regression
+  ran, including nested host-source/module copying and private-file exclusion.
+- All four bridge cross-builds succeeded. `go version -m` confirmed each binary's
+  GOOS/GOARCH, CGO_ENABLED=0, and `pissbox/host/cmd/pissbox-bridge` package.
+  An attempted `file` inspection was unavailable; Go build metadata supplied the
+  verification instead, without installing anything. Cross-builds are not runtime
+  verification for macOS or Linux amd64.
+- Native `.cache/bin/go-bridge-linux-arm64 --help` printed unchanged usage;
+  `invalid-operation` printed the existing diagnostic and exited 1. These commands
+  never resolve/contact the user's daemon.
+- Fresh coverage: bridge package **85.6%**, module **85.5%**. CLI `run`/`Main`
+  both **100%**, `controlCLI` **90.2%**, `serve` **82.7%**; subprocess coverage
+  survived the move. The one-call `cmd/pissbox-bridge/main.go` boundary has **0%**
+  instrumented coverage; real-binary Python/JS checks exercise it separately.
+- Exact-file CRAP selected only `internal/bridge/mailbox.go`: 4 functions,
+  scores 12.00, 9.05, 7.39, 5.00; none above 30. go-crap's per-function coverage
+  convention differs from `go tool cover`; no cross-tool comparison is implied.
+- Before mutation, copied the whole unmutated `host/` module to
+  `.cache/test-fixtures/phase1-copy-9k6byrox/host` and ran the existing target:
+  `PISSBOX_BRIDGE_TEST_FIXTURE_DIR="$FIXTURES" make -f "$ROOT/Makefile" -C "$ROOT/.cache/test-fixtures/phase1-copy-9k6byrox" test-go`.
+  It passed. The small Python copy harness was necessary because no target
+  materializes an unmutated copied module; the tests themselves used Make.
+- Scoped mutation assessment (not just the dry run): **13 killed, 3 survived,
+  1 uncovered; 0 timeouts, 0 invalid, 0 skipped**. Tool efficacy **81.25%**,
+  mutator coverage **94.12%**. The copied baseline passed and subprocess paths
+  are covered; no unrelated baseline failures were counted as kills.
+- Surviving pre-existing gaps: `herdr.go:27` timestamp-boundary/negation mutants
+  show no deterministic test for equal/backward timestamps; the sequence increment
+  arithmetic at line 28 is uncovered. The line-76 error-field mutant survives
+  because rejection assertions do not independently isolate an otherwise-valid
+  result carrying a non-null error. These are recorded, not fixed in a structural
+  migration or declared equivalent.
+- Compared every relocated Go file against its original Git contents with a
+  Python assertion: only package names, exported entrypoint name/comment,
+  `TestMain` invocation, and fixture fallback depth differ. `git diff --check`
+  and staged whitespace checks passed. Whole tracked-tree `git grep -n
+  'go-bridge' -- ':!plan-launcher-migration.md'` found only intentional stable
+  runtime binary/stub names; this plan intentionally retains old paths describing
+  the migration source and historical inspection seed.
+
+Reports are in `.cache/coverage/go/`, `.cache/crap/go/report.json` (mailbox only),
+and `.cache/mutation/go/report.json` (herdr only). Captured baseline/check/quality
+logs are under `.cache/test-fixtures/phase1-evidence-dbdirc5i/`.
+
+**Pending gate:** no real SBX creation, reattach, Herd messaging/lifecycle smoke
+check, or manual interruption/crash scenario was performed. SBX is not installed
+in this sandbox; installation and disposable sandbox operations require separate
+permission. Automated isolated-daemon tests do not satisfy this gate. The user's
+actual persistent bridge was never contacted or stopped. Obtain authorized manual
+checks and human acceptance before marking phase 1 complete or starting phase 2.
