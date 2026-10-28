@@ -213,6 +213,7 @@ validates the kit with SBX and requires Docker sign-in.
 
 ## Guides
 
+- [Recommended read-only GitHub CLI token permissions](doc/github-token.md)
 - [Usage, settings, and sandbox lifecycle](sbx-kit/README.md)
 - [Image builds, optional CA, and bundled search model](sbx-kit/README.image.md)
 - [Shared Linux tool state](sbx-kit/SHARED-DIRECTORIES.md)

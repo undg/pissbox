@@ -3,7 +3,7 @@
 `sbx-kit/Dockerfile` extends `docker/sandbox-templates:shell-docker` with Node
 26.9.0, Pi, mise 2026.10.21, pnpm 12.15.0, colgrep, the
 `lightonai/LateOn-Code-edge` search model, fd,
-ripgrep, Neovim, `jq`, and the upstream `tomljson` CLI. `EDITOR` and `VISUAL`
+ripgrep, Neovim, `jq`, GitHub CLI (`gh`), and the upstream `tomljson` CLI. `EDITOR` and `VISUAL`
 select Neovim. The kit starts `pi --offline` as `agent`; Pi's global npm
 installation stays writable for self-updates.
 
@@ -61,23 +61,22 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 | `COLGREP_MODEL_REVISION` | Hugging Face model commit |
 
 Pins/defaults live in the Dockerfile. These do not pin apt packages.
-Node 26.9.0 is installed from checksum-verified official Linux archives for
-amd64 and arm64. Its directory takes precedence over the base image's Node,
-with `node`, `npm`, and `npx` also linked into `/usr/local/bin`. The installation
-is owned by `agent` so global npm installs and Pi self-updates remain writable.
-Update the Node version and architecture-specific checksums together.
-
 mise 2026.10.21 is installed from checksum-verified upstream Linux archives for
 amd64 and arm64 into `/usr/local/bin/mise`. Update its version and both checksums
-together. `mise use -g pnpm@12.15.0` installs the default pnpm as `agent`.
+together. `mise use -g node@26.9.0 pnpm@12.15.0` installs the default Node and
+pnpm as `agent`, with downloads and verification handled by mise.
 `MISE_DATA_DIR=/opt/pissbox/mise` keeps tool installations and shims outside
 shared cache mounts, writable by `agent`; global configuration lives in
 `~/.config/mise/config.toml` inside the sandbox. These are not shared across
-sandboxes. Pi's Node installation remains separate.
+sandboxes. `NPM_CONFIG_PREFIX=/opt/pissbox/npm` keeps global npm packages,
+including Pi and its self-updates, writable by `agent` and independent of the
+selected Node version. Pi runs with the selected Node; project Node versions
+must satisfy Pi's runtime requirements.
 
-mise shims precede the image's Node on PATH, so installed project tool versions
+mise shims precede the base image's tools on PATH, so project tool versions
 from `mise.toml` work in Pi commands and non-interactive project setup without
-shell activation. `pnpm` and `pnpx` shims are also linked into `/usr/local/bin`.
+shell activation. `node`, `npm`, `npx`, `pnpm`, and `pnpx` shims are also linked
+into `/usr/local/bin`.
 The image keeps mise's default trust and auto-install behavior; it adds no
 blanket trusted paths. Plain tool-version configurations need no trust, and
 shims can auto-install missing versions. Configurations that change the

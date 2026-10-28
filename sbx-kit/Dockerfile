@@ -17,7 +17,8 @@ ARG COLGREP_VERSION=1.8.5
 ######################################################################
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils jq && \
+    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils jq gh && \
+    gh --version && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 
@@ -34,33 +35,9 @@ RUN --mount=type=secret,id=custom_ca \
 
 
 ######################################################################
-# Install the pinned Node release before running npm as agent
-######################################################################
-ARG TARGETARCH
-ENV PATH="/opt/pissbox/node/bin:${PATH}"
-RUN version=26.9.0 && \
-    case "$TARGETARCH" in \
-        amd64) arch=x64; checksum=c6ecd8efc1c1d395265891675319da7a7b3785c6be174bd78933cf4f057624d1 ;; \
-        arm64) arch=arm64; checksum=686d07ed3bc5d68d9f7bd4939b7e8849a87d0664ac19c8c5474474f44cc956db ;; \
-        *) echo "Unsupported Node architecture: $TARGETARCH" >&2; exit 1 ;; \
-    esac && \
-    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fLsS --retry 3 \
-        "https://nodejs.org/dist/v${version}/node-v${version}-linux-${arch}.tar.xz" \
-        -o /var/tmp/node.tar.xz && \
-    printf '%s  %s\n' "$checksum" /var/tmp/node.tar.xz | sha256sum -c - && \
-    mkdir -p /opt/pissbox/node && \
-    tar -xJf /var/tmp/node.tar.xz -C /opt/pissbox/node --strip-components=1 && \
-    chown -R agent:agent /opt/pissbox/node && \
-    ln -sf /opt/pissbox/node/bin/node /usr/local/bin/node && \
-    ln -sf /opt/pissbox/node/bin/npm /usr/local/bin/npm && \
-    ln -sf /opt/pissbox/node/bin/npx /usr/local/bin/npx && \
-    rm /var/tmp/node.tar.xz && \
-    test "$(node --version)" = "v${version}"
-
-
-######################################################################
 # Project configuration: upstream TOML-to-JSON CLI, no Go runtime needed
 ######################################################################
+ARG TARGETARCH
 RUN version=2.4.3 && \
     case "$TARGETARCH" in \
         amd64) checksum=70282ec360a01cd6895a01267110338c6dae00d73d0c00a83b5bdc3b1884d083 ;; \
@@ -76,10 +53,13 @@ RUN version=2.4.3 && \
 
 
 ######################################################################
-# Install mise and its default pnpm outside shared cache mounts
+# Install mise and its default tools outside shared cache mounts
 ######################################################################
 ENV MISE_DATA_DIR=/opt/pissbox/mise
-ENV PATH="/opt/pissbox/mise/shims:${PATH}"
+# Keep Pi and its self-updates independent of the selected Node version.
+ENV NPM_CONFIG_PREFIX=/opt/pissbox/npm
+ENV NODE_USE_SYSTEM_CA=1
+ENV PATH="/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"
 RUN version=2026.10.21 && \
     case "$TARGETARCH" in \
         amd64) arch=x64; checksum=e1743bb7628927f93d4ffb2c4e2c4f71186307612f59ebc7f85d52e3a7f42461 ;; \
@@ -92,13 +72,14 @@ RUN version=2026.10.21 && \
     printf '%s  %s\n' "$checksum" /var/tmp/mise.tar.xz | sha256sum -c - && \
     tar -xJf /var/tmp/mise.tar.xz -C /usr/local/bin --strip-components=2 mise/bin/mise && \
     rm /var/tmp/mise.tar.xz && \
-    mkdir -p "$MISE_DATA_DIR" && \
-    chown -R agent:agent "$MISE_DATA_DIR" && \
+    mkdir -p "$MISE_DATA_DIR" "$NPM_CONFIG_PREFIX" && \
+    chown -R agent:agent "$MISE_DATA_DIR" "$NPM_CONFIG_PREFIX" && \
     mise --version
 
 # Shims select project versions in non-interactive shells too; no activation needed.
 USER agent
-RUN mise use -g pnpm@12.15.0 && \
+RUN mise use -g node@26.9.0 pnpm@12.15.0 && \
+    test "$(node --version)" = "v26.9.0" && \
     test "$(pnpm --version)" = "12.15.0"
 
 ######################################################################
@@ -111,7 +92,6 @@ ADD --chmod=644 https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/${P
 
 # Install as agent so self-updates retain write access.
 USER agent
-ENV NODE_USE_SYSTEM_CA=1
 RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
     npm install -g "@earendil-works/pi-coding-agent@${version}" && \
     pi --offline --version
@@ -154,8 +134,9 @@ RUN printf '%s\n' '{"default_model":"/opt/pissbox/models/LateOn-Code-edge"}' \
 ##########################################################
 RUN ln -sf "$(npm prefix -g)/bin/pi" /usr/local/bin/pi && \
     ln -sf /home/agent/.local/bin/colgrep /usr/local/bin/colgrep && \
-    ln -sf /opt/pissbox/mise/shims/pnpm /usr/local/bin/pnpm && \
-    ln -sf /opt/pissbox/mise/shims/pnpx /usr/local/bin/pnpx
+    for tool in node npm npx pnpm pnpx; do \
+        ln -sf "/opt/pissbox/mise/shims/$tool" "/usr/local/bin/$tool" || exit 1; \
+    done
 
 LABEL com.docker.sandboxes.start-docker="true"
 LABEL com.docker.sandboxes.flavor="pi"
