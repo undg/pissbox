@@ -980,8 +980,18 @@ class LauncherTests(unittest.TestCase):
                     *args, PISSBOX_PI_DIR="missing", PISSBOX_STATE_DIR=str(LAUNCHER / "missing"),
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("[P/c/s/d/q]", result.stdout)
+                self.assertIn("Usage:", result.stdout)
                 self.assertEqual(calls, [])
+
+    def test_help_is_a_quick_reference_with_examples_and_documentation(self):
+        result, calls = self.launch("--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for text in ("Options:", "--secret ENV_NAME HOST COMMAND", "creation only (repeatable)",
+                     "loses sandbox-local data", "Examples:", "pissbox --yes --continue",
+                     "pissbox --secret GH_TOKEN api.github.com", "sbx-kit/README.md", "doc/secrets.md"):
+            with self.subTest(text=text):
+                self.assertIn(text, result.stdout)
+        self.assertEqual(calls, [])
 
     def test_help_needs_only_wrapper_utilities_not_runtime_commands(self):
         fixtures = STATE_DIR / "test-fixtures"

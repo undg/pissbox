@@ -36,6 +36,11 @@ Run `bin/pissbox --help` for all options. Directory selection is:
 
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
+The state directory is created if missing; shared Linux caches live there.
+
+`--help` is a quick reference for usage, options, and examples. This guide covers
+workspaces, configuration, and lifecycle; [proxy-managed secrets](../doc/secrets.md)
+covers credential registration and host command safety.
 
 ## Project configuration and additional workspaces
 
