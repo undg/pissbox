@@ -1,7 +1,8 @@
 # Local image
 
 `sbx-kit/Dockerfile` extends `docker/sandbox-templates:shell-docker` with Node
-26.9.0, Pi, pnpm, colgrep, the `lightonai/LateOn-Code-edge` search model, fd,
+26.9.0, Pi, mise 2026.10.21, pnpm 12.15.0, colgrep, the
+`lightonai/LateOn-Code-edge` search model, fd,
 ripgrep, Neovim, `jq`, and the upstream `tomljson` CLI. `EDITOR` and `VISUAL`
 select Neovim. The kit starts `pi --offline` as `agent`; Pi's global npm
 installation stays writable for self-updates.
@@ -59,12 +60,42 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 | `COLGREP_VERSION` | Colgrep release |
 | `COLGREP_MODEL_REVISION` | Hugging Face model commit |
 
-Pins/defaults live in the Dockerfile. These do not pin apt packages or pnpm.
+Pins/defaults live in the Dockerfile. These do not pin apt packages.
 Node 26.9.0 is installed from checksum-verified official Linux archives for
 amd64 and arm64. Its directory takes precedence over the base image's Node,
 with `node`, `npm`, and `npx` also linked into `/usr/local/bin`. The installation
 is owned by `agent` so global npm installs and Pi self-updates remain writable.
 Update the Node version and architecture-specific checksums together.
+
+mise 2026.10.21 is installed from checksum-verified upstream Linux archives for
+amd64 and arm64 into `/usr/local/bin/mise`. Update its version and both checksums
+together. `mise use -g pnpm@12.15.0` installs the default pnpm as `agent`.
+`MISE_DATA_DIR=/opt/pissbox/mise` keeps tool installations and shims outside
+shared cache mounts, writable by `agent`; global configuration lives in
+`~/.config/mise/config.toml` inside the sandbox. These are not shared across
+sandboxes. Pi's Node installation remains separate.
+
+mise shims precede the image's Node on PATH, so installed project tool versions
+from `mise.toml` work in Pi commands and non-interactive project setup without
+shell activation. `pnpm` and `pnpx` shims are also linked into `/usr/local/bin`.
+The image keeps mise's default trust and auto-install behavior; it adds no
+blanket trusted paths. Plain tool-version configurations need no trust, and
+shims can auto-install missing versions. Configurations that change the
+environment or run code can require trust. For explicit setup with a reviewed
+`mise.toml`, run:
+
+```bash
+mise trust
+mise install
+pnpm --version
+```
+
+To do this during sandbox creation, include `mise trust` and `mise install`
+before dependency installation in the project's `.pissbox.toml` `setup` list.
+Only trust configurations you have reviewed: mise configuration can execute code.
+Use `mise exec -- COMMAND` when the entire command needs the project's mise
+environment, or `eval "$(mise activate bash)"` for interactive shell activation.
+Other tool backends may require additional network-policy approvals.
 
 `tomljson` is pinned to v2.4.3 with architecture-specific SHA-256 checksums in
 the Dockerfile; update the version and checksums together. It parses project
