@@ -110,33 +110,8 @@ The first directory is primary; additional directories are mounted read-write:
 pissbox . ~/.config/opencode ~/.config/pi
 ```
 
-Or keep recurring mounts and first-time setup in the primary project's `.pissbox.toml`:
-
-```toml
-workspaces = [".."]
-setup = ["pnpm install --frozen-lockfile"]
-```
-
-`pissbox` / `pissbox -y` default to the current directory. Configured workspaces
-add to CLI paths, resolve relative to the primary project, and are deduplicated.
-Use `--ignore-config-workspaces` to skip configured mounts without disabling setup.
-Symlink targets must be mounted too; use a new sandbox name for changed mounts.
-See [project configuration](sbx-kit/README.md#project-configuration-and-additional-workspaces)
-for setup behavior and symlink rules.
-
-To keep macOS and Linux dependencies separate while sharing source and lockfiles,
-opt in for each dependency directory explicitly:
-
-```toml
-isolated_directories = ["node_modules", "packages/app/node_modules"]
-setup = ["pnpm install --frozen-lockfile"]
-```
-
-Nameless `pissbox` still works; use `--name` only for an additional instance or
-changed mounts. This experimental adapter uses SBX's hidden mount command,
-version-tested on macOS with SBX v0.49.1. See
-[dependency isolation](sbx-kit/README.md#optional-dependency-isolation)
-for lifecycle, failure recovery, and backing-state details.
+See [project configuration (`.pissbox.toml`)](doc/project-configuration.md)
+for recurring mounts, first-time setup, and dependency isolation.
 
 ## Optional agent tools
 

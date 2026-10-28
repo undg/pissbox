@@ -39,152 +39,18 @@ directory. Keep both directories separate from native/macOS tool state.
 
 ## Project configuration and additional workspaces
 
-Put `.pissbox.toml` in the primary project. The host reads it before launch,
-so `jq` and `tomljson` must be on PATH even for an empty config. `make install`
-checks, but does not install them. Install `jq` with your package manager and:
-
-```bash
-go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
-```
-
-Add `GOBIN` (normally `~/go/bin`) to PATH. The image supplies its own parser.
-
-```toml
-workspaces = [
-  "..",
-  "../shared-tools",
-]
-
-setup = [
-  "pnpm install --frozen-lockfile",
-  "colgrep init",
-]
-```
-
-- `workspaces` **adds** read-write mounts after CLI paths; it never changes the
-  primary. Duplicates are removed in order, including shared Pi/state mounts.
-- Relative entries use the primary project, not a symlinked config's location.
-  Absolute paths work. Entries must be existing directories; no `~`, variable,
-  command, or glob expansion. Empty paths, line breaks, and NUL bytes are errors.
-- Only the primary config is read; no parent/additional-directory search.
-  Missing files/keys and empty arrays are no-ops. Help/list/delete ignore config.
-
-With `workspaces = [".."]`, these all mount the current directory and its parent:
-
-```bash
-pissbox
-pissbox -y
-pissbox .
-pissbox . -y
-```
-
-For `pissbox /path/to/project /path/to/extra`, both CLI paths stay mounted and
-`/path/to/project/.pissbox.toml` supplies additional directories.
-
-Skip configured mounts for one launch:
-
-```bash
-pissbox --ignore-config-workspaces
-pissbox . /path/to/extra -y --ignore-config-workspaces
-```
-
-CLI and shared Pi/state mounts stay; configured directory checks are skipped.
-The file/schema is still validated and `setup` still runs on creation. Existing
-sandbox mounts cannot be changed by this flag.
-
-### Symlinked configuration
-
-The host can read a symlink before choosing mounts, but the sandbox also needs
-access to its target. For a config in the parent directory, use
-`workspaces = [".."]`; targets elsewhere need their containing directory listed.
-Targets are not mounted automatically. With `--ignore-config-workspaces`,
-supply target mounts on the CLI. Broken/unreadable config links fail before SBX creation.
-
-Use a **new sandbox name** for changed mounts or kit files; no image rebuild
-is needed if the image has the parser. Reattaching with `-y` keeps existing
-mounts, although the host still validates the current config.
+See [project configuration (`.pissbox.toml`)](../doc/project-configuration.md)
+for requirements, workspace mounts, validation, and symlink rules.
 
 ## Optional dependency isolation
 
-Keep source and lockfiles live on the host, but give Linux its own dependency
-contents at the same project paths:
-
-```toml
-isolated_directories = ["node_modules", "packages/app/node_modules"]
-setup = ["pnpm install --frozen-lockfile"]
-```
-
-Omit the key or use `[]` for the original launch behavior. List each needed
-workspace dependency directory; there is no monorepo discovery. Entries must be
-normalized relative directories: no absolute paths, empty/dot/traversal segments,
-colons, control characters, duplicates, or overlapping directories. Existing
-files and symlink components are refused, including symlinks staying inside the
-project. Primary/state mount paths cannot contain colons or control characters.
-Validation happens before settings, state creation, or SBX actions.
-
-On a **new** sandbox, the launcher creates with project setup deferred. Its kit
-hook reports SBX's assigned identity through a unique launch mailbox, so plain
-`pissbox` works without `--name`. The launcher creates missing host mountpoint
-folders as empty directories, preserving existing directories and contents, then
-mounts fresh Linux backing directories over them. It verifies each unique mount
-marker before testing UID-1000 writability. Only then does project setup run as
-UID 1000 and mark the sandbox ready for Pi. Source and lockfile edits still reach
-the host; host dependencies stay separate. Each sandbox/worktree gets fresh
-backing directories; installing separately per platform is expected.
-
-The host adapter lives in `host/internal/launcher/isolation.go`, uses SBX's hidden
-`sbx mount NAME SOURCE:TARGET` command, and is
-**experimental**. Hidden mounts and install-time `SANDBOX_NAME` were tested on
-macOS with SBX v0.49.1 for the original Bash launcher, not promised by upstream
-documentation. Nameless and explicit-name duplicate creation conflicts were also
-tested on that version. Real-SBX acceptance of the Go port remains on the
-[post-merge human checklist](../plan-launcher-migration.md#final-human-checklist--after-merge-to-main).
-An explicit-name conflict must report the exact requested name. Unrecognized
-creation errors are preserved rather than matched broadly or used to mutate an
-existing sandbox. The ordinary
-installer still checks SBX v0.39.0+; it does not certify this optional feature.
-No new tools, image build, or entrypoint changes are needed. New kit files require
-a new sandbox. Native-addon compatibility is not covered by the host experiment.
-
-Attachments never remount directories or replay setup, and current config cannot
-retrofit an old sandbox. Use a new name when enabling/changing isolation. A small
-readiness check before existing Pi **and shell** attaches blocks unfinished
-isolated sandboxes, including after the config is removed. It only reads readiness
-state, but `sbx exec` starts stopped sandboxes and can run their existing startup
-hooks before opening Pi or shell. Old sandboxes without the persisted isolation
-environment pass. Quit and explicit deletion still work.
-Failed or interrupted staging leaves evidence and backing data in
-`PISSBOX_STATE_DIR/isolation.*`; it does not fall back to host dependencies,
-resume setup, roll back, or delete anything. Recover with a new sandbox name or
-explicitly delete the failed sandbox. Backing data survives sandbox deletion and
-is never removed automatically. Do not remove or move it while a sandbox uses it.
-
-Disabling the key only changes future creations; existing mounts remain. Once
-SBX has native isolation, replace the adapter while retaining this intent key.
-Direct `sbx run` kit launches are **refused before project setup** when the config
-requests isolation without the persisted staging environment. Use `pissbox` for
-projects opting in; otherwise setup could overwrite host dependencies.
+See [dependency isolation](../doc/project-configuration.md#optional-dependency-isolation)
+for configuration, lifecycle, experimental SBX support, and failure recovery.
 
 ## First-time project setup
 
-`setup` runs **once during creation, before Pi**, after built-in kit setup.
-Commands run as user `1000` in one Bash process, initially in the primary project;
-`cd`, variables, and exports carry between commands, but not into Pi.
-Bash uses `errexit`, `nounset`, and `pipefail`: unhandled failures prevent the
-initial Pi launch. Completed work is not rolled back; keep commands repeat-safe
-for failed-creation retries. Restarts and attachments never rerun setup.
-
-All three keys (`setup`, `workspaces`, `isolated_directories`) must be arrays of strings. The entire config
-is validated before launch; unknown keys, wrong types, and NUL bytes fail.
-TOML literal (`'...'`) and multiline strings work for shell quoting. The old
-executable `.pissbox` format is not read.
-
-**Review unfamiliar configs:** mounts expose host directories read-write and
-setup commands can modify them, including shared Pi/tool state. Commands run
-only inside the sandbox, never on the host.
-
-For direct SBX kit launches, pass all workspaces explicitly and add
-`--env PISSBOX_WORKSPACE_DIR=/absolute/primary/workspace`.
+See [first-time project setup](../doc/project-configuration.md#first-time-project-setup)
+for command execution, failure behavior, and direct SBX launches.
 
 ## Optional messaging and Herd reporting
 
