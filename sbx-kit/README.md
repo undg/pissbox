@@ -42,6 +42,14 @@ directory. Keep both directories separate from native/macOS tool state.
 See [project configuration (`.pissbox.toml`)](../doc/project-configuration.md)
 for requirements, workspace mounts, validation, and symlink rules.
 
+## Proxy-managed secrets
+
+Use repeatable `--secret ENV_NAME HOST COMMAND` launcher flags; see
+[proxy-managed secrets](../doc/secrets.md) for host matching and command safety.
+SBX keeps the real credential on the host. Secret-enabled creation defers project
+setup until sandbox-scoped registration succeeds; existing attaches never
+register or change secrets.
+
 ## Optional dependency isolation
 
 See [dependency isolation](../doc/project-configuration.md#optional-dependency-isolation)

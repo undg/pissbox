@@ -96,9 +96,10 @@ dependencies but never installs them automatically.
   `--env PISSBOX_PI_DIR=...`, `--env PISSBOX_STATE_DIR=...`, and
   `--env PISSBOX_WORKSPACE_DIR=...` for the primary project. SBX selects the
   sandbox unless `--name` is supplied; do not add custom discovery/bootstrap
-  except the narrow opted-in isolation handshake below.
+  except the narrow opted-in staged creation handshake below.
 - `isolated_directories` is opt-in intent, relative to the primary workspace.
-  Omitted/empty keeps the ordinary `sbx run` creation path. Keep the replaceable
+  Omitted/empty keeps the ordinary `sbx run` creation path unless `--secret` needs
+  staged creation too. Keep the replaceable
   hidden-mount mechanism in `host/internal/launcher/isolation.go`: create with
   project setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
   mailbox, mount fresh per-instance backing directories, verify markers before
@@ -107,6 +108,12 @@ dependencies but never installs them automatically.
   remount existing instances, or automatically replay failed setup. The mailbox
   contract and hidden mounts are version-tested behavior, not upstream guarantees.
   Preserve nameless creation; `--name` remains optional.
+  Repeatable `--secret ENV_NAME HOST COMMAND` uses the same deferred-setup
+  mailbox even without isolated directories. Register through SBX `secret set-custom`
+  with the reported sandbox name before finalizing setup or starting Pi. Never
+  register globally or on attach, execute commands in the launcher, or put secret
+  commands in project config. SBX owns resolution and refresh. Helpers and their
+  dependencies must stay outside writable sandbox mounts. See `doc/secrets.md`.
   Existing Pi/shell attaches run a small inline readiness probe using persisted
   isolation environment plus a sandbox-local ready marker, even if current config
   removed isolation. The probe's `sbx exec` can start a stopped sandbox and run

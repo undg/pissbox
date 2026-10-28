@@ -10,6 +10,7 @@ type options struct {
 	name, deleteDir, piDir, stateDir                     string
 	yes, list, bridgeStop, ignoreConfig, help, continued bool
 	workspaces                                           []string
+	secrets                                              []secret
 }
 
 func parse(args []string) (options, error) {
@@ -26,6 +27,16 @@ func parse(args []string) (options, error) {
 			o.yes = true
 		case "-l", "--ls":
 			o.list = true
+		case "--secret":
+			if i+3 >= len(args) {
+				return o, fmt.Errorf("--secret requires ENV_NAME HOST COMMAND")
+			}
+			s := secret{env: args[i+1], host: args[i+2], command: args[i+3]}
+			if err := s.validate(o.secrets); err != nil {
+				return o, err
+			}
+			o.secrets = append(o.secrets, s)
+			i += 3
 		case "--ignore-config-workspaces":
 			o.ignoreConfig = true
 		case "--bridge-stop":

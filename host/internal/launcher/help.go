@@ -13,6 +13,8 @@ Options:
   -l, --ls             List sandboxes, current-directory matches first
   --bridge-stop        Stop this checkout's compatible host bridge daemon
   --name NAME          Pass an explicit sandbox name to SBX
+  --secret ENV_NAME HOST COMMAND
+                       Register a proxy-managed secret on creation (repeatable)
   --ignore-config-workspaces
                        Skip configured mounts; keep CLI paths and setup
   --pissbox-pi-dir DIR  Override PISSBOX_PI_DIR (default: this checkout's pi-agent/)
@@ -32,6 +34,12 @@ Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
 Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
+Secrets require SBX secret set-custom --command support (verified with v0.50.0).
+ENV_NAME receives a placeholder; HOST is a host/pattern, not a URL.
+Quote COMMAND: SBX runs it on the host for verification and later refresh.
+Keep helpers and dependencies outside writable sandbox mounts.
+Secret registration precedes project setup/Pi and never runs on attach.
+See doc/secrets.md; secret flags cannot be combined with list/delete/bridge-stop.
 If it already exists, choose Pi (default), continue, shell, delete, or quit [P/c/s/d/q].
 With --yes, open Pi in the existing sandbox without prompting; existing mounts stay.
 Deletion requires a separate confirmation [y/N], unless --delete uses --yes.

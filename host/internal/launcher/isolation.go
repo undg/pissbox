@@ -76,7 +76,7 @@ const readinessProbe = `
 		fi
 	`
 
-func (p *processes) finishIsolation(primary, state, mailbox string, paths []string) (string, int) {
+func (p *processes) finishCreation(primary, state, mailbox string, paths []string, secrets []secret) (string, int) {
 	data, err := os.ReadFile(filepath.Join(mailbox, "name"))
 	if err != nil {
 		return "", fail("Isolation creation returned no identity; refusing to discover or guess a sandbox name.")
@@ -85,7 +85,7 @@ func (p *processes) finishIsolation(primary, state, mailbox string, paths []stri
 	if !validName.MatchString(name) {
 		return "", fail("Isolation creation returned an invalid identity; refusing sandbox actions.")
 	}
-	fmt.Fprintf(os.Stderr, "Preparing isolated directories for '%s'; failures require a new sandbox or explicit deletion, not setup replay.\n", name)
+	fmt.Fprintf(os.Stderr, "Finalizing sandbox '%s'; failures require a new sandbox or explicit deletion, not setup replay.\n", name)
 	primary, err = validateIsolation(primary, state, paths)
 	if err != nil {
 		return "", fail("%s", err)
@@ -108,6 +108,9 @@ func (p *processes) finishIsolation(primary, state, mailbox string, paths []stri
 		if status := p.sbx("exec", "--user", "1000", name, "sh", "-eu", "-c", mountProbe, "isolation-mount", target, backing); status != 0 {
 			return "", status
 		}
+	}
+	if status := p.registerSecrets(name, secrets); status != 0 {
+		return "", status
 	}
 	status := p.sbx("exec", "--user", "1000", name, "bash", "-c", `exec bash "$HOME/.pissbox/scripts/project-setup.sh" --finalize-isolation`)
 	return name, status

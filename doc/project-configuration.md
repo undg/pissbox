@@ -70,6 +70,12 @@ work for shell quoting.
 For direct SBX launches without isolation, pass mounts explicitly and set
 `--env PISSBOX_WORKSPACE_DIR=/absolute/primary/workspace`.
 
+## Secrets
+
+Secret commands are not supported in this file. Use the explicit launcher flag
+`--secret ENV_NAME HOST COMMAND`; see [proxy-managed secrets](secrets.md).
+Commands run on the host under SBX, while the sandbox receives a placeholder.
+
 ## Changing configuration
 
 Use a **new sandbox name** for changed mounts, isolation, or kit files. Existing

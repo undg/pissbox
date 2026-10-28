@@ -63,6 +63,20 @@ func testTool() int {
 		return 20
 	}
 	switch args[0] {
+	case "secret":
+		if args[len(args)-1] == "--help" {
+			if os.Getenv("SECRET_UNSUPPORTED") == "1" {
+				return 1
+			}
+			help := "--command string --sandbox string --env string "
+			if missing := os.Getenv("SECRET_MISSING_FLAG"); missing != "" {
+				help = strings.ReplaceAll(help, missing+" ", "")
+			}
+			fmt.Fprint(os.Stdout, help)
+			return 0
+		}
+		n, _ := strconv.Atoi(os.Getenv("SECRET_STATUS"))
+		return n
 	case "ls":
 		fmt.Fprint(os.Stdout, os.Getenv("LISTING"))
 	case "create":
@@ -78,7 +92,7 @@ func testTool() int {
 			if strings.HasPrefix(arg, "PISSBOX_ISOLATION_DIR=") {
 				mailbox := strings.TrimPrefix(arg, "PISSBOX_ISOLATION_DIR=")
 				if os.Getenv("NO_IDENTITY") != "1" {
-					os.WriteFile(filepath.Join(mailbox, "name"), []byte("reported\n"), 0600)
+					os.WriteFile(filepath.Join(mailbox, "name"), []byte(fallback(os.Getenv("CREATED_NAME"), "reported")+"\n"), 0600)
 				}
 			}
 		}

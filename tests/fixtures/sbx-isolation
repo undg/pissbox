@@ -27,6 +27,17 @@ def conflict(create):
     sys.exit(1)
 
 
+if args[0] == "secret":
+    assert args[1] == "set-custom"
+    if args[2:] == ["--help"]:
+        print("--command string --sandbox string --env string")
+        sys.exit(0)
+    data = json.loads(metadata.read_text())
+    assert args[args.index("--sandbox") + 1] == data["name"]
+    assert not (root / "home/.pissbox/isolation-ready").exists(), "secret registered after setup"
+    # Deliberately never execute the resolver; this fixture tests orchestration.
+    sys.exit(int(os.environ.get("TEST_ISOLATION_SECRET_STATUS", "0")))
+
 if args[0] == "create":
     if os.environ.get("TEST_ISOLATION_UNKNOWN_CREATE_CONFLICT"):
         print("error: explicitly named sandbox already exists (unrecognized test wording)", file=sys.stderr)

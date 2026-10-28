@@ -182,6 +182,8 @@ if call == ["sbx", "version"]:
                 if status == 0:
                     self.assertIn("Usage:", result.stdout)
                     self.assertIn("Optional bin/artifacts transfers require Python 3", result.stdout)
+                    self.assertIn("Optional --secret needs SBX secret set-custom --command support", result.stdout)
+                    self.assertIn("base SBX version check does not verify this optional capability", result.stdout)
                     self.assertIn("jq, and tomljson", result.stdout)
                     self.assertIn("build the Go launcher/bridge and image", result.stdout)
                     self.assertIn("wrapper for the explicitly built native Go launcher", result.stdout)

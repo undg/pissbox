@@ -35,6 +35,10 @@ builds only the image and needs no host Go or bridge.
 For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
+Use repeatable `--secret ENV_NAME HOST COMMAND` flags for sandbox-scoped custom
+credentials; see [proxy-managed secrets](doc/secrets.md) for examples, host
+matching, command safety, and creation-only registration. This optional feature
+requires SBX `secret set-custom --command` support (verified with v0.50.0).
 
 ## Go launcher
 

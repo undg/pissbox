@@ -33,6 +33,9 @@ func run(root, host string, args []string) int {
 		fmt.Fprint(os.Stdout, helpText)
 		return 0
 	}
+	if len(o.secrets) > 0 && (o.deleteDir != "" || o.list || o.bridgeStop) {
+		return fail("--secret cannot be combined with list, delete, or bridge-stop")
+	}
 	p := newProcesses()
 	defer p.close()
 	if o.deleteDir != "" || o.list {
@@ -81,7 +84,13 @@ func run(root, host string, args []string) int {
 			workspaces.append(workspace)
 		}
 	}
-	if len(project.Isolated) > 0 {
+	staged := len(project.Isolated) > 0 || len(o.secrets) > 0
+	if len(o.secrets) > 0 {
+		if status := p.checkSecrets(); status != 0 {
+			return status
+		}
+	}
+	if staged {
 		primary, err = validateIsolation(primary, state, project.Isolated)
 		if err != nil {
 			return fail("%s", err)
@@ -113,7 +122,8 @@ func run(root, host string, args []string) int {
 	bridge := registration{processes: p}
 	defer bridge.stop()
 	isolation := ""
-	if len(project.Isolated) > 0 {
+	if staged {
+		// Reuse the deferred-setup mailbox even when no isolated mounts are needed.
 		isolation, err = os.MkdirTemp(state, "isolation.")
 		if err != nil {
 			return fail("%s", err)
@@ -135,7 +145,7 @@ func run(root, host string, args []string) int {
 		if isolation == "" {
 			return 0
 		}
-		name, status := p.finishIsolation(primary, state, isolation, project.Isolated)
+		name, status := p.finishCreation(primary, state, isolation, project.Isolated, o.secrets)
 		if status != 0 {
 			return status
 		}
