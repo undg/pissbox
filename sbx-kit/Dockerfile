@@ -76,6 +76,32 @@ RUN version=2.4.3 && \
 
 
 ######################################################################
+# Install mise and its default pnpm outside shared cache mounts
+######################################################################
+ENV MISE_DATA_DIR=/opt/pissbox/mise
+ENV PATH="/opt/pissbox/mise/shims:${PATH}"
+RUN version=2026.10.21 && \
+    case "$TARGETARCH" in \
+        amd64) arch=x64; checksum=e1743bb7628927f93d4ffb2c4e2c4f71186307612f59ebc7f85d52e3a7f42461 ;; \
+        arm64) arch=arm64; checksum=3a7ecb96f2d9fbf5cb05631f1da02699d49e592b3ed3adfd5a7fce7420d43ee9 ;; \
+        *) echo "Unsupported mise architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac && \
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fLsS --retry 3 \
+        "https://github.com/jdx/mise/releases/download/v${version}/mise-v${version}-linux-${arch}.tar.xz" \
+        -o /var/tmp/mise.tar.xz && \
+    printf '%s  %s\n' "$checksum" /var/tmp/mise.tar.xz | sha256sum -c - && \
+    tar -xJf /var/tmp/mise.tar.xz -C /usr/local/bin --strip-components=2 mise/bin/mise && \
+    rm /var/tmp/mise.tar.xz && \
+    mkdir -p "$MISE_DATA_DIR" && \
+    chown -R agent:agent "$MISE_DATA_DIR" && \
+    mise --version
+
+# Shims select project versions in non-interactive shells too; no activation needed.
+USER agent
+RUN mise use -g pnpm@12.15.0 && \
+    test "$(pnpm --version)" = "12.15.0"
+
+######################################################################
 # Install pi-coding-agent
 ######################################################################
 
@@ -87,7 +113,6 @@ ADD --chmod=644 https://registry.npmjs.org/@earendil-works%2Fpi-coding-agent/${P
 USER agent
 ENV NODE_USE_SYSTEM_CA=1
 RUN version="$(node -p 'require("/tmp/pi-latest.json").version')" && \
-	npm install -g pnpm && \
     npm install -g "@earendil-works/pi-coding-agent@${version}" && \
     pi --offline --version
 
@@ -128,7 +153,9 @@ RUN printf '%s\n' '{"default_model":"/opt/pissbox/models/LateOn-Code-edge"}' \
 # Keep tools available in minimal-PATH execution contexts.
 ##########################################################
 RUN ln -sf "$(npm prefix -g)/bin/pi" /usr/local/bin/pi && \
-    ln -sf /home/agent/.local/bin/colgrep /usr/local/bin/colgrep
+    ln -sf /home/agent/.local/bin/colgrep /usr/local/bin/colgrep && \
+    ln -sf /opt/pissbox/mise/shims/pnpm /usr/local/bin/pnpm && \
+    ln -sf /opt/pissbox/mise/shims/pnpx /usr/local/bin/pnpx
 
 LABEL com.docker.sandboxes.start-docker="true"
 LABEL com.docker.sandboxes.flavor="pi"

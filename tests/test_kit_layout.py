@@ -54,7 +54,7 @@ class KitLayoutTests(unittest.TestCase):
         self.assertIn("install -m 0644 /run/secrets/custom_ca", dockerfile)
         self.assertLess(ca_step, dockerfile.index("update-ca-certificates;"))
         self.assertLess(dockerfile.index("update-ca-certificates;"),
-                        dockerfile.index("npm install -g pnpm"))
+                        dockerfile.index('npm install -g "@earendil-works/pi-coding-agent@${version}"'))
         self.assertNotIn("COPY ca.crt", dockerfile)
 
     def test_node_is_pinned_verified_and_writable_before_pi_installation(self):
@@ -67,11 +67,31 @@ class KitLayoutTests(unittest.TestCase):
         self.assertLess(dockerfile.index("update-ca-certificates;"), node_step)
         self.assertLess(dockerfile.index("sha256sum -c -", node_step), extract)
         self.assertLess(dockerfile.index("chown -R agent:agent /opt/pissbox/node"),
-                        dockerfile.index("npm install -g pnpm"))
+                        dockerfile.index('npm install -g "@earendil-works/pi-coding-agent@${version}"'))
         self.assertIn('ENV PATH="/opt/pissbox/node/bin:${PATH}"', dockerfile)
         self.assertIn('test "$(node --version)" = "v${version}"', dockerfile)
         for tool in ("node", "npm", "npx"):
             self.assertIn(f"ln -sf /opt/pissbox/node/bin/{tool} /usr/local/bin/{tool}", dockerfile)
+
+    def test_mise_is_verified_and_pnpm_uses_project_aware_shims(self):
+        dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
+        mise_step = dockerfile.index("RUN version=2026.10.21")
+        extract = dockerfile.index("tar -xJf /var/tmp/mise.tar.xz")
+        pnpm_step = dockerfile.index("RUN mise use -g pnpm@12.15.0")
+        self.assertIn("mise-v${version}-linux-${arch}.tar.xz", dockerfile)
+        self.assertIn("amd64) arch=x64; checksum=e1743bb7628927f93d4ffb2c4e2c4f71186307612f59ebc7f85d52e3a7f42461", dockerfile)
+        self.assertIn("arm64) arch=arm64; checksum=3a7ecb96f2d9fbf5cb05631f1da02699d49e592b3ed3adfd5a7fce7420d43ee9", dockerfile)
+        self.assertLess(dockerfile.index("update-ca-certificates;"), mise_step)
+        self.assertLess(dockerfile.index("sha256sum -c -", mise_step), extract)
+        self.assertIn("--strip-components=2 mise/bin/mise", dockerfile)
+        self.assertIn("ENV MISE_DATA_DIR=/opt/pissbox/mise", dockerfile)
+        self.assertIn('ENV PATH="/opt/pissbox/mise/shims:${PATH}"', dockerfile)
+        self.assertLess(dockerfile.index('chown -R agent:agent "$MISE_DATA_DIR"'), pnpm_step)
+        self.assertEqual(dockerfile[:pnpm_step].rsplit("USER ", 1)[1].splitlines()[0], "agent")
+        self.assertIn('test "$(pnpm --version)" = "12.15.0"', dockerfile)
+        self.assertNotIn("npm install -g pnpm", dockerfile)
+        for tool in ("pnpm", "pnpx"):
+            self.assertIn(f"ln -sf /opt/pissbox/mise/shims/{tool} /usr/local/bin/{tool}", dockerfile)
 
     def test_project_toml_parser_is_pinned_verified_and_installed_after_ca(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
