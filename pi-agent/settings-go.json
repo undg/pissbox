@@ -18,7 +18,7 @@
   },
   "showCacheMissNotices": true,
   "collapseChangelog": true,
-  "quietStartup": false,
+  "quietStartup": true,
   "enableInstallTelemetry": false,
   "treeFilterMode": "all",
   "warnings": {
@@ -31,17 +31,17 @@
   "transport": "sse",
   "doubleEscapeAction": "tree",
   "autocompleteMaxVisible": 20,
+  "sessionShareDestination": "gist",
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "theme": "system",
+  "tuiMode": "regular",
   "defaultProvider": "opencode-go",
   "defaultModel": "deepseek-v4.1-flash",
   "defaultThinkingLevel": "high",
   "enabledModels": [
     "opencode-go/deepseek-v4.1-flash",
     "opencode-go/gpt-6-luna"
-  ],
-  "sessionShareDestination": "gist",
-  "markdown": {
-    "mermaid": "streaming"
-  },
-  "theme": "system",
-  "tuiMode": "regular"
+  ]
 }

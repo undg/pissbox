@@ -31,6 +31,12 @@
   "transport": "sse",
   "doubleEscapeAction": "tree",
   "autocompleteMaxVisible": 20,
+  "sessionShareDestination": "gist",
+  "markdown": {
+    "mermaid": "streaming"
+  },
+  "theme": "system",
+  "tuiMode": "regular",
   "defaultProvider": "github-copilot",
   "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "medium",
@@ -38,11 +44,5 @@
     "github-copilot/gpt-6.1-sol",
     "github-copilot/gpt-6-astra",
     "github-copilot/gpt-6-luna"
-  ],
-  "sessionShareDestination": "gist",
-  "markdown": {
-    "mermaid": "streaming"
-  },
-  "theme": "system",
-  "tuiMode": "regular"
+  ]
 }
