@@ -37,13 +37,48 @@ keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
 For recurring credentials, define environment names, hosts, and host commands in
 `${XDG_CONFIG_HOME:-$HOME/.config}/pissbox/config.toml` (override with
-`PISSBOX_CONFIG`). The launcher creates a schema-only starter file on first use,
-never writes CLI secrets into it, and registers global entries for every new
-sandbox. Repeatable `--secret ENV_NAME HOST COMMAND` remains for one-off
-additions and overrides a global entry with the same name. See
-[proxy-managed secrets](doc/secrets.md) for the schema, path rules, host
-matching, command safety, and creation-only registration. This optional feature
-requires SBX `secret set-custom --command` support (verified with v0.50.0).
+`PISSBOX_CONFIG`):
+
+Few examples:
+
+```toml
+[secrets.GH_TOKEN]
+host = "api.github.com"
+command = "security find-generic-password -s gh-token -w"
+
+[secrets.OPENAI_API_KEY]
+host = "api.openai.com"
+command = "op read op://Private/OpenAI/api-key"
+
+[secrets.ANTHROPIC_API_KEY]
+host = "api.anthropic.com"
+command = 'bw get password "Anthropic API Key"'
+
+[secrets.AWS_SECRET_ACCESS_KEY]
+host = "*.amazonaws.com"
+command = "secret-tool lookup service aws account default"
+
+[secrets.OPENCODE_API_KEY]
+host = "opencode.ai"
+command = "pass show work/opencode"
+
+[secrets.DEEPSEEK_API_KEY]
+host = "api.deepseek.com"
+command = "vault kv get -field=api_key secret/deepseek"
+```
+
+`bw` needs `BW_SESSION` available to SBX after `bw unlock`; `kpass` needs its
+keyring cache configured for unattended runs.
+
+Reference the placeholder from Pi settings, for example
+`"apiKey": "${GH_TOKEN}"`. Entries accept only `host` and `command`; there is
+no literal credential field. The launcher creates a schema-only starter file on
+first use, never writes CLI secrets into it, and registers global entries for
+every new sandbox. Repeatable `--secret ENV_NAME HOST COMMAND` remains for
+one-off additions and overrides a global entry with the same name. See
+[proxy-managed secrets](doc/secrets.md) for the path rules, host matching,
+command safety, and creation-only registration. This optional feature requires
+SBX `secret set-custom --command` support (verified with v0.50.0).
 
 ## Go launcher
 
