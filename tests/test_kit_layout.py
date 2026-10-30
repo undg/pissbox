@@ -37,6 +37,7 @@ class KitLayoutTests(unittest.TestCase):
     def test_github_cli_is_installed_and_checked_during_image_build(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
         self.assertRegex(dockerfile, r"apt-get install\b[^\n]*\bgh\s*&&")
+        self.assertRegex(dockerfile, r"apt-get install\b[^\n]*\blibatomic1\b")
         self.assertIn("gh --version &&", dockerfile)
 
     def test_search_model_download_uses_pinned_revision_and_system_tls(self):

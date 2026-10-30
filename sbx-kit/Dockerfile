@@ -16,8 +16,9 @@ ARG COLGREP_VERSION=1.8.5
 # Install packages
 ######################################################################
 USER root
+# libatomic1: upstream Node binaries link libatomic.so.1; base image lacks it.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fd-find ripgrep neovim xz-utils jq gh && \
+    apt-get install -y --no-install-recommends fd-find ripgrep neovim libatomic1 xz-utils jq gh && \
     gh --version && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
