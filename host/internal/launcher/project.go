@@ -68,6 +68,7 @@ func (p *processes) readProject(root, primary string) (project, int) {
 		return config, fail("Project configuration must be a readable TOML file: %s", path)
 	}
 	f.Close()
+	//  @TODO (undg) 2026-10-30: refactor needed. Never use scripts designed for sbx on the host. This is SRP violation. Validation can be done when json schema validation engine will be implemented. JSON schema will become one source of true. https://pkg.go.dev/github.com/wasilibs/go-tombi is a good candidate, but research need to be done.
 	for _, tool := range []string{"tomljson", "jq"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			return config, fail("Reading .pissbox.toml requires %s on the host; install it before launching.", tool)
@@ -82,6 +83,7 @@ func (p *processes) readProject(root, primary string) (project, int) {
 	}
 	return config, 0
 }
+
 func settingsProfile(host string) string {
 	host = strings.SplitN(host, ".", 2)[0]
 	switch host {

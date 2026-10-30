@@ -12,8 +12,7 @@ or directory name. User guides start at [README.md](README.md).
   Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
 - `sbx-kit/files/home/.pissbox/`: small setup scripts and shared-directory mappings.
-  `scripts/project-setup.sh` contains validation and sandbox setup. The host
-  invokes `--validate FILE` for JSON data only; keep validation in this one file.
+  `scripts/project-setup.sh` contains sandbox setup.
 - `pi-agent/`: shared sandbox-only configuration, credentials, and sessions.
   Keep its `AGENTS.md` brief and general; repository rules belong here.
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
