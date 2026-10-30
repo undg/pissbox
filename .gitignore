@@ -28,5 +28,6 @@ pi-agent/settings.json.replaced*
 sbx-kit/ca.crt
 /.worktrees/
 .wk.toml
-/.wk/
 .pissbox.toml
+/.pissbox
+/.wk
