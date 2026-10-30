@@ -31,8 +31,8 @@ func parse(args []string) (options, error) {
 			if i+3 >= len(args) {
 				return o, fmt.Errorf("--secret requires ENV_NAME HOST COMMAND")
 			}
-			s := secret{env: args[i+1], host: args[i+2], command: args[i+3]}
-			if err := s.validate(o.secrets); err != nil {
+			s := secret{Env: args[i+1], Host: args[i+2], Command: args[i+3]}
+			if err := s.Validate(o.secrets); err != nil {
 				return o, err
 			}
 			o.secrets = append(o.secrets, s)

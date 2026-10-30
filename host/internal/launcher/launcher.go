@@ -84,8 +84,20 @@ func run(root, host string, args []string) int {
 			workspaces.append(workspace)
 		}
 	}
-	staged := len(project.Isolated) > 0 || len(o.secrets) > 0
-	if len(o.secrets) > 0 {
+	if !isDir(pi) {
+		return fail("Pi directory does not exist: %s", pi)
+	}
+	pi, err = physical(pi)
+	if err != nil {
+		return fail("%s", err)
+	}
+	global, status := loadGlobalSecrets(root, cwd, append(append([]string{}, workspaces.paths...), pi, state))
+	if status != 0 {
+		return status
+	}
+	secrets := mergeSecrets(global, o.secrets)
+	staged := len(project.Isolated) > 0 || len(secrets) > 0
+	if len(secrets) > 0 {
 		if status := p.checkSecrets(); status != 0 {
 			return status
 		}
@@ -95,13 +107,6 @@ func run(root, host string, args []string) int {
 		if err != nil {
 			return fail("%s", err)
 		}
-	}
-	if !isDir(pi) {
-		return fail("Pi directory does not exist: %s", pi)
-	}
-	pi, err = physical(pi)
-	if err != nil {
-		return fail("%s", err)
 	}
 	if err := linkSettings(pi, settingsProfile(host)); err != nil {
 		return fail("%s", err)
@@ -145,7 +150,7 @@ func run(root, host string, args []string) int {
 		if isolation == "" {
 			return 0
 		}
-		name, status := p.finishCreation(primary, state, isolation, project.Isolated, o.secrets)
+		name, status := p.finishCreation(primary, state, isolation, project.Isolated, secrets)
 		if status != 0 {
 			return status
 		}

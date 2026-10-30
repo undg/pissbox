@@ -15,6 +15,7 @@ Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, jq, and tomljson.
 Optional --secret needs SBX secret set-custom --command support (verified with v0.50.0).
 The base SBX version check does not verify this optional capability.
 The host TOML CLI reads project workspaces before the sandbox exists.
+Global secret config is validated by the launcher; only project config needs jq and tomljson.
 Docker must be running; kit validation must pass with your Docker sign-in.
 Dependencies are checked, never installed automatically.
 Optional bin/artifacts transfers require Python 3; it is not checked here.

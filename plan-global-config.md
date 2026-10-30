@@ -185,32 +185,32 @@ project-orchestration logic to the package or duplicating the schema engine.
 
 ## Tasks
 
-- [ ] Add and pin `github.com/BurntSushi/toml` v1.6.0 and
+- [x] Add and pin `github.com/BurntSushi/toml` v1.6.0 and
   `github.com/santhosh-tekuri/jsonschema/v6` v6.0.3, review `bin/install` and
   README dependency statements, then run `make tidy`. Both are Go-only; no new
   host CLI prerequisite is expected.
 
-- [ ] Create `host/config/` with the config model, default/explicit path
+- [x] Create `host/config/` with the config model, default/explicit path
   resolution, starter-file creation, schema embedding, schema validation, and
   semantic secret checks. Provide creation and loading entry points that the
   launcher can call without duplicating config logic. Keep the package free of
   SBX calls, command execution, mount logic, and lifecycle decisions, and shape
   it so a future project-config schema can be added beside the global one.
 
-- [ ] Add `host/config/global-schema.json`. Reject unknown top-level keys and unknown
+- [x] Add `host/config/global-schema.json`. Reject unknown top-level keys and unknown
   entry keys, require `host` and `command` per secret, constrain environment
   names, accept the generated schema-only file as empty valid config, and
   provide a `description` for every key. Add a test that walks nested schema
   objects, including the `secrets` entry schema, and fails when any property
   lacks a description.
 
-- [ ] Wire the launcher using the sequence above: resolve mounts, check config
+- [x] Wire the launcher using the sequence above: resolve mounts, check config
   path safety, create the default config when absent, load and validate it,
   apply global entries then CLI overrides, run the SBX capability check, and
   compute `staged` before creation. Never rewrite the config. Keep all
   management commands and help on the existing no-config path.
 
-- [ ] Keep CLI parsing in the launcher, but share one secret type/validation
+- [x] Keep CLI parsing in the launcher, but share one secret type/validation
   rule set with `host/config` rather than maintaining separate definitions.
   The launcher must never execute configured commands or capture their stdout.
   It passes each entry's `command` string directly as SBX arguments, exactly as
@@ -218,7 +218,7 @@ project-orchestration logic to the package or duplicating the schema engine.
   `sbx secret set-custom --sandbox NAME --env ENV --host HOST --command COMMAND`.
   SBX resolves and refreshes the value; the launcher never sees it.
 
-- [ ] Add `host/config` tests for: path resolution and relative/empty override
+- [x] Add `host/config` tests for: path resolution and relative/empty override
   semantics, directory/non-regular rejection, starter-file creation and
   first-line schema directive, exclusive create/no overwrite, creation failure
   returning an error, comment-only normalization, missing explicit override,
@@ -226,7 +226,7 @@ project-orchestration logic to the package or duplicating the schema engine.
   invalid hosts/commands, deterministic ordering, every nested schema property
   having a description, and empty config.
 
-- [ ] Add launcher tests for: global secrets registered on creation before setup
+- [x] Add launcher tests for: global secrets registered on creation before setup
   and Pi, later attaches not re-registering, CLI entries overriding global
   entries by environment name, duplicate CLI entries still failing, config left
   unchanged by CLI flags, starter-creation error producing a warning and a
@@ -234,20 +234,27 @@ project-orchestration logic to the package or duplicating the schema engine.
   host command execution. Extend the fixture as needed to set an isolated
   `PISSBOX_CONFIG` and config directory.
 
-- [ ] Audit both Go and Python launcher test harnesses so ambient user config
+- [x] Audit both Go and Python launcher test harnesses so ambient user config
   cannot leak. Set `PISSBOX_CONFIG` explicitly to a fixture path for every
   launch, including tests that do not exercise secrets. Unset falls back to the
   real home directory.
 
-- [ ] Update `--help`, `doc/secrets.md`, `doc/project-configuration.md`,
+- [x] Update `--help`, `doc/secrets.md`, `doc/project-configuration.md`,
   `README.md`, `host/README.md`, and the host lifecycle/config contract in
   `AGENTS.md`. Document the path, generated starter line, schema location,
   schema, read-only rule, no-literal-values rule, escape hatch, scope widening,
   commit intent and limits. Remove any claim that global secret commands require
   `tomljson`/`jq` or the sandbox project-setup script.
 
-- [ ] Run `make check` and the focused Go suites. Record any real-SBX
+- [x] Run `make check` and the focused Go suites. Record any real-SBX
   verification gap rather than claiming proxy behavior was tested.
+
+  Verification note: `make test-go`, focused launcher/config suites, `make vet`,
+  `make syntax`, `make test-js`, and Python launcher/secret/isolation/bridge suites
+  passed. Full `make check` stopped on the pre-existing, unrelated
+  `test_settings_profiles` failure (`settings-go.json` currently lists deepseek
+  models). Real SBX placeholder injection/proxy substitution was not run; the
+  stubbed registration tests still only prove orchestration.
 
 ## Acceptance criteria
 

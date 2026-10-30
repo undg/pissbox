@@ -36,6 +36,10 @@ class BridgeLauncherTests(unittest.TestCase):
         shutil.copy2(ROOT / "tests/fixtures/go-bridge", self.binary)
         self.binary.chmod(0o755)
         self.log = self.checkout / "helper.jsonl"
+        config_dir = Path(tempfile.mkdtemp(prefix="config-", dir=fixtures))
+        self.addCleanup(shutil.rmtree, config_dir)
+        self.global_config = config_dir / "config.toml"
+        self.global_config.write_text("# isolated launcher test config\n")
 
     def environment(self, **overrides):
         env = {
@@ -45,7 +49,7 @@ class BridgeLauncherTests(unittest.TestCase):
         env.update(
             PATH=str(ROOT / "tests/fixtures") + os.pathsep + env["PATH"],
             HERDR_ENV="1", HERDR_SOCKET_PATH="host-only.sock", HERDR_PANE_ID="w1:p7",
-            TEST_BRIDGE_LOG=str(self.log),
+            TEST_BRIDGE_LOG=str(self.log), PISSBOX_CONFIG=str(self.global_config),
         )
         env.update(overrides)
         return env

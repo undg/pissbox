@@ -37,6 +37,8 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.tools = self.root / "tools"
         self.tools.mkdir()
         (self.tools / "sbx").symlink_to(ROOT / "tests/fixtures/sbx-isolation")
+        self.global_config = self.root / "config.toml"
+        self.global_config.write_text("# isolated launcher test config\n")
 
     def configure(self, paths=None, commands=None):
         self.config.write_text("isolated_directories = " + json.dumps(paths if paths is not None else ["node_modules"]) +
@@ -47,6 +49,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
                        if not key.startswith(("PISSBOX_", "TEST_ISOLATION_"))}
         environment.update(PATH=str(self.tools) + os.pathsep + TOOL_PATH,
                            PISSBOX_PI_DIR=str(self.pi), PISSBOX_STATE_DIR=str(self.state),
+                           PISSBOX_CONFIG=str(self.global_config),
                            TEST_ISOLATION_ROOT=str(self.root))
         environment.update(env)
         result = subprocess.run([str(LAUNCHER), *args], cwd=self.project, env=environment,

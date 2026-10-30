@@ -20,7 +20,10 @@ or directory name. User guides start at [README.md](README.md).
 - `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
 - `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
   and tests in `internal/bridge`. Default launcher entrypoint in `cmd/pissbox`,
-  implementation/tests in `internal/launcher`. Requires Go 1.25+ to build.
+  implementation/tests in `internal/launcher`. `host/config` is the pure global
+  configuration library (path resolution, starter creation, embedded JSON Schema,
+  TOML/schema validation, deterministic secrets). It must not call SBX or execute
+  configured commands. Requires Go 1.25+ to build.
   Use `bin/build-bridge` / `bin/build-launcher`
   for native binaries, or `--all` for all four supported targets.
 - `tests/`: Python-standard-library regression tests, shared JS helpers/tests, and fixtures.
@@ -113,6 +116,16 @@ dependencies but never installs them automatically.
   register globally or on attach, execute commands in the launcher, or put secret
   commands in project config. SBX owns resolution and refresh. Helpers and their
   dependencies must stay outside writable sandbox mounts. See `doc/secrets.md`.
+- Global secret config is `PISSBOX_CONFIG`, else
+  `${XDG_CONFIG_HOME:-$HOME/.config}/pissbox/config.toml`. Resolve and validate
+  it through `host/config` after mount paths are known but before state creation,
+  mailbox setup, or any SBX call. A missing default is created as an exclusive
+  0600 schema-only starter (creation failure warns and continues); an explicit
+  missing target is an error. Reject directories/non-regular files and any path
+  inside a mounted workspace, Pi, or state directory. Global entries are
+  read-only data; merge CLI secrets over them by environment name. Never execute
+  commands, write the file, or read/create it for help/list/delete/bridge-stop.
+  Keep `host/config` free of SBX, command execution, mounts, and lifecycle logic.
   Existing Pi/shell attaches run a small inline readiness probe using persisted
   isolation environment plus a sandbox-local ready marker, even if current config
   removed isolation. The probe's `sbx exec` can start a stopped sandbox and run
