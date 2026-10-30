@@ -3,6 +3,9 @@
 The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
 and its implementation and colocated tests together in `internal/bridge`.
 The default Go launcher lives in `cmd/pissbox` and `internal/launcher`.
+The pure host configuration library lives in `host/config`: it owns the global
+secret schema, TOML and JSON Schema validation, path resolution, and starter
+file creation, but never calls SBX or executes configured commands.
 `bin/pissbox` only resolves symlinks, selects the native binary, and execs it.
 
 Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar
@@ -46,8 +49,11 @@ project config or Pi credentials. The legacy launcher and temporary
 implementation-selection harness have been removed.
 The Go launcher locates resources relative to its resolved executable under
 `.cache/bin/`, preserves the caller's directory, and invokes the bridge as a
-separate CLI process. No production dependencies were added; host Bash, jq and
-tomljson remain necessary for the shared project-schema validator.
+separate CLI process. Global secret configuration uses the Go-only
+`github.com/BurntSushi/toml` and `github.com/santhosh-tekuri/jsonschema/v6`
+dependencies with an embedded schema; no new host CLI dependency was added.
+Host Bash, jq and tomljson remain necessary only for the shared project-schema
+validator.
 
 Go subprocess tests re-execute the instrumented test binary, including signal
 forwarding and bridge cleanup. Linux PTY tests check single-key mode, terminal

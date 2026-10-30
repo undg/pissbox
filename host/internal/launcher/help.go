@@ -39,6 +39,11 @@ ENV_NAME receives a placeholder; HOST is a host/pattern, not a URL.
 Quote COMMAND: SBX runs it on the host for verification and later refresh.
 Keep helpers and dependencies outside writable sandbox mounts.
 Secret registration precedes project setup/Pi and never runs on attach.
+Global secrets live in PISSBOX_CONFIG or ~/.config/pissbox/config.toml.
+The launcher creates a schema-only starter at the default path when missing.
+Global entries apply to every new sandbox; CLI --secret overrides the same ENV_NAME.
+The global file is read-only to the launcher; store commands, never literal values.
+Help/list/delete/bridge-stop never read or create the global file.
 See doc/secrets.md; secret flags cannot be combined with list/delete/bridge-stop.
 If it already exists, choose Pi (default), continue, shell, delete, or quit [P/c/s/d/q].
 With --yes, open Pi in the existing sandbox without prompting; existing mounts stay.

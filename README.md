@@ -35,8 +35,13 @@ builds only the image and needs no host Go or bridge.
 For API keys, prefer SBX proxy-managed secrets when supported and configured:
 keys stay on the host while the proxy authenticates requests. The agent can
 read Pi's `auth.json` and environment variables passed directly into the sandbox.
-Use repeatable `--secret ENV_NAME HOST COMMAND` flags for sandbox-scoped custom
-credentials; see [proxy-managed secrets](doc/secrets.md) for examples, host
+For recurring credentials, define environment names, hosts, and host commands in
+`${XDG_CONFIG_HOME:-$HOME/.config}/pissbox/config.toml` (override with
+`PISSBOX_CONFIG`). The launcher creates a schema-only starter file on first use,
+never writes CLI secrets into it, and registers global entries for every new
+sandbox. Repeatable `--secret ENV_NAME HOST COMMAND` remains for one-off
+additions and overrides a global entry with the same name. See
+[proxy-managed secrets](doc/secrets.md) for the schema, path rules, host
 matching, command safety, and creation-only registration. This optional feature
 requires SBX `secret set-custom --command` support (verified with v0.50.0).
 
@@ -101,8 +106,8 @@ than merging or overwriting them. It restores into the checkout containing the
 script, regardless of the caller's directory. An interrupted or failed write can
 leave partial artifacts; inspect these before retrying. Nothing loads an image,
 recreates a sandbox, installs dependencies, or changes the launcher link
-automatically. The destination still needs Docker/SBX and the launcher's `jq`
-and `tomljson` dependencies. Supply the image and bridge binaries matching its
+automatically. The destination still needs Docker/SBX, plus `jq` and `tomljson`
+when using project configuration. Supply the image and bridge binaries matching its
 architecture, including the launcher binary; installed sandbox npm dependencies
 must also support that architecture. A packaged host does not need Go to launch.
 

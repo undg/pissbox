@@ -14,8 +14,8 @@ func TestSecretParserPreservesCommandsAndWorkspaceOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []secret{
-		{"API_ONE", "api.one.com", "security find-generic-password -s 'api one' -w"},
-		{"API_TWO", "*.example.com", "/host/bin/get-token --account two"},
+		{Env: "API_ONE", Host: "api.one.com", Command: "security find-generic-password -s 'api one' -w"},
+		{Env: "API_TWO", Host: "*.example.com", Command: "/host/bin/get-token --account two"},
 	}
 	if !reflect.DeepEqual(o.secrets, want) || !reflect.DeepEqual(o.workspaces, []string{"one", "two", "--secret"}) || !o.continued {
 		t.Fatalf("%+v", o)

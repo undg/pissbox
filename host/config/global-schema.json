@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pissbox.local/schemas/global-config.json",
+  "title": "pissbox global configuration",
+  "description": "Host-wide launcher configuration. Secrets are addressed by the sandbox environment variable that receives a proxy placeholder.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "secrets": {
+      "description": "Proxy-managed secrets applied to every new sandbox. Keys are environment variable names; values describe a host command that SBX runs to obtain the real value.",
+      "type": "object",
+      "propertyNames": {
+        "description": "Environment variable name that receives a placeholder in the sandbox. PISSBOX_* and SANDBOX_NAME are reserved.",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+        "not": {
+          "anyOf": [
+            {
+              "pattern": "^PISSBOX_"
+            },
+            {
+              "const": "SANDBOX_NAME"
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/secret"
+      }
+    }
+  },
+  "$defs": {
+    "secret": {
+      "description": "One proxy-managed secret definition.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "command"
+      ],
+      "properties": {
+        "host": {
+          "description": "Host, IP address, or quoted wildcard pattern that receives the credential. No scheme, port, or path.",
+          "type": "string"
+        },
+        "command": {
+          "description": "Host command whose stdout SBX uses as the credential. The command must fetch the value, not embed it. The launcher never executes this command.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

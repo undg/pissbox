@@ -33,12 +33,15 @@ class SecretTests(unittest.TestCase):
         self.tools = self.root / "tools"
         self.tools.mkdir()
         (self.tools / "sbx").symlink_to(ROOT / "tests/fixtures/sbx-isolation")
+        self.global_config = self.root / "config.toml"
+        self.global_config.write_text("# isolated launcher test config\n")
 
     def launch(self, *args, answers="", **env):
         environment = {key: value for key, value in os.environ.items()
                        if not key.startswith(("PISSBOX_", "TEST_ISOLATION_"))}
         environment.update(PATH=str(self.tools) + os.pathsep + os.environ["PATH"],
                            PISSBOX_PI_DIR=str(self.pi), PISSBOX_STATE_DIR=str(self.root / "state"),
+                           PISSBOX_CONFIG=str(self.global_config),
                            TEST_ISOLATION_ROOT=str(self.root))
         environment.update(env)
         log = self.root / "calls.jsonl"
@@ -65,6 +68,32 @@ class SecretTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["secret", "create", "exec", "run"])
         self.assertFalse((self.project / "setup-marker").exists())
+
+    def test_global_config_registers_before_setup_and_cli_overrides_by_name(self):
+        marker = self.project / "host-execution"
+        original = (f'[secrets.ZED]\nhost = "z.example.com"\ncommand = "touch {marker}"\n'
+                    '[secrets.API]\nhost = "global.example.com"\ncommand = "global_command"\n')
+        self.global_config.write_text(original)
+        result, calls = self.launch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[0] for call in calls], ["secret", "create", "secret", "secret", "exec", "run"])
+        self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
+                                    "--env", "API", "--host", "global.example.com", "--command", "global_command"])
+        self.assertEqual(calls[3], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
+                                    "--env", "ZED", "--host", "z.example.com", "--command", f"touch {marker}"])
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.global_config.read_text(), original)
+
+        (self.root / "sandbox.json").unlink()
+        shutil.rmtree(self.root / "home")
+        result, calls = self.launch("--secret", "API", "cli.example.com", "cli_command")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[0] for call in calls], ["secret", "create", "secret", "secret", "exec", "run"])
+        self.assertEqual(calls[2][calls[2].index("--env") + 1], "API")
+        self.assertEqual(calls[2][calls[2].index("--host") + 1], "cli.example.com")
+        self.assertEqual(calls[2][calls[2].index("--command") + 1], "cli_command")
+        self.assertEqual(calls[3][calls[3].index("--env") + 1], "ZED")
+        self.assertEqual(self.global_config.read_text(), original)
 
     def test_named_creation_and_later_attach_without_secret_flags(self):
         result, calls = self.launch("--secret", "API", "api.example.com", "/host/bin/get-token",

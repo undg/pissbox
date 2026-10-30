@@ -72,9 +72,11 @@ For direct SBX launches without isolation, pass mounts explicitly and set
 
 ## Secrets
 
-Secret commands are not supported in this file. Use the explicit launcher flag
-`--secret ENV_NAME HOST COMMAND`; see [proxy-managed secrets](secrets.md).
-Commands run on the host under SBX, while the sandbox receives a placeholder.
+Secret commands are not supported in this project file. Use the user-level
+global config for recurring secrets, or the explicit launcher flag for one-off
+additions; see [proxy-managed secrets](secrets.md). Commands run on the host
+under SBX, while the sandbox receives a placeholder. The global file is not
+read or created by help/list/delete/bridge-stop.
 
 ## Changing configuration
 

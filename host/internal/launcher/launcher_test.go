@@ -154,6 +154,7 @@ func testTool() int {
 type fixture struct {
 	t                                         *testing.T
 	root, project, pi, state, log, tools, exe string
+	configDir, userConfig                     string
 }
 
 func newFixture(t *testing.T) fixture {
@@ -178,7 +179,16 @@ func newFixture(t *testing.T) fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := fixture{t: t, root: root, project: filepath.Join(root, "project"), pi: filepath.Join(root, "pi"), state: filepath.Join(root, "state"), log: filepath.Join(root, "calls.jsonl"), tools: filepath.Join(root, "tools"), exe: exe}
+	configDir, err := os.MkdirTemp(base, "config-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configDir, err = filepath.Abs(configDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(configDir) })
+	f := fixture{t: t, root: root, project: filepath.Join(root, "project"), pi: filepath.Join(root, "pi"), state: filepath.Join(root, "state"), log: filepath.Join(root, "calls.jsonl"), tools: filepath.Join(root, "tools"), exe: exe, configDir: configDir, userConfig: filepath.Join(configDir, "user", "config.toml")}
 	for _, dir := range []string{f.project, f.pi, f.tools} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			t.Fatal(err)
@@ -187,6 +197,7 @@ func newFixture(t *testing.T) fixture {
 	for _, profile := range []string{"settings-co.json", "settings-go.json"} {
 		f.write(filepath.Join(f.pi, profile), "{}")
 	}
+	f.write(f.userConfig, "# isolated launcher test config\n")
 	// Keep argv[0] distinguishable in the subprocess fixture.
 	if err := os.Symlink(exe, filepath.Join(f.tools, "sbx")); err != nil {
 		t.Fatal(err)
@@ -249,6 +260,7 @@ func (f fixture) command(input string, env map[string]string, args ...string) *e
 	values["PATH"] = f.tools + string(os.PathListSeparator) + os.Getenv("PATH")
 	values["PISSBOX_PI_DIR"] = f.pi
 	values["PISSBOX_STATE_DIR"] = f.state
+	values["PISSBOX_CONFIG"] = f.userConfig
 	values["GORACE"] = "atexit_sleep_ms=0"
 	// Subprocesses dispatch by argv[0] in TestMain; launcher mode is replaced
 	// there when the executable is invoked through a tool symlink.

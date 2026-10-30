@@ -30,6 +30,10 @@ class LauncherTests(unittest.TestCase):
         fixtures.mkdir(parents=True, exist_ok=True)
         self.bridge_runtime = tempfile.mkdtemp(prefix="ls-", dir=fixtures)
         self.addCleanup(self.stop_test_bridge)
+        config_dir = tempfile.mkdtemp(prefix="config-")
+        self.addCleanup(shutil.rmtree, config_dir)
+        self.global_config = Path(config_dir) / "config.toml"
+        self.global_config.write_text("# isolated launcher test config\n")
 
     def stop_test_bridge(self):
         if not (Path(self.bridge_runtime) / "control.sock").exists():
@@ -42,11 +46,11 @@ class LauncherTests(unittest.TestCase):
         env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith(("TEST_SBX_", "HERDR_"))
-            and key not in ("PISSBOX_PI_DIR", "PISSBOX_STATE_DIR", "PISSBOX_BRIDGE_DIR", "PISSBOX_WORKSPACE_DIR")
+            if not key.startswith(("PISSBOX_", "TEST_SBX_", "HERDR_"))
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
         env["PISSBOX_BRIDGE_RUNTIME_DIR"] = self.bridge_runtime
+        env["PISSBOX_CONFIG"] = str(self.global_config)
         env.update(overrides)
         return env
 
