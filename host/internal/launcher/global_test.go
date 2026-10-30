@@ -25,11 +25,14 @@ command = "/host/bin/get-alpha --account one"
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
 	want := [][]string{
-		{"secret", "set-custom", "--sandbox", "reported", "--env", "ALPHA", "--host", "*.example.com", "--command", "/host/bin/get-alpha --account one"},
-		{"secret", "set-custom", "--sandbox", "reported", "--env", "ZED", "--host", "z.example.com", "--command", "touch '" + marker + "'"},
+		{"secret", "set-custom", "--sandbox", "reported", "--env", "ALPHA", "--host", "*.example.com", "--placeholder", argValue(calls[2], "--placeholder"), "--command", "/host/bin/get-alpha --account one"},
+		{"secret", "set-custom", "--sandbox", "reported", "--env", "ZED", "--host", "z.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "touch '" + marker + "'"},
 	}
 	if !reflect.DeepEqual(calls[2:4], want) {
 		t.Fatal(calls)
+	}
+	if !contains(calls[1], "ALPHA="+argValue(calls[2], "--placeholder")) || !contains(calls[1], "ZED="+argValue(calls[3], "--placeholder")) {
+		t.Fatal("creation did not receive global secret placeholders", calls[1])
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatal("launcher executed global secret command")
@@ -63,11 +66,14 @@ command = "other_command"
 	if status != 0 || kinds(calls) != "secret,create,secret,secret,exec,run" {
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
-	if !reflect.DeepEqual(calls[2], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "cli.example.com", "--command", "cli_command"}) {
+	if !reflect.DeepEqual(calls[2], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "cli.example.com", "--placeholder", argValue(calls[2], "--placeholder"), "--command", "cli_command"}) {
 		t.Fatal(calls[2])
 	}
-	if !reflect.DeepEqual(calls[3], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "OTHER", "--host", "other.example.com", "--command", "other_command"}) {
+	if !reflect.DeepEqual(calls[3], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "OTHER", "--host", "other.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "other_command"}) {
 		t.Fatal(calls[3])
+	}
+	if !contains(calls[1], "API="+argValue(calls[2], "--placeholder")) || !contains(calls[1], "OTHER="+argValue(calls[3], "--placeholder")) {
+		t.Fatal("creation did not receive merged placeholders", calls[1])
 	}
 	if data, err := os.ReadFile(f.userConfig); err != nil || string(data) != global {
 		t.Fatal("CLI changed global config", string(data), err)

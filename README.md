@@ -78,7 +78,8 @@ every new sandbox. Repeatable `--secret ENV_NAME HOST COMMAND` remains for
 one-off additions and overrides a global entry with the same name. See
 [proxy-managed secrets](doc/secrets.md) for the path rules, host matching,
 command safety, and creation-only registration. This optional feature requires
-SBX `secret set-custom --command` support (verified with v0.50.0).
+SBX `secret set-custom --command` and `--placeholder` support (verified with
+v0.50.0).
 
 ## Go launcher
 

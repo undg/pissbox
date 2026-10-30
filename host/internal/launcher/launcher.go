@@ -97,9 +97,14 @@ func run(root, host string, args []string) int {
 	}
 	secrets := mergeSecrets(global, o.secrets)
 	staged := len(project.Isolated) > 0 || len(secrets) > 0
+	var registrations []registeredSecret
 	if len(secrets) > 0 {
 		if status := p.checkSecrets(); status != 0 {
 			return status
+		}
+		registrations, err = prepareSecrets(secrets)
+		if err != nil {
+			return fail("%s", err)
 		}
 	}
 	if staged {
@@ -135,6 +140,9 @@ func run(root, host string, args []string) int {
 		}
 		sbxArgs[0] = "create"
 		sbxArgs = append(sbxArgs, "--env", "PISSBOX_ISOLATION_DIR="+isolation)
+		for _, s := range registrations {
+			sbxArgs = append(sbxArgs, "--env", s.Env+"="+s.Placeholder)
+		}
 	} else {
 		bridge.start(root, pi, state)
 	}
@@ -150,7 +158,7 @@ func run(root, host string, args []string) int {
 		if isolation == "" {
 			return 0
 		}
-		name, status := p.finishCreation(primary, state, isolation, project.Isolated, secrets)
+		name, status := p.finishCreation(primary, state, isolation, project.Isolated, registrations)
 		if status != 0 {
 			return status
 		}

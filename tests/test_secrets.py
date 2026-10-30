@@ -12,6 +12,10 @@ from launcher_harness import checkout_root
 ROOT = checkout_root()
 
 
+def flag(call, name):
+    return call[call.index(name) + 1]
+
+
 class SecretTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -57,8 +61,12 @@ class SecretTests(unittest.TestCase):
         result, calls = self.launch("--secret", "API", "*.example.com", command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["secret", "create", "secret", "exec", "run"])
+        placeholder = flag(calls[2], "--placeholder")
+        self.assertTrue(placeholder.startswith("sbx-cs-"), placeholder)
         self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "API", "--host", "*.example.com", "--command", command])
+                                    "--env", "API", "--host", "*.example.com",
+                                    "--placeholder", placeholder, "--command", command])
+        self.assertIn("API=" + placeholder, calls[1])
         self.assertEqual((self.project / "setup-marker").read_text(), "ready")
         self.assertTrue((self.root / "home/.pissbox/isolation-ready").is_file())
         self.assertFalse((self.project / "host-execution").exists())
@@ -77,10 +85,16 @@ class SecretTests(unittest.TestCase):
         result, calls = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["secret", "create", "secret", "secret", "exec", "run"])
+        api, zed = flag(calls[2], "--placeholder"), flag(calls[3], "--placeholder")
+        self.assertNotEqual(api, zed)
         self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "API", "--host", "global.example.com", "--command", "global_command"])
+                                    "--env", "API", "--host", "global.example.com",
+                                    "--placeholder", api, "--command", "global_command"])
         self.assertEqual(calls[3], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "ZED", "--host", "z.example.com", "--command", f"touch {marker}"])
+                                    "--env", "ZED", "--host", "z.example.com",
+                                    "--placeholder", zed, "--command", f"touch {marker}"])
+        self.assertIn("API=" + api, calls[1])
+        self.assertIn("ZED=" + zed, calls[1])
         self.assertFalse(marker.exists())
         self.assertEqual(self.global_config.read_text(), original)
 
@@ -93,6 +107,8 @@ class SecretTests(unittest.TestCase):
         self.assertEqual(calls[2][calls[2].index("--host") + 1], "cli.example.com")
         self.assertEqual(calls[2][calls[2].index("--command") + 1], "cli_command")
         self.assertEqual(calls[3][calls[3].index("--env") + 1], "ZED")
+        self.assertIn("API=" + flag(calls[2], "--placeholder"), calls[1])
+        self.assertIn("ZED=" + flag(calls[3], "--placeholder"), calls[1])
         self.assertEqual(self.global_config.read_text(), original)
 
     def test_named_creation_and_later_attach_without_secret_flags(self):
@@ -100,6 +116,7 @@ class SecretTests(unittest.TestCase):
                                     "--name", "chosen")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls[2][calls[2].index("--sandbox") + 1], "chosen")
+        self.assertIn("API=" + flag(calls[2], "--placeholder"), calls[1])
         self.assertEqual(calls[-1], ["run", "--name", "chosen"])
         result, calls = self.launch("--name", "chosen", "-y")
         self.assertEqual(result.returncode, 0, result.stderr)

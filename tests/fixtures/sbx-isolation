@@ -30,10 +30,13 @@ def conflict(create):
 if args[0] == "secret":
     assert args[1] == "set-custom"
     if args[2:] == ["--help"]:
-        print("--command string --sandbox string --env string")
+        print("--command string --sandbox string --env string --placeholder string")
         sys.exit(0)
     data = json.loads(metadata.read_text())
     assert args[args.index("--sandbox") + 1] == data["name"]
+    placeholder = args[args.index("--placeholder") + 1]
+    env = args[args.index("--env") + 1]
+    assert data["env"][env] == placeholder, "creation did not receive the registered placeholder"
     assert not (root / "home/.pissbox/isolation-ready").exists(), "secret registered after setup"
     # Deliberately never execute the resolver; this fixture tests orchestration.
     sys.exit(int(os.environ.get("TEST_ISOLATION_SECRET_STATUS", "0")))

@@ -76,7 +76,7 @@ const readinessProbe = `
 		fi
 	`
 
-func (p *processes) finishCreation(primary, state, mailbox string, paths []string, secrets []secret) (string, int) {
+func (p *processes) finishCreation(primary, state, mailbox string, paths []string, secrets []registeredSecret) (string, int) {
 	data, err := os.ReadFile(filepath.Join(mailbox, "name"))
 	if err != nil {
 		return "", fail("Isolation creation returned no identity; refusing to discover or guess a sandbox name.")

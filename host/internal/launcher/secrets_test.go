@@ -74,11 +74,20 @@ func TestSecretCreationScopesToReportedIdentityBeforeSetupAndPi(t *testing.T) {
 				t.Fatalf("%d %v: %s", status, calls, out)
 			}
 			firstSecret := len(calls) - 4
-			if !reflect.DeepEqual(calls[firstSecret], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "*.example.com", "--command", command}) {
-				t.Fatal(calls[firstSecret])
+			api := calls[firstSecret]
+			second := calls[firstSecret+1]
+			placeholder := argValue(api, "--placeholder")
+			if placeholder == "" || argValue(second, "--placeholder") == placeholder {
+				t.Fatal("secret placeholders are not unique", api, second)
 			}
-			if !reflect.DeepEqual(calls[firstSecret+1], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "SECOND", "--host", "other.com", "--command", "/host/bin/get-token --account two"}) {
-				t.Fatal(calls[firstSecret+1])
+			if !reflect.DeepEqual(api, []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "*.example.com", "--placeholder", placeholder, "--command", command}) {
+				t.Fatal(api)
+			}
+			if !contains(calls[1], "API="+placeholder) {
+				t.Fatal("creation did not receive the API placeholder", calls[1])
+			}
+			if !contains(calls[1], "SECOND="+argValue(second, "--placeholder")) {
+				t.Fatal("creation did not receive the SECOND placeholder", calls[1])
 			}
 			setup := calls[len(calls)-2]
 			if setup[0] != "exec" || setup[1] != "--user" || setup[2] != "1000" || setup[3] != "reported" || !strings.Contains(setup[len(setup)-1], "--finalize-isolation") {
@@ -97,6 +106,15 @@ func TestSecretCreationScopesToReportedIdentityBeforeSetupAndPi(t *testing.T) {
 	}
 }
 
+func argValue(call []string, flag string) string {
+	for i := 0; i+1 < len(call); i++ {
+		if call[i] == flag {
+			return call[i+1]
+		}
+	}
+	return ""
+}
+
 func TestSecretFailuresNeverStartPiOrReplaySetup(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -108,6 +126,7 @@ func TestSecretFailuresNeverStartPiOrReplaySetup(t *testing.T) {
 		{"missing command", map[string]string{"SECRET_MISSING_FLAG": "--command"}, "secret", 1},
 		{"missing scope", map[string]string{"SECRET_MISSING_FLAG": "--sandbox"}, "secret", 1},
 		{"missing env", map[string]string{"SECRET_MISSING_FLAG": "--env"}, "secret", 1},
+		{"missing placeholder", map[string]string{"SECRET_MISSING_FLAG": "--placeholder"}, "secret", 1},
 		{"creation", map[string]string{"CREATE_FAIL": "7"}, "secret,create", 7},
 		{"missing identity", map[string]string{"NO_IDENTITY": "1"}, "secret,create", 1},
 		{"invalid identity", map[string]string{"CREATED_NAME": "-unsafe"}, "secret,create", 1},

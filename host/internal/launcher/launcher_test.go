@@ -68,7 +68,7 @@ func testTool() int {
 			if os.Getenv("SECRET_UNSUPPORTED") == "1" {
 				return 1
 			}
-			help := "--command string --sandbox string --env string "
+			help := "--command string --sandbox string --env string --placeholder string "
 			if missing := os.Getenv("SECRET_MISSING_FLAG"); missing != "" {
 				help = strings.ReplaceAll(help, missing+" ", "")
 			}

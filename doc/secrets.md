@@ -1,8 +1,9 @@
 # Proxy-managed secrets
 
-Requires SBX's experimental `secret set-custom --command` support (CLI verified
-with v0.50.0). The sandbox receives a placeholder environment variable; the
-proxy substitutes the real value in request headers sent to `HOST`.
+Requires SBX's experimental `secret set-custom --command` and `--placeholder`
+support (CLI verified with v0.50.0). The sandbox receives a placeholder
+environment variable; the proxy substitutes the real value in request headers
+sent to `HOST`.
 
 ## Global configuration
 
@@ -61,6 +62,14 @@ CLI environment names are still errors. CLI flags never write into the global
 file, and the launcher never executes a configured command or captures its
 stdout: it passes the command string unchanged to
 `sbx secret set-custom --command`. SBX resolves and refreshes the value.
+
+Staged creation makes the sandbox before the launcher knows its name. Because a
+sandbox-scoped custom secret registered after creation does not populate the
+environment, the launcher generates a unique `sbx-cs-...` placeholder for each
+entry, passes it as `--env ENV_NAME=...` during `sbx create`, and registers the
+same value with `--placeholder`. Project setup, Pi, and later shells therefore
+see the placeholder. The placeholder is not a credential; the command remains
+opaque and is never executed by the launcher.
 
 To use a different or smaller set for one launch, point `PISSBOX_CONFIG` at
 another file outside writable mounts, including an empty TOML file. To disable

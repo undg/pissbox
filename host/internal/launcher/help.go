@@ -34,7 +34,7 @@ Shared Linux caches live in PISSBOX_STATE_DIR, created if missing.
 Directory flags override environment variables; relative paths use the caller's directory.
 Settings profile follows the host name; unknown hosts use settings-co.json.
 SBX chooses the sandbox name unless --name is provided.
-Secrets require SBX secret set-custom --command support (verified with v0.50.0).
+Secrets require SBX secret set-custom --command/--placeholder support (verified with v0.50.0).
 ENV_NAME receives a placeholder; HOST is a host/pattern, not a URL.
 Quote COMMAND: SBX runs it on the host for verification and later refresh.
 Keep helpers and dependencies outside writable sandbox mounts.
