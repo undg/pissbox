@@ -43,7 +43,7 @@
           "type": "string"
         },
         "command": {
-          "description": "Host command whose stdout SBX uses as the credential. The command must fetch the value, not embed it. The launcher never executes this command.",
+          "description": "Host command whose stdout SBX uses as the credential. The command must fetch the value, not embed it. The launcher probes it for availability before registration and passes it unchanged to SBX.",
           "type": "string"
         }
       }

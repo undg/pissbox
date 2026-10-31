@@ -21,7 +21,8 @@ import (
 )
 
 // Secret describes one proxy-managed secret. Command is opaque data: the
-// launcher must pass it to SBX without executing it or inspecting its output.
+// launcher may probe it for availability but must pass it to SBX unchanged and
+// never inspect its output.
 type Secret struct {
 	Env     string
 	Host    string

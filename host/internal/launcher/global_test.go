@@ -11,31 +11,27 @@ import (
 
 func TestGlobalSecretsRegisterOnCreationAndNotOnAttach(t *testing.T) {
 	f := newFixture(t)
-	marker := filepath.Join(f.project, "must-not-execute-on-host")
-	global := fmt.Sprintf(`[secrets.ZED]
+	global := `[secrets.ZED]
 host = "z.example.com"
-command = "touch '%s'"
+command = "printf zed"
 [secrets.ALPHA]
 host = "*.example.com"
-command = "/host/bin/get-alpha --account one"
-`, marker)
+command = "test -n \"$HOME\""
+`
 	f.write(f.userConfig, global)
 	out, status, calls := f.launch("", nil, "-c")
 	if status != 0 || kinds(calls) != "secret,create,secret,secret,exec,run" {
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
 	want := [][]string{
-		{"secret", "set-custom", "--sandbox", "reported", "--env", "ALPHA", "--host", "*.example.com", "--placeholder", argValue(calls[2], "--placeholder"), "--command", "/host/bin/get-alpha --account one"},
-		{"secret", "set-custom", "--sandbox", "reported", "--env", "ZED", "--host", "z.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "touch '" + marker + "'"},
+		{"secret", "set-custom", "--sandbox", "reported", "--env", "ALPHA", "--host", "*.example.com", "--placeholder", argValue(calls[2], "--placeholder"), "--command", "test -n \"$HOME\""},
+		{"secret", "set-custom", "--sandbox", "reported", "--env", "ZED", "--host", "z.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "printf zed"},
 	}
 	if !reflect.DeepEqual(calls[2:4], want) {
 		t.Fatal(calls)
 	}
 	if !contains(calls[1], "ALPHA="+argValue(calls[2], "--placeholder")) || !contains(calls[1], "ZED="+argValue(calls[3], "--placeholder")) {
 		t.Fatal("creation did not receive global secret placeholders", calls[1])
-	}
-	if _, err := os.Stat(marker); !os.IsNotExist(err) {
-		t.Fatal("launcher executed global secret command")
 	}
 	if calls[4][0] != "exec" || !strings.Contains(calls[4][len(calls[4])-1], "--finalize-isolation") {
 		t.Fatal(calls)
@@ -54,13 +50,14 @@ command = "/host/bin/get-alpha --account one"
 
 func TestCLIOverridesGlobalAndLeavesConfigReadOnly(t *testing.T) {
 	f := newFixture(t)
-	global := `[secrets.API]
+	marker := filepath.Join(f.project, "overridden-command-ran")
+	global := fmt.Sprintf(`[secrets.API]
 host = "global.example.com"
-command = "global_command"
+command = "touch '%s'"
 [secrets.OTHER]
 host = "other.example.com"
-command = "other_command"
-`
+command = "true"
+`, marker)
 	f.write(f.userConfig, global)
 	out, status, calls := f.launch("", nil, "--secret", "API", "cli.example.com", "cli_command")
 	if status != 0 || kinds(calls) != "secret,create,secret,secret,exec,run" {
@@ -69,11 +66,14 @@ command = "other_command"
 	if !reflect.DeepEqual(calls[2], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "cli.example.com", "--placeholder", argValue(calls[2], "--placeholder"), "--command", "cli_command"}) {
 		t.Fatal(calls[2])
 	}
-	if !reflect.DeepEqual(calls[3], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "OTHER", "--host", "other.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "other_command"}) {
+	if !reflect.DeepEqual(calls[3], []string{"secret", "set-custom", "--sandbox", "reported", "--env", "OTHER", "--host", "other.example.com", "--placeholder", argValue(calls[3], "--placeholder"), "--command", "true"}) {
 		t.Fatal(calls[3])
 	}
 	if !contains(calls[1], "API="+argValue(calls[2], "--placeholder")) || !contains(calls[1], "OTHER="+argValue(calls[3], "--placeholder")) {
 		t.Fatal("creation did not receive merged placeholders", calls[1])
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("launcher probed a CLI-overridden global command")
 	}
 	if data, err := os.ReadFile(f.userConfig); err != nil || string(data) != global {
 		t.Fatal("CLI changed global config", string(data), err)
@@ -85,6 +85,40 @@ command = "other_command"
 	}
 	if data, _ := os.ReadFile(f.userConfig); string(data) != global {
 		t.Fatal("duplicate CLI entries changed global config")
+	}
+}
+
+func TestInaccessibleGlobalSecretsAreSkipped(t *testing.T) {
+	f := newFixture(t)
+	global := `[secrets.GOOD]
+host = "good.example.com"
+command = "true"
+[secrets.BAD]
+host = "bad.example.com"
+command = "exit 3"
+[secrets.MISSING]
+host = "missing.example.com"
+command = "/definitely/not/a/real/command"
+`
+	f.write(f.userConfig, global)
+	out, status, calls := f.launch("", nil)
+	if status != 0 || kinds(calls) != "secret,create,secret,exec,run" {
+		t.Fatalf("%d %v: %s", status, calls, out)
+	}
+	for _, name := range []string{"BAD", "MISSING"} {
+		if strings.Count(out, "Global secret "+name+" was not added") != 1 {
+			t.Fatalf("missing warning for %s: %s", name, out)
+		}
+	}
+	if strings.Contains(out, "Global secret GOOD") || !strings.Contains(out, "Global secret BAD was not added") || !strings.Contains(out, "Global secret MISSING was not added") {
+		t.Fatal(out)
+	}
+	if !reflect.DeepEqual(calls[2][4:6], []string{"--env", "GOOD"}) {
+		t.Fatal(calls[2])
+	}
+	created := strings.Join(calls[1], " ")
+	if strings.Contains(created, "BAD=") || strings.Contains(created, "MISSING=") {
+		t.Fatal("skipped secret passed to creation", calls[1])
 	}
 }
 

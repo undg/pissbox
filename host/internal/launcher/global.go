@@ -1,13 +1,17 @@
 package launcher
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"pissbox/host/config"
 )
@@ -56,6 +60,38 @@ func loadGlobalSecrets(root, cwd string, mounts []string) ([]secret, int) {
 		return nil, fail("%s", err)
 	}
 	return secrets, 0
+}
+
+// accessibleSecrets drops global entries whose command cannot run, warning by
+// environment name. Entries overridden by a CLI secret are kept without probing.
+func accessibleSecrets(secrets, overrides []secret) []secret {
+	kept := secrets[:0]
+	for _, s := range secrets {
+		if overridden(s.Env, overrides) || commandRuns(s.Command) {
+			kept = append(kept, s)
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "Warning: Global secret %s was not added: command could not be executed.\n", s.Env)
+	}
+	return kept
+}
+
+func overridden(env string, secrets []secret) bool {
+	for _, s := range secrets {
+		if s.Env == env {
+			return true
+		}
+	}
+	return false
+}
+
+func commandRuns(command string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	return cmd.Run() == nil
 }
 
 // mergeSecrets applies CLI entries over global entries by environment name.

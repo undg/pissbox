@@ -95,7 +95,7 @@ func run(root, host string, args []string) int {
 	if status != 0 {
 		return status
 	}
-	secrets := mergeSecrets(global, o.secrets)
+	secrets := mergeSecrets(accessibleSecrets(global, o.secrets), o.secrets)
 	staged := len(project.Isolated) > 0 || len(secrets) > 0
 	var registrations []registeredSecret
 	if len(secrets) > 0 {

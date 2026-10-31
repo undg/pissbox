@@ -59,17 +59,24 @@ attaches never add or update them. Use a new sandbox name to change the set.
 `--secret ENV_NAME HOST COMMAND` remains available for one-off additions.
 A CLI entry overrides the same environment name from global config. Duplicate
 CLI environment names are still errors. CLI flags never write into the global
-file, and the launcher never executes a configured command or captures its
-stdout: it passes the command string unchanged to
-`sbx secret set-custom --command`. SBX resolves and refreshes the value.
+file. The launcher passes the command string unchanged to
+`sbx secret set-custom --command`; SBX resolves and refreshes the value.
+
+Before merging, the launcher runs each global command once with stdin, stdout,
+and stderr discarded and a 10-second timeout. A command that exits non-zero or
+times out is dropped and reported by environment name on stderr; other entries
+continue. This lets one config work on machines that lack some credentials.
+Entries overridden by a CLI `--secret` are not probed. Commands therefore run
+more than once and must be repeatable and free of side effects. Help, list,
+delete, and bridge-stop never probe.
 
 Staged creation makes the sandbox before the launcher knows its name. Because a
 sandbox-scoped custom secret registered after creation does not populate the
 environment, the launcher generates a unique `sbx-cs-...` placeholder for each
 entry, passes it as `--env ENV_NAME=...` during `sbx create`, and registers the
 same value with `--placeholder`. Project setup, Pi, and later shells therefore
-see the placeholder. The placeholder is not a credential; the command remains
-opaque and is never executed by the launcher.
+see the placeholder. The placeholder is not a credential; after the availability
+probe the command remains opaque and its output is never captured.
 
 To use a different or smaller set for one launch, point `PISSBOX_CONFIG` at
 another file outside writable mounts, including an empty TOML file. To disable

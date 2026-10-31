@@ -122,9 +122,11 @@ dependencies but never installs them automatically.
   mailbox setup, or any SBX call. A missing default is created as an exclusive
   0600 schema-only starter (creation failure warns and continues); an explicit
   missing target is an error. Reject directories/non-regular files and any path
-  inside a mounted workspace, Pi, or state directory. Global entries are
-  read-only data; merge CLI secrets over them by environment name. Never execute
-  commands, write the file, or read/create it for help/list/delete/bridge-stop.
+  inside a mounted workspace, Pi, or state directory. Probe each global command
+  before merging: discard output, enforce a timeout, drop failures with a
+  stderr warning naming the environment variable, and do not probe entries
+  overridden by CLI secrets. Merge CLI secrets over them by environment name.
+  Never write the file or read/create it for help/list/delete/bridge-stop.
   Keep `host/config` free of SBX, command execution, mounts, and lifecycle logic.
   Existing Pi/shell attaches run a small inline readiness probe using persisted
   isolation environment plus a sandbox-local ready marker, even if current config
