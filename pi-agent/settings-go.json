@@ -39,7 +39,7 @@
   "tuiMode": "regular",
   "defaultProvider": "opencode-go",
   "defaultModel": "deepseek-v4.1-flash",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "max",
   "enabledModels": [
     "deepseek/deepseek-flash",
     "deepseek/deepseek-v4-pro"
