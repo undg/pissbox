@@ -66,6 +66,14 @@ func (p *processes) capture(name string, args []string, stdin io.Reader) (string
 	status := p.command(name, args, stdin, &output, os.Stderr)
 	return stringsTrimNewlines(output.String()), status
 }
+
+// captureCommand buffers both streams so callers can inspect diagnostics before
+// deciding whether to show or recover from them.
+func (p *processes) captureCommand(name string, args []string) (string, string, int) {
+	var stdout, stderr bytes.Buffer
+	status := p.command(name, args, os.Stdin, &stdout, &stderr)
+	return stdout.String(), stderr.String(), status
+}
 func stringsTrimNewlines(s string) string {
 	for len(s) > 0 && s[len(s)-1] == '\n' {
 		s = s[:len(s)-1]

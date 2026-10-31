@@ -115,6 +115,45 @@ func argValue(call []string, flag string) string {
 	return ""
 }
 
+func TestStaleScopedSecretIsReplacedBeforeSetup(t *testing.T) {
+	f := newFixture(t)
+	out, status, calls := f.launch("", map[string]string{"SECRET_CONFLICT": "sbx-cs-stale"}, "--secret", "API", "example.com", "get_token")
+	if status != 0 || kinds(calls) != "secret,create,secret,secret,secret,exec,run" {
+		t.Fatalf("%d %v: %s", status, calls, out)
+	}
+	if !reflect.DeepEqual(calls[3], []string{"secret", "rm", "--sandbox", "reported", "--placeholder", "sbx-cs-stale", "--force"}) {
+		t.Fatal(calls[3])
+	}
+	placeholder := argValue(calls[4], "--placeholder")
+	if placeholder == "sbx-cs-stale" || !contains(calls[1], "API="+placeholder) {
+		t.Fatal("retry did not register the placeholder given to creation", calls)
+	}
+}
+
+func TestSecretConflictOutsideTheNewScopeStillFails(t *testing.T) {
+	for _, tc := range []map[string]string{
+		{"SECRET_CONFLICT_SCOPE": "global"},
+		{"SECRET_CONFLICT_ENV": "OTHER"},
+	} {
+		t.Run(strings.Join([]string{tc["SECRET_CONFLICT_SCOPE"], tc["SECRET_CONFLICT_ENV"]}, ""), func(t *testing.T) {
+			f := newFixture(t)
+			env := map[string]string{"SECRET_CONFLICT": "sbx-cs-stale"}
+			for key, value := range tc {
+				env[key] = value
+			}
+			out, status, calls := f.launch("", env, "--secret", "API", "example.com", "get_token")
+			if status != 1 || kinds(calls) != "secret,create,secret" || !strings.Contains(out, "already exists") {
+				t.Fatalf("%d %v: %s", status, calls, out)
+			}
+			for _, call := range calls {
+				if len(call) > 1 && call[1] == "rm" {
+					t.Fatal("removed a secret outside the new sandbox scope", call)
+				}
+			}
+		})
+	}
+}
+
 func TestSecretFailuresNeverStartPiOrReplaySetup(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

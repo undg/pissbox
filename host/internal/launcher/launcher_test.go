@@ -75,6 +75,24 @@ func testTool() int {
 			fmt.Fprint(os.Stdout, help)
 			return 0
 		}
+		if len(args) > 1 && args[1] == "rm" {
+			return 0
+		}
+		if stale := os.Getenv("SECRET_CONFLICT"); stale != "" {
+			marker := os.Getenv("LAUNCHER_LOG") + ".conflict"
+			if _, err := os.Stat(marker); os.IsNotExist(err) {
+				os.WriteFile(marker, nil, 0600)
+				env, scope := flagValue(args, "--env"), flagValue(args, "--sandbox")
+				if override := os.Getenv("SECRET_CONFLICT_ENV"); override != "" {
+					env = override
+				}
+				if override := os.Getenv("SECRET_CONFLICT_SCOPE"); override != "" {
+					scope = override
+				}
+				fmt.Fprintf(os.Stderr, "error: custom secret env %q already exists in scope %q with placeholder %q\n", env, scope, stale)
+				return 1
+			}
+		}
 		n, _ := strconv.Atoi(os.Getenv("SECRET_STATUS"))
 		return n
 	case "ls":
@@ -304,6 +322,15 @@ func (f fixture) calls() [][]string {
 	}
 	return calls
 }
+func flagValue(args []string, flag string) string {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == flag {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 func kinds(calls [][]string) string {
 	var result []string
 	for _, args := range calls {

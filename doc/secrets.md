@@ -78,6 +78,12 @@ same value with `--placeholder`. Project setup, Pi, and later shells therefore
 see the placeholder. The placeholder is not a credential; after the availability
 probe the command remains opaque and its output is never captured.
 
+A sandbox name can be reused after deletion while its scoped secret survives in
+SBX. When an environment name from the new configuration already exists in the
+new sandbox's scope, the launcher removes that stale registration by placeholder
+and registers the current one. Conflicts in any other scope are errors and are
+never removed automatically.
+
 To use a different or smaller set for one launch, point `PISSBOX_CONFIG` at
 another file outside writable mounts, including an empty TOML file. To disable
 global secrets for one launch, do the same with an empty file; do not rely on a

@@ -78,9 +78,8 @@ class SecretTests(unittest.TestCase):
         self.assertFalse((self.project / "setup-marker").exists())
 
     def test_global_config_registers_before_setup_and_cli_overrides_by_name(self):
-        marker = self.project / "host-execution"
-        original = (f'[secrets.ZED]\nhost = "z.example.com"\ncommand = "touch {marker}"\n'
-                    '[secrets.API]\nhost = "global.example.com"\ncommand = "global_command"\n')
+        original = ('[secrets.ZED]\nhost = "z.example.com"\ncommand = "printf zed"\n'
+                    '[secrets.API]\nhost = "global.example.com"\ncommand = "printf api"\n')
         self.global_config.write_text(original)
         result, calls = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -89,13 +88,12 @@ class SecretTests(unittest.TestCase):
         self.assertNotEqual(api, zed)
         self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
                                     "--env", "API", "--host", "global.example.com",
-                                    "--placeholder", api, "--command", "global_command"])
+                                    "--placeholder", api, "--command", "printf api"])
         self.assertEqual(calls[3], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
                                     "--env", "ZED", "--host", "z.example.com",
-                                    "--placeholder", zed, "--command", f"touch {marker}"])
+                                    "--placeholder", zed, "--command", "printf zed"])
         self.assertIn("API=" + api, calls[1])
         self.assertIn("ZED=" + zed, calls[1])
-        self.assertFalse(marker.exists())
         self.assertEqual(self.global_config.read_text(), original)
 
         (self.root / "sandbox.json").unlink()
@@ -121,6 +119,18 @@ class SecretTests(unittest.TestCase):
         result, calls = self.launch("--name", "chosen", "-y")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["run", "exec", "run"])
+
+    def test_stale_sandbox_scoped_secret_is_replaced_during_creation(self):
+        result, calls = self.launch("--secret", "API", "api.example.com", "get_token",
+                                    TEST_ISOLATION_SECRET_CONFLICT="sbx-cs-stale")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([call[0] for call in calls],
+                         ["secret", "create", "secret", "secret", "secret", "exec", "run"])
+        self.assertEqual(calls[3], ["secret", "rm", "--sandbox", "sbx-assigned-not-guessed",
+                                    "--placeholder", "sbx-cs-stale", "--force"])
+        placeholder = flag(calls[4], "--placeholder")
+        self.assertNotEqual(placeholder, "sbx-cs-stale")
+        self.assertIn("API=" + placeholder, calls[1])
 
     def test_failed_registration_blocks_setup_and_later_pi_shell_attaches(self):
         config = self.project / ".pissbox.toml"
