@@ -99,7 +99,7 @@ func run(root, host string, args []string) int {
 	staged := len(project.Isolated) > 0 || len(secrets) > 0
 	var registrations []registeredSecret
 	if len(secrets) > 0 {
-		if status := p.checkSecrets(); status != 0 {
+		if status := p.checkSbxSecretFlag(); status != 0 {
 			return status
 		}
 		registrations, err = prepareSecrets(secrets)

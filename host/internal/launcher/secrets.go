@@ -21,7 +21,7 @@ type registeredSecret struct {
 	Placeholder string
 }
 
-func (p *processes) checkSecrets() int {
+func (p *processes) checkSbxSecretFlag() int {
 	help, status := p.capture("sbx", []string{"secret", "set-custom", "--help"}, nil)
 	if status != 0 {
 		return fail("--secret requires SBX secret set-custom --command/--placeholder support (verified with v0.50.0).")
