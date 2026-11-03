@@ -7,7 +7,7 @@
  * Delete this file to remove the extension.
  */
 
-import { Text, TruncatedText } from "@earendil-works/pi-tui";
+import { Box, Text, TruncatedText } from "@earendil-works/pi-tui";
 
 const PREFERRED_ARG_KEYS = [
 	"command",
@@ -101,26 +101,41 @@ export default function compactTools(pi) {
 		/** @param {number} outputPad */
 		const padding = (outputPad) => shell === "self" ? outputPad : 0;
 
+		/**
+		 * Self-rendering avoids Pi's default vertical box padding. Keep native
+		 * self-renderers untouched when expanded; frame default renderers here.
+		 * @param {import("@earendil-works/pi-tui").Component} component
+		 * @param {import("@earendil-works/pi-coding-agent").Theme} theme
+		 * @param {any} context
+		 */
+		const frame = (component, theme, context) => {
+			if (context.expanded && shell === "self") return component;
+			const background = context.isPartial ? "toolPendingBg" : context.isError ? "toolErrorBg" : "toolSuccessBg";
+			const box = new Box(context.outputPad, context.expanded ? 1 : 0, (text) => theme.bg(background, text));
+			box.addChild(component);
+			return box;
+		};
+
 		return {
-			renderShell: shell,
+			renderShell: "self",
 			renderCall(args, theme, context) {
 				if (context.expanded) {
 					if (native?.renderCall) {
-						return native.renderCall(args, theme, freshContext(context));
+						return frame(native.renderCall(args, theme, freshContext(context)), theme, context);
 					}
 					const body = JSON.stringify(args ?? {}, null, 2);
 					const text = `${theme.fg("toolTitle", theme.bold(toolName))}\n${theme.fg("toolOutput", body)}`;
-					return new Text(text, padding(context.outputPad), 0);
+					return frame(new Text(text, padding(context.outputPad), 0), theme, context);
 				}
-				return new TruncatedText(collapsedLine(toolName, args, theme), padding(context.outputPad), 0);
+				return frame(new TruncatedText(collapsedLine(toolName, args, theme), 0, 0), theme, context);
 			},
 			renderResult(result, options, theme, context) {
 				if (!context.expanded) return EMPTY;
 				if (native?.renderResult) {
-					return native.renderResult(result, { ...options, expanded: true }, theme, freshContext(context));
+					return frame(native.renderResult(result, { ...options, expanded: true }, theme, freshContext(context)), theme, context);
 				}
 				const text = resultText(result);
-				return text ? new Text(theme.fg("toolOutput", text), padding(context.outputPad), 0) : EMPTY;
+				return text ? frame(new Text(theme.fg("toolOutput", text), padding(context.outputPad), 0), theme, context) : EMPTY;
 			},
 		};
 	});

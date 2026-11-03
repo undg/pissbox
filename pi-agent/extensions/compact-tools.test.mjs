@@ -57,12 +57,39 @@ function visibleLines(component, width = 80) {
 		.filter(Boolean);
 }
 
-test("collapsed bash shows one line and no output preview", () => {
+test("collapsed tools occupy two lines, keeping horizontal padding and hiding output", () => {
 	const component = toolComponent("bash", { command: "make test" });
-	assert.deepEqual(visibleLines(component), ["bash make test"]);
+	const expected = ["", ` bash make test${" ".repeat(65)}`];
+	assert.deepEqual(component.render(80).map(stripTerminalSequences), expected);
 
 	component.updateResult(result("line one\nline two"));
-	assert.deepEqual(visibleLines(component), ["bash make test"]);
+	assert.deepEqual(component.render(80).map(stripTerminalSequences), expected);
+
+	component.setExpanded(true);
+	component.setExpanded(false);
+	assert.deepEqual(component.render(80).map(stripTerminalSequences), expected);
+});
+
+test("collapsed tools keep pending, success and error background colors", () => {
+	const component = toolComponent("bash", { command: "make test" });
+	const pending = component.render(80)[1];
+	component.updateResult(result("done"));
+	const success = component.render(80)[1];
+	component.updateResult(result("failed", true));
+	const error = component.render(80)[1];
+	assert.notEqual(pending, stripTerminalSequences(pending));
+	assert.notEqual(pending, success);
+	assert.notEqual(success, error);
+	assert.notEqual(pending, error);
+});
+
+test("native self-renderers also collapse to two lines and keep their expanded framing", () => {
+	const component = toolComponent("bash", { command: "make test" }, { ...native, renderShell: "self" });
+	assert.equal(component.render(80).length, 2);
+	assert.equal(stripTerminalSequences(component.render(80)[1]).indexOf("bash"), 1);
+	component.updateResult(result("done"));
+	component.setExpanded(true);
+	assert.deepEqual(component.render(80).map((line) => stripTerminalSequences(line).trimEnd()), ["", "NATIVE make test", "NATIVE RESULT done"]);
 });
 
 test("expanded rows delegate to the native renderer", () => {
