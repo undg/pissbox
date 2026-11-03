@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# Pi must start before project tools are installed; never enter a mise shim here.
+exec /opt/pissbox/mise/installs/node/26.9.0/bin/node /opt/pissbox/npm/bin/pi "$@"

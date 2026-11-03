@@ -89,13 +89,48 @@ class KitLayoutTests(unittest.TestCase):
         self.assertLess(dockerfile.index("sha256sum -c -", mise_step), extract)
         self.assertIn("--strip-components=2 mise/bin/mise", dockerfile)
         self.assertIn("ENV MISE_DATA_DIR=/opt/pissbox/mise", dockerfile)
-        self.assertIn('ENV PATH="/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"', dockerfile)
+        self.assertIn('ENV PATH="/opt/pissbox/bin:/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"', dockerfile)
         self.assertLess(dockerfile.index('chown -R agent:agent "$MISE_DATA_DIR" "$NPM_CONFIG_PREFIX"'), pnpm_step)
         self.assertEqual(dockerfile[:pnpm_step].rsplit("USER ", 1)[1].splitlines()[0], "agent")
         self.assertIn('test "$(pnpm --version)" = "12.15.0"', dockerfile)
         self.assertNotIn("npm install -g pnpm", dockerfile)
         self.assertIn("for tool in node npm npx pnpm pnpx; do", dockerfile)
         self.assertIn('ln -sf "/opt/pissbox/mise/shims/$tool" "/usr/local/bin/$tool"', dockerfile)
+
+    def test_pi_launcher_bypasses_project_shims_and_preserves_arguments_and_status(self):
+        dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()
+        launcher = (ROOT / "sbx-kit/pi-launcher").read_text()
+        node_path = "/opt/pissbox/mise/installs/node/26.9.0/bin/node"
+        self.assertIn("mise use -g node@26.9.0", dockerfile)
+        self.assertIn(node_path, launcher)
+        self.assertIn("COPY --chmod=755 pi-launcher /opt/pissbox/bin/pi", dockerfile)
+        self.assertIn("ln -sf /opt/pissbox/bin/pi /usr/local/bin/pi", dockerfile)
+        self.assertIn('ENV PATH="/opt/pissbox/bin:/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"',
+                      dockerfile)
+
+        fixtures = ROOT / ".cache/test-fixtures"
+        fixtures.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=fixtures) as directory:
+            project = Path(directory)
+            (project / "mise.toml").write_text('[tools]\nnode = "0.0.0"\n')
+            shim = project / "node"
+            shim.write_text("#!/bin/sh\necho 'project shim reached' >&2\nexit 99\n")
+            shim.chmod(0o755)
+            bundled_node = project / "bundled-node"
+            bundled_node.write_text('#!/bin/sh\nprintf \'%s\\n\' "$PWD" "$@"\nexit 23\n')
+            bundled_node.chmod(0o755)
+            pi = project / "pi"
+            pi.write_text(launcher.replace(node_path, str(bundled_node)))
+            result = subprocess.run(
+                ["/bin/sh", str(pi), "--offline", "message with spaces", ""],
+                cwd=project, env={**os.environ, "PATH": str(project)},
+                text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 23, result.stderr)
+            self.assertEqual(result.stderr, "")
+            self.assertEqual(result.stdout.splitlines(),
+                             [str(project), "/opt/pissbox/npm/bin/pi", "--offline",
+                              "message with spaces", ""])
 
     def test_project_toml_parser_is_pinned_verified_and_installed_after_ca(self):
         dockerfile = (ROOT / "sbx-kit/Dockerfile").read_text()

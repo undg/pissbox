@@ -60,7 +60,7 @@ ENV MISE_DATA_DIR=/opt/pissbox/mise
 # Keep Pi and its self-updates independent of the selected Node version.
 ENV NPM_CONFIG_PREFIX=/opt/pissbox/npm
 ENV NODE_USE_SYSTEM_CA=1
-ENV PATH="/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"
+ENV PATH="/opt/pissbox/bin:/opt/pissbox/mise/shims:/opt/pissbox/npm/bin:${PATH}"
 RUN version=2026.10.21 && \
     case "$TARGETARCH" in \
         amd64) arch=x64; checksum=e1743bb7628927f93d4ffb2c4e2c4f71186307612f59ebc7f85d52e3a7f42461 ;; \
@@ -133,7 +133,9 @@ RUN printf '%s\n' '{"default_model":"/opt/pissbox/models/LateOn-Code-edge"}' \
 ##########################################################
 # Keep tools available in minimal-PATH execution contexts.
 ##########################################################
-RUN ln -sf "$(npm prefix -g)/bin/pi" /usr/local/bin/pi && \
+# Pi's --offline must not reach mise, nor depend on project Node installations.
+COPY --chmod=755 pi-launcher /opt/pissbox/bin/pi
+RUN ln -sf /opt/pissbox/bin/pi /usr/local/bin/pi && \
     ln -sf /home/agent/.local/bin/colgrep /usr/local/bin/colgrep && \
     for tool in node npm npx pnpm pnpx; do \
         ln -sf "/opt/pissbox/mise/shims/$tool" "/usr/local/bin/$tool" || exit 1; \

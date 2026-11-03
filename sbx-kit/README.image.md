@@ -72,8 +72,11 @@ shared cache mounts, writable by `agent`; global configuration lives in
 `~/.config/mise/config.toml` inside the sandbox. These are not shared across
 sandboxes. `NPM_CONFIG_PREFIX=/opt/pissbox/npm` keeps global npm packages,
 including Pi and its self-updates, writable by `agent` and independent of the
-selected Node version. Pi runs with the selected Node; project Node versions
-must satisfy Pi's runtime requirements.
+selected Node version. `/usr/local/bin/pi` launches Pi directly with bundled
+Node 26.9.0, bypassing mise. Keep the Node path in `sbx-kit/pi-launcher` aligned
+with the image pin. Pi can start before project tools are installed, and its
+`--offline` flag cannot be consumed by mise's Node shim. Commands run by Pi
+still use the project's mise-selected tools.
 
 mise shims precede the base image's tools on PATH, so project tool versions
 from `mise.toml` work in Pi commands and non-interactive project setup without
