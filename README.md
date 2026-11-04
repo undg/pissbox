@@ -181,6 +181,14 @@ sandboxes; use it when upgrading or recovering from a protocol mismatch.
 `make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64. See the
 [bridge guide](host/README.md) for setup and daemon lifecycle.
 
+The bridge also provides shared host-only Markdown vaults through `vault_*`
+tools and the `vault-manager` skill. Configure `[vault.<name>]` tables in the
+host global config; vaults are never mounted by this feature. Notes are saved
+immediately, with automatic single-note history in Git-enabled repositories.
+Obsidian is optional, used only to open notes on your desktop. Host Git is needed
+for that history; opening requires Obsidian and macOS `open` or Linux `xdg-open`.
+See the [vault guide](doc/vault.md) for configuration, safety, and limits.
+
 New interactive sessions also generate a title from the first prompt. Use
 `/skill:session-name` to refresh it from the conversation, or `/name My title`
 for a manual rename. Automatic naming makes a small additional model request.

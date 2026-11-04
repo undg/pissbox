@@ -122,6 +122,7 @@ func Load(path string) ([]Secret, error) {
 
 type document struct {
 	Secrets map[string]entry `toml:"secrets"`
+	Vaults  map[string]Vault `toml:"vault"`
 }
 
 type entry struct {
@@ -143,6 +144,9 @@ func parse(data []byte) ([]Secret, error) {
 	var doc document
 	if _, err := toml.Decode(string(data), &doc); err != nil {
 		return nil, fmt.Errorf("invalid global configuration: %w", err)
+	}
+	if _, err := vaultDefinitions(doc.Vaults); err != nil {
+		return nil, err
 	}
 	secrets := make([]Secret, 0, len(doc.Secrets))
 	for name, value := range doc.Secrets {

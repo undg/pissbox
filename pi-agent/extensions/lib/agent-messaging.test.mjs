@@ -61,14 +61,16 @@ function nativeSession(mailbox, mode = "rpc") {
 		},
 	};
 }
-function daemon(t) {
+function daemon(t, configText = "") {
 	const dir = mkdtempSync(path.join(fixtures, "b"));
 	const socket = path.join(dir, "control.sock");
 	assert.ok(Buffer.byteLength(socket) <= 103,
 		`Private bridge socket needs ${Buffer.byteLength(socket)} bytes (limit 103): ${socket}; use a shorter checkout or fixture root`);
 	const binary = path.join(dir, "bridge");
 	execFileSync("go", ["build", "-o", binary, "./cmd/pissbox-bridge"], { cwd: path.join(root, "host"), timeout: 60000 });
-	const env = { ...process.env, PISSBOX_BRIDGE_RUNTIME_DIR: dir };
+	const config = path.join(dir, "config.toml");
+	writeFileSync(config, configText);
+	const env = { ...process.env, PISSBOX_BRIDGE_RUNTIME_DIR: dir, PISSBOX_CONFIG: config };
 	const cli = (...args) => execFileSync(binary, args, { env, encoding: "utf8", timeout: 6000 });
 	cli("ensure");
 	t.after(async () => {
@@ -222,4 +224,45 @@ test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t
 	s.emit("session_shutdown"); s.emit("session_shutdown");
 	assert.equal(liveTimers.size, 0);
 	await assert.rejects(s.call("agent_list"), /unavailable/);
+});
+
+test("shared host-only vault tools persist notes, fence stale writers and keep history internal", async (t) => {
+	const notes = mkdtempSync(path.join(fixtures, "vault-notes-"));
+	const git = (...args) => execFileSync("git", args, { cwd: notes, encoding: "utf8" }).trim();
+	git("init", "--quiet");
+	git("config", "user.name", "Vault integration test");
+	git("config", "user.email", "vault@example.invalid");
+	const mailbox = daemon(t, `[vault.shared]\npath = ${JSON.stringify(notes)}\ngit = true\n`);
+	const a = nativeSession(mailbox(), "rpc"), b = nativeSession(mailbox(), "json");
+	t.after(() => { a.emit("session_shutdown"); b.emit("session_shutdown"); });
+	a.emit("session_start"); b.emit("session_start");
+	const listing = (await a.call("vault_list")).details;
+	assert.deepEqual(listing.vaults, ["shared"]);
+	assert.ok(!JSON.stringify(listing).includes(notes), "host paths are not returned");
+	const created = (await a.call("vault_new", { path: "ideas.md", content: "Shared findings\n", tags: ["topic/sub"] })).structuredContent;
+	assert.equal(created.path, "ideas.md");
+	assert.equal(git("log", "-1", "--format=%s"), "vault: ideas.md");
+	const read = (await b.call("vault_read", { path: "ideas.md" })).details;
+	assert.equal(read.revision, created.revision);
+	assert.match(read.content, /Shared findings/);
+	const edited = (await b.call("vault_edit", { path: read.path, revision: read.revision, oldText: "Shared findings", newText: "Verified shared findings" })).details;
+	assert.notEqual(edited.revision, read.revision);
+	await assert.rejects(a.call("vault_save", { path: read.path, revision: read.revision, content: "stale overwrite" }), /reread/);
+	const found = (await a.call("vault_search", { query: "verified", tag: "topic" })).details;
+	assert.equal(found.notes.length, 1);
+	assert.equal(found.notes[0].path, "ideas.md");
+	const tags = (await b.call("vault_tags")).details;
+	assert.deepEqual(tags.tags, [{ tag: "topic/sub", count: 1 }]);
+	await assert.rejects(a.call("vault_read", { path: "../outside.md" }), /vault-relative/);
+	assert.equal(git("rev-list", "--count", "HEAD"), "2", "every successful mutation records one note automatically");
+	assert.match(readFileSync(path.join(notes, "ideas.md"), "utf8"), /Verified shared findings/);
+});
+
+test("vault startup failures leave agent messaging available and report no false saves", async (t) => {
+	const mailbox = daemon(t, "[vault.broken]\npath = '/no-such-vault-directory'\n");
+	const s = nativeSession(mailbox());
+	t.after(() => s.emit("session_shutdown"));
+	s.emit("session_start");
+	assert.equal((await s.call("agent_list")).details.status, "ok");
+	await assert.rejects(s.call("vault_list"), /unavailable/);
 });

@@ -44,7 +44,7 @@ func (r *registration) start(root, pi, state string) {
 		fmt.Fprintln(os.Stderr, "Warning: Host bridge binary missing; run bin/build-bridge. Continuing without it.")
 		return
 	}
-	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		if !isFile(filepath.Join(pi, resource)) {
 			fmt.Fprintln(os.Stderr, "Warning: Host bridge extension missing from selected Pi directory. Continuing without it.")
 			return

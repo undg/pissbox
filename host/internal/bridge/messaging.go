@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 	"unicode/utf8"
+
+	"pissbox/host/internal/vault"
 )
 
 const maxRecordBytes = 32 * 1024
@@ -41,12 +43,14 @@ type presenceRecord struct {
 	Agent   agentIdentity `json:"agent"`
 }
 type agentRequest struct {
-	Version   int    `json:"version"`
-	ID        string `json:"id"`
-	Op        string `json:"op"`
-	To        string `json:"to,omitempty"`
-	Text      string `json:"text,omitempty"`
-	InReplyTo string `json:"inReplyTo,omitempty"`
+	Version   int            `json:"version"`
+	ID        string         `json:"id"`
+	Op        string         `json:"op"`
+	To        string         `json:"to,omitempty"`
+	Text      string         `json:"text,omitempty"`
+	InReplyTo string         `json:"inReplyTo,omitempty"`
+	VaultOp   string         `json:"vaultOp,omitempty"`
+	Params    *vault.Request `json:"params,omitempty"`
 }
 type peerMessage struct {
 	Version   int           `json:"version"`
@@ -65,6 +69,7 @@ type agentResponse struct {
 	MessageID string          `json:"messageId,omitempty"`
 	Self      *agentIdentity  `json:"self,omitempty"`
 	Peers     []agentIdentity `json:"peers,omitempty"`
+	Result    any             `json:"result,omitempty"`
 }
 type inboxIndex struct {
 	Version  int      `json:"version"`
@@ -94,9 +99,11 @@ type pendingMessage struct {
 	deadline  time.Time
 }
 type messageRouter struct {
-	agents  map[string]*liveAgent
-	retired map[string]bool
-	pending map[string]*pendingMessage
+	agents       map[string]*liveAgent
+	retired      map[string]bool
+	pending      map[string]*pendingMessage
+	vaultJobs    chan vaultJob
+	vaultResults chan vaultResult
 }
 
 func randomID() string {
@@ -331,6 +338,18 @@ func (r *messageRouter) requests(a *liveAgent) {
 			continue
 		}
 		switch req.Op {
+		case "vault":
+			if req.Params == nil || r.vaultJobs == nil {
+				response.Error = "vault service unavailable; rebuild and restart the host bridge"
+				break
+			}
+			select {
+			case r.vaultJobs <- vaultJob{agent: a.identity.ID, id: id, op: req.VaultOp, params: *req.Params, deadline: time.Now().Add(8 * time.Second)}:
+				a.requests[id] = nil
+				continue
+			default:
+				response.Error = "vault request queue full; no operation performed"
+			}
 		case "list":
 			self := a.identity
 			response.Self = &self
@@ -449,12 +468,18 @@ func (d *daemon) runMessaging(ctx context.Context) {
 			a.root.Close()
 		}
 	}()
+	vaultDone := r.startVaultWorker(ctx)
+	defer func() { <-vaultDone }()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case result := <-r.vaultResults:
+			if a := r.agents[result.agent]; a != nil {
+				r.respond(a, result.response)
+			}
 		case now := <-ticker.C:
 			r.discover(d, now)
 			r.receipts(now)

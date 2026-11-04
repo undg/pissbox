@@ -182,6 +182,8 @@ if call == ["sbx", "version"]:
                 if status == 0:
                     self.assertIn("Usage:", result.stdout)
                     self.assertIn("Optional bin/artifacts transfers require Python 3", result.stdout)
+                    self.assertIn("Optional vault history requires host Git", result.stdout)
+                    self.assertIn("These optional vault dependencies are not checked or installed here", result.stdout)
                     self.assertIn("Optional --secret needs SBX secret set-custom --command and --placeholder support", result.stdout)
                     self.assertIn("base SBX version check does not verify this optional capability", result.stdout)
                     self.assertIn("jq, and tomljson", result.stdout)

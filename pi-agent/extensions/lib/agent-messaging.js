@@ -5,6 +5,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { getAgentCallsign } from "./agent-identity.js";
+import { registerVaultTools } from "./vault-tools.js";
 
 const MAX_RECORD = 32 * 1024;
 const MAX_TEXT = 16 * 1024;
@@ -121,7 +122,7 @@ export function registerMessaging(pi, mailbox) {
 		clearInterval(old.timer);
 		remove(path.join(old.dir, "presence.json"));
 		for (const pending of [...old.pending.values()]) {
-			pending.fail("Agent address retired; delivery may have occurred; do not resend automatically");
+			pending.fail("Agent address retired; operation may have completed; do not resend automatically");
 		}
 	}
 	function refresh(instance, ctx) {
@@ -151,7 +152,7 @@ export function registerMessaging(pi, mailbox) {
 					remove(path.join(instance.responses, `${id}.json`));
 					pending.finish(response);
 				} else if (Date.now() >= pending.deadline) {
-					pending.fail("Bridge response timeout; delivery may have occurred; do not resend automatically");
+					pending.fail("Bridge response timeout; operation may have completed; do not resend automatically");
 				}
 			}
 			for (const name of incomingNames(instance)) {
@@ -241,7 +242,7 @@ export function registerMessaging(pi, mailbox) {
 				signal?.removeEventListener("abort", abort);
 				remove(path.join(instance.requests, `${id}.json`));
 			}
-			function abort() { pending.fail("Request cancelled; delivery may have occurred; do not resend automatically"); }
+			function abort() { pending.fail("Request cancelled; operation may have completed; do not resend automatically"); }
 			const pending = {
 				deadline: Date.now() + 12000,
 				finish(response) {
@@ -259,6 +260,7 @@ export function registerMessaging(pi, mailbox) {
 			catch (error) { pending.fail(error.message); }
 		});
 	}
+	registerVaultTools(pi, request);
 	// JSON Schema is also the wire representation used by Pi's TypeBox tools.
 	pi.registerTool({
 		name: "agent_list", label: "Agent list",

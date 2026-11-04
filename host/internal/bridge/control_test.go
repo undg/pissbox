@@ -40,7 +40,11 @@ func processFixture(t *testing.T) processBridge {
 	if len(socket) > 103 {
 		t.Fatalf("private bridge socket needs %d bytes (limit 103): %s; use a shorter checkout or fixture root", len(socket), socket)
 	}
-	p := processBridge{t: t, dir: dir, env: append(os.Environ(), "PISSBOX_BRIDGE_TEST_PROCESS=1", "GORACE=atexit_sleep_ms=0", "PISSBOX_BRIDGE_RUNTIME_DIR="+dir)}
+	configPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(configPath, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := processBridge{t: t, dir: dir, env: append(os.Environ(), "PISSBOX_BRIDGE_TEST_PROCESS=1", "GORACE=atexit_sleep_ms=0", "PISSBOX_BRIDGE_RUNTIME_DIR="+dir, "PISSBOX_CONFIG="+configPath)}
 	t.Cleanup(func() {
 		// Always target this isolated directory, never the user's real daemon.
 		controlCall(p.dir, controlRequest{Op: "stop"})

@@ -38,7 +38,7 @@ func TestBridgeHerdBindingAndResourceRefusal(t *testing.T) {
 			}
 		})
 	}
-	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		t.Run(resource, func(t *testing.T) {
 			f := newFixture(t)
 			f.bridge()
