@@ -103,7 +103,10 @@ func TestHostVaultHistoryConfigurationDefaultTrueAndFalse(t *testing.T) {
 }
 
 func TestVaultQueueFullAndUnavailableReturnExplicitFailures(t *testing.T) {
-	mailbox, _ := fixture(t)
+	mailbox, root := fixture(t)
+	if err := publishRecord(root, "generation", randomID()); err != nil {
+		t.Fatal(err)
+	}
 	a := newSimulatedAgent(t, mailbox)
 	live := &liveAgent{identity: agentIdentity{ID: a.id}, root: a.root, requests: make(map[string]*agentResponse)}
 	r := messageRouter{vaultJobs: make(chan vaultJob, 1)}

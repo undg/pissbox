@@ -10,7 +10,10 @@ mkdirSync(fixtures, { recursive: true });
 
 function session(mode = "tui", ready = true) {
 	const mailbox = mkdtempSync(path.join(fixtures, "extension-"));
-	if (ready) writeFileSync(path.join(mailbox, "ready"), "3\n");
+	if (ready) {
+		writeFileSync(path.join(mailbox, "ready"), "4\n");
+		writeFileSync(path.join(mailbox, "generation"), JSON.stringify("a".repeat(32)));
+	}
 	const previous = process.env.PISSBOX_BRIDGE_DIR;
 	process.env.PISSBOX_BRIDGE_DIR = mailbox;
 	const handlers = new Map();
@@ -83,6 +86,7 @@ test("does not report Herd state for headless sessions or a stale mailbox", () =
 	utimesSync(path.join(stale.mailbox, "ready"), new Date(0), new Date(0));
 	stale.emit("session_start");
 	assert.deepEqual(stale.events(), []);
+	stale.emit("session_shutdown");
 });
 
 test("reload startup reflects a busy run and helper failure warns only once", () => {

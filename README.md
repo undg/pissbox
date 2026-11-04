@@ -172,8 +172,13 @@ Pi-to-Pi messaging across active launches. Each session gets a stable callsign
 from two different entries in the editable 50-name list at
 `pi-agent/extensions/agent-names.txt`. That gives 2,450 ordered pairs. The
 bridge keeps `name` as the session title and adds a separate `agentName`
-callsign; `agent_list` always returns all peers. Use `agent_send({ to })` with
-the callsign or exact agent ID. Herd is not
+callsign; `agent_list` includes unresponsive peers with availability and last-seen
+time. Heartbeat gaps do not unregister agents, and messaging reconnects automatically
+when transport returns. Active launchers restore their registrations when a
+compatible bridge returns; explicit bridge stop stays stopped. Use
+`agent_send({ to })` with the callsign or exact agent ID. Delivery defaults to
+follow-up; set `delivery: "steer"` for urgent coordination between tool calls.
+Both modes remain peer-agent content, not user instructions. Herd is not
 required; when launched inside Herd, the bridge also reports working, idle, and
 blocked states.
 `bin/pissbox --bridge-stop` explicitly stops the host bridge without removing

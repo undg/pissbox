@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,12 @@ func newSimulatedAgent(t *testing.T, mailbox string) simulatedAgent {
 }
 func (a simulatedAgent) refresh(t *testing.T) {
 	t.Helper()
-	if err := publishRecord(a.root, "presence.json", presenceRecord{1, agentIdentity{ID: a.id, SessionID: "session-" + a.id, Name: "peer task", AgentName: "Peer Name", Cwd: "/workspace", State: "idle"}}); err != nil {
+	var generation string
+	data, err := os.ReadFile(filepath.Join(a.dir, "..", "..", "generation"))
+	if err != nil || json.Unmarshal(data, &generation) != nil {
+		t.Fatalf("cannot read mailbox generation: %v", err)
+	}
+	if err := publishRecord(a.root, "presence.json", presenceRecord{Version: 1, Agent: agentIdentity{ID: a.id, SessionID: "session-" + a.id, Name: "peer task", AgentName: "Peer Name", Cwd: "/workspace", State: "idle"}, Generation: generation}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -163,7 +169,42 @@ func TestMessagingRoutesAcrossRootsAndWithinOneMailboxWithoutHerd(t *testing.T) 
 		}
 	}
 }
-func TestMessagingExpiresAddressesAndRejectsUnsafeRecords(t *testing.T) {
+func TestMessagingDeliveryModesAndRecipientCapabilities(t *testing.T) {
+	p := processFixture(t)
+	p.cli("ensure")
+	mailbox := messagingMailbox(t, p, "", "")
+	a := newSimulatedAgent(t, mailbox)
+	b := newSimulatedAgent(t, mailbox)
+	awaitPeers(t, a, 1)
+	id := a.request(t, agentRequest{Op: "send", To: b.id, Text: "urgent", Delivery: "steer"})
+	if response := a.response(t, id); response.Status != "failed" || !strings.Contains(response.Error, "does not support steering") {
+		t.Fatalf("silently downgraded unsupported steering: %+v", response)
+	}
+	if err := publishRecord(b.root, "capabilities.json", agentCapabilities{Version: 1, Steering: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, delivery := range []string{"", "followUp", "steer"} {
+		id := a.request(t, agentRequest{Op: "send", To: b.id, Text: "coordination", Delivery: delivery})
+		message := b.incoming(t)
+		if message.Delivery != delivery || message.Text != "coordination" {
+			t.Fatalf("delivery changed: %+v; want %q", message, delivery)
+		}
+		b.acknowledge(t, message)
+		if response := a.response(t, id); response.Status != "queued" {
+			t.Fatal(response)
+		}
+	}
+	id = a.request(t, agentRequest{Op: "send", To: b.id, Text: "invalid", Delivery: "nextTurn"})
+	if response := a.response(t, id); response.Status != "failed" || response.Error != "invalid message" {
+		t.Fatalf("accepted invalid delivery: %+v", response)
+	}
+	entries, err := os.ReadDir(filepath.Join(b.dir, "inbox"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("failed sends published inbox records: %v, %v", entries, err)
+	}
+}
+
+func TestMessagingKeepsUnresponsiveAgentsAndRejectsUnsafeRecords(t *testing.T) {
 	p := processFixture(t)
 	p.cli("ensure")
 	mailbox := messagingMailbox(t, p, "", "")
@@ -195,13 +236,36 @@ func TestMessagingExpiresAddressesAndRejectsUnsafeRecords(t *testing.T) {
 	}
 	old := time.Now().Add(-presenceTTL - time.Second)
 	os.Chtimes(filepath.Join(b.dir, "presence.json"), old, old)
+	waitFor(t, func() bool {
+		response := a.response(t, a.request(t, agentRequest{Op: "list"}))
+		return len(response.Peers) == 1 && response.Peers[0].ID == b.id && response.Peers[0].Availability == "unresponsive" && response.Peers[0].LastSeen == old.UnixMilli()
+	})
+	id = a.request(t, agentRequest{Op: "send", To: b.id, Text: "not queued"})
+	if response := a.response(t, id); response.Status != "failed" || !strings.Contains(response.Error, "unresponsive") {
+		t.Fatalf("sent to unresponsive agent: %+v", response)
+	}
+	b.refresh(t)
+	waitFor(t, func() bool {
+		response := a.response(t, a.request(t, agentRequest{Op: "list"}))
+		return len(response.Peers) == 1 && response.Peers[0].ID == b.id && response.Peers[0].Availability == "responsive"
+	})
+	id = a.request(t, agentRequest{Op: "send", To: b.id, Text: "recovered"})
+	incoming := b.incoming(t)
+	b.acknowledge(t, incoming)
+	if response := a.response(t, id); response.Status != "queued" {
+		t.Fatalf("recovered address unusable: %+v", response)
+	}
+	// Missing or malformed presence is uncertainty, not a shutdown signal.
+	os.Remove(filepath.Join(b.dir, "presence.json"))
+	awaitPeers(t, a, 1)
+	os.WriteFile(filepath.Join(b.dir, "presence.json"), []byte("broken"), 0600)
+	awaitPeers(t, a, 1)
+	if err := publishRecord(b.root, "closed.json", closedRecord{Version: 1, ID: b.id}); err != nil {
+		t.Fatal(err)
+	}
 	awaitPeers(t, a, 0)
 	b.refresh(t)
-	time.Sleep(200 * time.Millisecond)
-	id = a.request(t, agentRequest{Op: "send", To: b.id, Text: "stale"})
-	if response := a.response(t, id); response.Status != "failed" || !strings.Contains(response.Error, "expired") {
-		t.Fatalf("retired address returned: %+v", response)
-	}
+	awaitPeers(t, a, 0)
 }
 func TestMessagingDuplicateAddressesAndLaunchRemovalDoNotAffectSurvivors(t *testing.T) {
 	p := processFixture(t)

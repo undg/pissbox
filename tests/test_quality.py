@@ -184,6 +184,8 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
         self.write("pi-agent/auth.json", "not-a-secret test sentinel\n")
         self.write("host/go.mod", "module fixture\n")
         self.write("host/go.sum", "")
+        self.write("host/config/global-schema.json", "{}")
+        self.write("pi-agent/extensions/agent-names.txt", "Fixture Name\n")
         self.write("tests/pi-installation.mjs", "export const helper = true;\n")
         self.write("tests/helper.test.mjs", '''import assert from "node:assert/strict";
 import { appendFileSync } from "node:fs";
@@ -200,8 +202,9 @@ assert.equal(helper, true);
 appendFileSync(process.env.DISCOVERY_LOG, "root\\n");
 ''')
         self.write("pi-agent/extensions/lib/new-nested.test.mjs", '''import assert from "node:assert/strict";
-import { appendFileSync, existsSync } from "node:fs";
-for (const name of ["cmd/pissbox-bridge/main.go", "internal/bridge/mailbox.go", "go.mod", "go.sum"]) {
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
+assert.equal(readFileSync(new URL("../agent-names.txt", import.meta.url), "utf8"), "Fixture Name\\n");
+for (const name of ["cmd/pissbox-bridge/main.go", "internal/bridge/mailbox.go", "go.mod", "go.sum", "config/global-schema.json"]) {
     assert.ok(existsSync(new URL("../../../host/" + name, import.meta.url)), name);
 }
 if (process.env.PISSBOX_BRIDGE_TEST_FIXTURE_DIR) {

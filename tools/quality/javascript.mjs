@@ -47,9 +47,9 @@ async function mutation() {
 		// Whitelist source and test dependencies, including the Go messaging
 		// fixture. Never copy shared auth, sessions, caches or host binaries.
 		ignorePatterns: [
-			"**", "!pi-agent/extensions/**/*.js", "!tests/pi-installation.mjs",
+			"**", "!pi-agent/extensions/**/*.js", "!pi-agent/extensions/agent-names.txt", "!tests/pi-installation.mjs",
 			...tests.map((pattern) => `!${pattern}`), "!host/**/*.go",
-			"!host/go.mod", "!host/go.sum",
+			"!host/go.mod", "!host/go.sum", "!host/config/global-schema.json",
 		],
 		testRunner: "command",
 		commandRunner: { command: `node --test ${tests.map((pattern) => `'${pattern}'`).join(" ")}` },

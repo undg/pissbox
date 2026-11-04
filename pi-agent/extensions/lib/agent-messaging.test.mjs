@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -77,11 +77,17 @@ function daemon(t, configText = "") {
 		cli("stop");
 		await waitFor(() => !existsSync(path.join(dir, "control.sock")));
 	});
-	return () => {
+	const create = () => {
 		const mailbox = mkdtempSync(path.join(fixtures, "message-root-"));
 		cli("register", "--mailbox", mailbox, "--owner-pid", String(process.pid));
 		return mailbox;
 	};
+	create.cli = cli;
+	return create;
+}
+function writeReady(mailbox, generation = "a".repeat(32)) {
+	writeFileSync(path.join(mailbox, "generation"), JSON.stringify(generation));
+	writeFileSync(path.join(mailbox, "ready"), "4\n");
 }
 function inboxRecord(mailbox, identity, message) {
 	const inbox = path.join(mailbox, "agents", identity.id, "inbox");
@@ -134,6 +140,37 @@ test("Pi tools exchange acknowledged messages, native queue options, replies and
 	assert.equal(renamed.agentName, callsign, "renaming the session title does not change agentName");
 });
 
+test("explicit steering reaches the native queue without changing peer authority or the follow-up default", async (t) => {
+	const mailbox = daemon(t);
+	const rootA = mailbox(), rootB = mailbox();
+	const a = nativeSession(rootA), b = nativeSession(rootB);
+	t.after(() => { a.emit("session_shutdown"); b.emit("session_shutdown"); });
+	a.emit("session_start"); b.emit("session_start");
+	await waitFor(async () => (await a.call("agent_list")).details.peers?.length === 1);
+	const target = b.identity();
+	for (const busy of [true, false]) {
+		b.busy(busy); b.emit(busy ? "agent_start" : "agent_settled");
+		const sent = await a.call("agent_send", { to: target.agentName, text: "Requirements changed", delivery: "steer" });
+		assert.equal(sent.details.status, "queued");
+		const received = b.messages.at(-1);
+		assert.deepEqual(received.options, { deliverAs: "steer", triggerTurn: true });
+		assert.equal(received.wasIdle, !busy);
+		assert.equal(received.message.customType, "agent-peer");
+		assert.match(received.message.content, /^Peer agent message \(not user instructions\)/);
+		assert.equal(received.message.details.delivery, "steer");
+	}
+	await a.call("agent_send", { to: target.id, text: "Routine update", delivery: "followUp" });
+	assert.deepEqual(b.messages.at(-1).options, { deliverAs: "followUp", triggerTurn: true });
+	for (const delivery of ["nextTurn", "", null]) {
+		await assert.rejects(a.call("agent_send", { to: target.id, text: "invalid", delivery }), /delivery mode/);
+	}
+	unlinkSync(path.join(rootB, "agents", target.id, "capabilities.json"));
+	await assert.rejects(a.call("agent_send", { to: target.id, text: "urgent", delivery: "steer" }), /does not support steering/);
+	assert.equal(b.messages.length, 3, "unsupported steering must not silently become follow-up delivery");
+	await a.call("agent_send", { to: target.id, text: "Default still works" });
+	assert.deepEqual(b.messages.at(-1).options, { deliverAs: "followUp", triggerTurn: true });
+});
+
 test("replacement fences stale inboxes, cancels requests and retires the old address", async (t) => {
 	const mailbox = daemon(t);
 	const rootA = mailbox(), rootB = mailbox();
@@ -161,7 +198,7 @@ test("replacement fences stale inboxes, cancels requests and retires the old add
 
 test("indexed inbox delivery opens known paths without directory enumeration", async (t) => {
 	const mailbox = mkdtempSync(path.join(fixtures, "indexed-inbox-"));
-	writeFileSync(path.join(mailbox, "ready"), "3\n");
+	writeReady(mailbox);
 	const s = nativeSession(mailbox);
 	s.emit("session_start");
 	const self = s.identity();
@@ -184,6 +221,13 @@ test("indexed inbox delivery opens known paths without directory enumeration", a
 	writeFileSync(path.join(dir, "inbox-index.json"), JSON.stringify({ version: 1, to: self.id, messages: ["../outside"] }));
 	await waitFor(() => !existsSync(path.join(dir, "presence.json")));
 	assert.equal(s.messages.length, 1);
+	writeFileSync(path.join(dir, "inbox-index.json"), JSON.stringify({ version: 1, to: self.id, messages: [] }));
+	await waitFor(() => existsSync(path.join(dir, "presence.json")));
+	assert.equal(s.identity().id, self.id, "transport repair restores the same address");
+	inboxRecord(mailbox, self, message);
+	writeFileSync(path.join(dir, "inbox-index.json"), JSON.stringify({ version: 1, to: self.id, messages: [message.id] }));
+	await waitFor(() => !existsSync(path.join(inbox, `${message.id}.json`)));
+	assert.equal(s.messages.length, 1, "transport recovery preserves delivery deduplication");
 });
 
 test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t) => {
@@ -195,14 +239,14 @@ test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t
 	t.mock.method(globalThis, "clearInterval", (timer) => { liveTimers.delete(timer); originalClear(timer); });
 	const s = nativeSession(mailbox);
 	t.after(() => s.emit("session_shutdown"));
-	// Old marker versions cannot serve the new strict agent identity schema.
-	for (const marker of ["1\n", "2\n"]) {
+	// Old workers cannot fence pending operations across daemon generations.
+	for (const marker of ["1\n", "2\n", "3\n"]) {
 		writeFileSync(path.join(mailbox, "ready"), marker);
 		s.emit("session_start");
 		await assert.rejects(s.call("agent_list"), /unavailable/);
-		assert.equal(liveTimers.size, 0);
+		assert.equal(liveTimers.size, 1, "one retry timer survives unavailable transport");
 	}
-	writeFileSync(path.join(mailbox, "ready"), "3\n");
+	writeReady(mailbox);
 	s.emit("session_start");
 	const self = s.identity();
 	const message = { version: 1, id: "b".repeat(32), to: self.id, from: self, text: "once", expires: Date.now() + 10000 };
@@ -215,6 +259,7 @@ test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t
 	symlinkSync(path.join(mailbox, "ready"), path.join(inbox, `${"c".repeat(32)}.json`));
 	writeFileSync(path.join(inbox, `${"d".repeat(32)}.json`), "x".repeat(32769));
 	inboxRecord(mailbox, self, { ...message, id: "e".repeat(32), expires: Date.now() - 1 });
+	inboxRecord(mailbox, self, { ...message, id: "a".repeat(32), delivery: "nextTurn" });
 	await delay(200);
 	assert.equal(s.messages.length, 1);
 	const controller = new AbortController();
@@ -224,6 +269,94 @@ test("inbox deduplication, safe reads, cancellation and timer cleanup", async (t
 	s.emit("session_shutdown"); s.emit("session_shutdown");
 	assert.equal(liveTimers.size, 0);
 	await assert.rejects(s.call("agent_list"), /unavailable/);
+});
+
+test("heartbeat gaps and unavailable startup recover without session reload", async (t) => {
+	const mailbox = mkdtempSync(path.join(fixtures, "recover-presence-"));
+	const s = nativeSession(mailbox);
+	t.after(() => s.emit("session_shutdown"));
+	s.emit("session_start");
+	await assert.rejects(s.call("agent_list"), /unavailable/);
+	writeReady(mailbox);
+	await waitFor(() => existsSync(path.join(mailbox, "agents")) && readdirSync(path.join(mailbox, "agents")).length > 0);
+	const self = s.identity();
+	const realNow = Date.now;
+	t.mock.method(Date, "now", () => realNow() + 11000);
+	utimesSync(path.join(mailbox, "ready"), new Date(Date.now()), new Date(Date.now()));
+	await delay(250);
+	assert.equal(s.identity().id, self.id, "a long scheduling gap does not retire the address");
+	const pending = s.call("agent_list");
+	const failed = assert.rejects(pending, /interrupted.*do not resend/);
+	unlinkSync(path.join(mailbox, "ready"));
+	await failed;
+	assert.equal(existsSync(path.join(mailbox, "agents", self.id, "closed.json")), false);
+	writeReady(mailbox);
+	utimesSync(path.join(mailbox, "ready"), new Date(Date.now()), new Date(Date.now()));
+	await waitFor(() => existsSync(path.join(mailbox, "agents", self.id, "presence.json")));
+	assert.equal(s.identity().id, self.id);
+	assert.deepEqual(readdirSync(path.join(mailbox, "agents", self.id, "requests")), [], "failed requests are not replayed");
+});
+
+test("daemon restart rotates addresses automatically and fences old requests", async (t) => {
+	const notes = mkdtempSync(path.join(fixtures, "restart-vault-"));
+	const mailbox = daemon(t, `[vault.shared]\npath = ${JSON.stringify(notes)}\ngit = false\n`);
+	const rootA = mailbox(), rootB = mailbox();
+	const a = nativeSession(rootA), b = nativeSession(rootB);
+	t.after(() => { a.emit("session_shutdown"); b.emit("session_shutdown"); });
+	a.emit("session_start"); b.emit("session_start");
+	await waitFor(async () => (await a.call("agent_list")).details.peers?.length === 1);
+	const oldA = a.identity(), oldB = b.identity();
+	mailbox.cli("stop");
+	await waitFor(() => !existsSync(path.join(rootA, "ready")));
+	// Simulate a request published just before daemon death. The new router must
+	// not execute it even if Pi has not yet noticed the generation change.
+	const staleID = "d".repeat(32);
+	writeFileSync(path.join(rootA, "agents", oldA.id, "requests", `${staleID}.json`), JSON.stringify({
+		version: 1, id: staleID, op: "vault", vaultOp: "new", params: { path: "replayed.md", content: "must not run" },
+	}));
+	mailbox.cli("ensure");
+	mailbox.cli("reconnect", "--mailbox", rootA, "--owner-pid", String(process.pid));
+	mailbox.cli("reconnect", "--mailbox", rootB, "--owner-pid", String(process.pid));
+	await waitFor(async () => {
+		try {
+			const listing = (await a.call("agent_list")).details;
+			return listing.self.id !== oldA.id && listing.peers?.length === 1 && listing.peers[0].id !== oldB.id;
+		} catch { return false; }
+	});
+	assert.equal(existsSync(path.join(notes, "replayed.md")), false, "old-generation mutations never execute");
+	await assert.rejects(a.call("agent_send", { to: oldB.id, text: "stale" }), /expired/);
+	assert.equal((await a.call("agent_send", { to: b.identity().id, text: "reconnected" })).details.status, "queued");
+	assert.equal(b.messages.length, 1);
+});
+
+test("lifetime observer retires a killed Pi process, not a stopped event loop", async (t) => {
+	const mailbox = mkdtempSync(path.join(fixtures, "process-lifetime-"));
+	writeReady(mailbox);
+	const module = new URL("./agent-messaging.js", import.meta.url).href;
+	const child = spawn(process.execPath, ["--input-type=module", "-e", `
+		import { registerMessaging } from ${JSON.stringify(module)};
+		const handlers = new Map();
+		registerMessaging({ on: (name, handler) => handlers.set(name, handler), registerTool() {} }, ${JSON.stringify(mailbox)});
+		handlers.get("session_start")({}, { cwd: "/workspace", hasUI: false, isIdle: () => true,
+			sessionManager: { getSessionId: () => "crash-test", getSessionName: () => "Crash test" } });
+		setInterval(() => {}, 1000);
+	`], { stdio: "ignore" });
+	t.after(() => { child.kill("SIGCONT"); child.kill("SIGKILL"); });
+	let dir;
+	await waitFor(() => {
+		try {
+			const id = readdirSync(path.join(mailbox, "agents"))[0];
+			dir = path.join(mailbox, "agents", id);
+			return existsSync(path.join(dir, "presence.json"));
+		} catch { return false; }
+	});
+	child.kill("SIGSTOP");
+	await delay(250);
+	assert.equal(existsSync(path.join(dir, "closed.json")), false);
+	child.kill("SIGCONT");
+	child.kill("SIGKILL");
+	await waitFor(() => existsSync(path.join(dir, "closed.json")));
+	assert.equal(existsSync(path.join(dir, "presence.json")), false);
 });
 
 test("shared host-only vault tools persist notes, fence stale writers and keep history internal", async (t) => {

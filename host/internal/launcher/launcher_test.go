@@ -13,11 +13,17 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	hostbridge "pissbox/host/internal/bridge"
 )
 
 // Re-execute the instrumented test executable, never an ordinary go-build
 // candidate: coverage and mutation must reach production orchestration.
 func TestMain(m *testing.M) {
+	if os.Getenv("PISSBOX_LAUNCHER_TEST_PROCESS") == "bridge-daemon" {
+		hostbridge.Main()
+		return
+	}
 	if name := filepath.Base(os.Args[0]); name == "sbx" || strings.HasPrefix(name, "go-bridge-") {
 		os.Exit(testTool())
 	}
@@ -255,7 +261,7 @@ func (f fixture) bridge() {
 	if err := os.Symlink(f.exe, binary); err != nil {
 		f.t.Fatal(err)
 	}
-	for _, path := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, path := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-lifetime.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		f.write(filepath.Join(f.pi, path), "")
 	}
 }

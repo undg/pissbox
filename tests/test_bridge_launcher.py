@@ -175,7 +175,7 @@ class BridgeLauncherTests(unittest.TestCase):
                 self.assertEqual(events, [])
                 shutil.copy2(source, missing)
 
-    def test_launcher_crash_unregisters_but_leaves_real_daemon_alive(self):
+    def test_launcher_recovers_after_daemon_restart_and_unregisters_after_crash(self):
         if not shutil.which("go"):
             self.skipTest("real bridge process test requires Go")
         self.binary.unlink()
@@ -231,6 +231,23 @@ class BridgeLauncherTests(unittest.TestCase):
             )
         pid = json.loads(result.stdout)["pid"]
         mailbox = next((self.checkout / ".cache").glob("bridge-launch.*"))
+        self.assertTrue((mailbox / "ready").exists())
+        generation = (mailbox / "generation").read_text()
+        stop_daemon()
+        time.sleep(2.2)
+        self.assertNotEqual(control("status").returncode, 0, "watchdog undid explicit stop")
+        self.assertEqual(control("ensure").returncode, 0)
+        deadline = time.monotonic() + 6
+        while time.monotonic() < deadline:
+            result = control("status")
+            status = json.loads(result.stdout)
+            if status["registrations"] == 1:
+                break
+            time.sleep(0.02)
+        else:
+            self.fail("launcher did not restore its registration after bridge restart")
+        pid = status["pid"]
+        self.assertNotEqual((mailbox / "generation").read_text(), generation)
         self.assertTrue((mailbox / "ready").exists())
         kill_launcher_group()
         deadline = time.monotonic() + 5

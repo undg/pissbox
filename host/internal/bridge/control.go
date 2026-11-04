@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const protocolVersion = 3
+const protocolVersion = 4
 const controlTimeout = 2 * time.Second
 
 // Control is host-only. The sandbox only receives its mailbox directory.
@@ -172,10 +172,10 @@ func ensureDaemon(ctx context.Context, dir string) error {
 
 func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("expected ensure, register, unregister, status, or stop")
+		return errors.New("expected ensure, register, reconnect, unregister, status, or stop")
 	}
 	if args[0] == "--help" || args[0] == "-h" {
-		fmt.Fprintln(stdout, "Usage: go-bridge {ensure|status|stop|register|unregister}\nregister --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]\nunregister --id ID\nRuntime: per-user cache/pissbox/bridge; override PISSBOX_BRIDGE_RUNTIME_DIR.")
+		fmt.Fprintln(stdout, "Usage: go-bridge {ensure|status|stop|register|reconnect|unregister}\nregister/reconnect --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]\nunregister --id ID\nRuntime: per-user cache/pissbox/bridge; override PISSBOX_BRIDGE_RUNTIME_DIR.")
 		return nil
 	}
 	op := args[0]
@@ -183,7 +183,7 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags.SetOutput(stderr)
 	req := controlRequest{Op: op}
 	switch op {
-	case "register":
+	case "register", "reconnect":
 		flags.StringVar(&req.Mailbox, "mailbox", "", "existing mailbox directory")
 		flags.StringVar(&req.Socket, "herdr-socket", "", "host Herd socket")
 		flags.StringVar(&req.Pane, "herdr-pane", "", "host Herd pane")
@@ -203,13 +203,13 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if op == "register" && (req.Mailbox == "" || req.Owner <= 1 || (req.Socket == "") != (req.Pane == "")) {
+	if (op == "register" || op == "reconnect") && (req.Mailbox == "" || req.Owner <= 1 || (req.Socket == "") != (req.Pane == "")) {
 		return errors.New("register requires --mailbox and --owner-pid; Herd socket and pane must be supplied together")
 	}
 	if op == "unregister" && req.ID == "" {
 		return errors.New("unregister requires --id")
 	}
-	if op == "register" && req.Socket != "" {
+	if (op == "register" || op == "reconnect") && req.Socket != "" {
 		// Relative host socket paths belong to the caller, not the first launcher
 		// that happened to start the shared daemon.
 		var err error
@@ -242,7 +242,7 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	if op == "register" {
+	if op == "register" || op == "reconnect" {
 		fmt.Fprintln(stdout, response.ID)
 	} else if op == "status" {
 		return json.NewEncoder(stdout).Encode(response)
@@ -256,11 +256,13 @@ func ownerAlive(pid int) bool {
 }
 
 type registration struct {
-	mailbox string
-	socket  string
-	pane    string
-	cancel  context.CancelFunc
-	done    chan struct{}
+	mailbox    string
+	owner      int
+	generation string
+	socket     string
+	pane       string
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
 type daemon struct {
@@ -285,13 +287,16 @@ func (d *daemon) register(req controlRequest) (string, error) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if len(d.regs) >= 256 {
-		return "", errors.New("too many bridge registrations")
-	}
-	for _, r := range d.regs {
+	for id, r := range d.regs {
 		if r.mailbox == mailbox || (req.Socket != "" && r.socket == req.Socket && r.pane == req.Pane) {
+			if req.Op == "reconnect" && r.mailbox == mailbox && r.owner == req.Owner && r.socket == req.Socket && r.pane == req.Pane {
+				return id, nil
+			}
 			return "", errors.New("mailbox or Herd pane already registered")
 		}
+	}
+	if len(d.regs) >= 256 {
+		return "", errors.New("too many bridge registrations")
 	}
 	root, err := os.OpenRoot(mailbox)
 	if err != nil {
@@ -308,8 +313,13 @@ func (d *daemon) register(req controlRequest) (string, error) {
 		return "", err
 	}
 	id := hex.EncodeToString(token)
+	if err := publishRecord(root, "generation", id); err != nil {
+		root.Remove("ready")
+		root.Close()
+		return "", errors.New("cannot publish mailbox generation")
+	}
 	ctx, cancel := context.WithCancel(d.ctx)
-	r := &registration{mailbox: mailbox, socket: req.Socket, pane: req.Pane, cancel: cancel, done: make(chan struct{})}
+	r := &registration{mailbox: mailbox, owner: req.Owner, generation: id, socket: req.Socket, pane: req.Pane, cancel: cancel, done: make(chan struct{})}
 	d.regs[id] = r
 	go func() {
 		defer cancel()
@@ -336,7 +346,7 @@ func (d *daemon) handle(req controlRequest) controlResponse {
 		return response
 	}
 	switch req.Op {
-	case "register":
+	case "register", "reconnect":
 		id, err := d.register(req)
 		if err != nil {
 			response.Error = err.Error()

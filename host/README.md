@@ -127,12 +127,12 @@ Use the matching binary for your host (example: macOS arm64):
 `register --mailbox DIR --owner-pid PID [--herdr-socket PATH --herdr-pane ID]`
 ensures the daemon, then prints an opaque ID after mailbox readiness is installed.
 The Herd arguments must either both be present or both be absent. Host control
-protocol **3** rejects older live daemons for normal operations. Run
-`pissbox --bridge-stop` to explicitly stop a protocol-2 or protocol-3 daemon;
+protocol **4** rejects older live daemons for normal operations. Run
+`pissbox --bridge-stop` to explicitly stop a protocol-3 or protocol-4 daemon;
 this command tries the current protocol and its immediate predecessor. This
-version bump is required because the strict presence schema now carries a
-separate `agentName`. Lifecycle envelopes remain version 1. The readiness
-marker contains `3`; messaging refuses older markers too, including after an
+version requires generation-fenced requests and explicit agent retirement rather
+than heartbeat-based removal. Lifecycle envelopes remain version 1. The readiness
+marker contains `4`; messaging refuses older markers too, including after an
 extension reload inside an old still-running launch.
 `unregister --id ID` drains/releases that registration only; it never starts or
 stops a daemon. The launcher uses these operations automatically. Control messages
@@ -141,22 +141,29 @@ retry window. Socket paths are limited to 103 bytes for macOS compatibility.
 `PISSBOX_BRIDGE_RUNTIME_DIR` overrides the private runtime directory for isolated
 tests; setting different overrides intentionally creates separate daemons. Do not
 mount the runtime directory into SBX. `pissbox --bridge-stop` stops the compatible
-host daemon without touching sandboxes; use it before rebuilding the bridge, then
-reattach Pi sessions through the launcher to register fresh mailboxes.
+host daemon without touching sandboxes; use it before rebuilding the bridge.
 
-Registrations exist only in memory. After daemon death, mailbox readiness becomes
-stale within five seconds and Pi stops publishing as before. Starting another
-launch ensures a new daemon but **does not restore old registrations**. Exit the
-old Pi attachment and reattach through `bin/pissbox` (choose Pi), which registers
-a fresh mailbox. No sandbox recreation is needed.
+Registrations exist only in memory. Each active launcher retries the host-only
+`reconnect` operation every two seconds. It restores its own mailbox registration
+when a compatible daemon comes back, preserving the host owner and optional Herd
+binding. Reconnect is idempotent and never starts or replaces a daemon: explicit
+stop stays stopped until `ensure` or another launch starts it. Incompatible
+upgrades still require launcher reattach and Pi reload.
+
+Pi keeps retrying through mailbox outages. A new registration publishes a random
+`generation`; Pi registers a fresh agent address when that generation changes.
+The router ignores presence and requests from previous generations, including
+requests published immediately before a crash. Uncertain operations fail locally
+and are never replayed automatically. Old launchers without reconnect support
+still need reattach after daemon death. No sandbox recreation is needed.
 
 For a binary upgrade, close active launches, run `stop` with the old matching
 binary, build/install the replacement, then launch again. An incompatible live
 daemon is never silently replaced or killed. A protocol-compatible existing
 daemon continues running its old executable until explicitly stopped. When moving
 from the old per-launch model, first close launches that still own per-launch
-helpers; the singleton cannot adopt them. There is no watchdog or automatic
-restart for existing sessions.
+helpers; the singleton cannot adopt them. The launcher reconnect watchdog does
+not automatically restart a stopped daemon.
 
 ## Mailbox and boundary
 
@@ -202,8 +209,11 @@ remain limited to reporting/releasing the bound Herd agent.
 
 ## Agent messaging
 
-`agent_list` returns `self` and every live `peer` across all registered
-mailboxes and state roots; it does not filter. Each identity keeps `name` as the
+`agent_list` returns `self` and every registered `peer` across all registered
+mailboxes and state roots, including unresponsive agents; it does not filter.
+Each listed identity includes `availability` (`responsive` or `unresponsive`)
+and `lastSeen` (the last valid presence mtime in Unix milliseconds). `state`
+remains the last reported work state, not evidence that the agent is responsive. Each identity keeps `name` as the
 Pi session title and has a separate `agentName` callsign, shown in the footer.
 The editable 50-name pool is
 `pi-agent/extensions/agent-names.txt`. Each callsign combines two different
@@ -218,24 +228,57 @@ optionally referencing its `id` as `inReplyTo`. There is no broadcast, automatic
 automatic resend.
 
 The recipient inserts a displayed `agent-peer` custom message through
-`pi.sendMessage(..., { deliverAs: "followUp", triggerTurn: true })`. Idle Pi wakes;
-busy Pi receives a follow-up after current work. Text is never submitted as user
-input or expanded as a slash command. The tool succeeds only after an explicit
-`queued` receipt following native queue insertion, **not** after reasoning or an
-answer. A timeout or disappearing recipient after publication is `indeterminate`:
+`pi.sendMessage(..., { deliverAs: delivery, triggerTurn: true })`.
+`agent_send` accepts optional `delivery: "followUp" | "steer"`:
+
+- Omitted or `followUp` (default): busy Pi receives the message after its current
+  run. Use for routine updates and questions.
+- `steer`: Pi surfaces the message at its next steering boundary between tool
+  calls. Use for urgent coordination, changed requirements, or conflicting edits.
+  It does not interrupt an executing tool. Idle Pi wakes for either mode.
+
+For example:
+
+```js
+agent_send({ to: "Aiden Jasper", text: "Stop editing bridge.go; conflict found.", delivery: "steer" })
+```
+
+Delivery timing does not change authority: both modes remain visibly labeled
+peer-agent content, never user instructions, user input, or slash commands.
+The tool succeeds only after an explicit `queued` receipt following native
+queue insertion, **not** after reasoning or an answer. Steering requires a
+recipient advertising support in `capabilities.json`; older receivers fail
+before publication rather than silently downgrading to follow-up. Reload the
+recipient extension and rebuild/restart the host bridge to enable this option;
+the default remains compatible with existing protocol-4 peers. A timeout or disappearing recipient after publication is `indeterminate`:
 insertion may already have happened. Do not retry automatically. Unknown/expired
-addresses and full queues fail before publication. Bridge loss or local
+addresses, unresponsive recipients, and full queues fail before publication. Bridge loss or local
 cancellation after publishing a request is likewise potentially indeterminate.
 
 Each session startup (including new/resume/fork/reload) creates a random 128-bit
-live ID; shutdown removes presence, cancels local requests, and clears the poll
-timer. The callsign stays stable for the Pi session and does not change when its
+live ID; shutdown publishes `closed.json`, removes presence, cancels local
+requests, and clears the poll timer. The callsign stays stable for the Pi session and does not change when its
 task title changes. Messaging runs in TUI,
 RPC, JSON, and print modes while Pi is alive; Herd reporting stays TUI-only.
-Presence refreshes every second and expires after 10 seconds. An expired or
-retired ID never revives within this daemon lifetime. After a long process pause,
-reload/reattach for a new address. Removing a launch registration retires its
-agents on the next messaging poll without affecting other launches.
+Presence refreshes every second and at tool/lifecycle boundaries. Ten seconds
+without a valid heartbeat marks the agent unresponsive; it does **not** retire
+its address. Missing/malformed presence and transient filesystem failures also
+mean uncertainty, not death. A fresh heartbeat restores the same address and
+retains inbox deduplication state. Transport errors retry every second rather
+than permanently stopping the poller.
+
+A small detached Node lifetime observer watches a pipe owned by Pi. A paused or
+busy event loop keeps the pipe open. Pi exit (including SIGKILL) closes it, and
+the observer publishes `closed.json`. Clean session replacement/shutdown also
+publishes that marker explicitly. If the observer is killed or cannot write,
+the conservative fallback is an unresponsive entry until launch cleanup, not a
+false declaration of death. Removing a launch registration retires its agents
+on the next messaging poll without affecting other launches. This remains a
+launcher-owned capability, not independent sandbox process discovery.
+
+Explicitly retired addresses never revive within the daemon lifetime. Session
+replacement or a changed bridge generation gets a fresh address. Recovery never
+resubmits uncertain sends or vault mutations.
 
 ### File layout and version-1 envelopes
 
@@ -244,10 +287,13 @@ launch mailbox, never the host control socket. Each agent has independent queues
 
 ```text
 bridge-launch.*/
-  ready                          # Host writes 3; refreshes every second
+  ready                          # Host writes 4; refreshes every second
+  generation                     # Host registration incarnation (JSON string)
   <lifecycle-event>.json          # Existing lifecycle transport
   agents/<live-agent-id>/
-    presence.json                # Pi publishes identity atomically
+    presence.json                # Pi publishes identity + generation atomically
+    closed.json                  # Explicit session/process retirement
+    capabilities.json            # Receiver advertises optional steering support
     inbox-index.json             # Host publishes pending message IDs atomically
     requests/<request-id>.json    # Pi → daemon: list or send
     responses/<request-id>.json   # Daemon → originating Pi
@@ -255,10 +301,10 @@ bridge-launch.*/
     receipts/<message-id>.json    # Recipient Pi → daemon
 ```
 
-Presence (file mtime is the lease; names/cwd are metadata, not routing paths):
+Presence (mtime tracks responsiveness, not lifetime; names/cwd are metadata):
 
 ```json
-{"version":1,"agent":{"id":"<agent-id>","sessionId":"<Pi-session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle"}}
+{"version":1,"generation":"<registration-id>","agent":{"id":"<agent-id>","sessionId":"<Pi-session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle"}}
 ```
 
 Requests contain no caller-selected sender identity. The daemon resolves the
@@ -266,14 +312,14 @@ sender from the registered source agent. Unknown fields are rejected:
 
 ```json
 {"version":1,"id":"<request-id>","op":"list"}
-{"version":1,"id":"<request-id>","op":"send","to":"<recipient-id>","text":"Hello","inReplyTo":"<optional-message-id>"}
+{"version":1,"id":"<request-id>","op":"send","to":"<recipient-id>","text":"Hello","inReplyTo":"<optional-message-id>","delivery":"steer"}
 ```
 
 List responses contain `self` and, when nonempty, `peers` identity objects. Send
 responses carry a bridge-generated `messageId`. Failures use `error`:
 
 ```json
-{"version":1,"id":"<request-id>","status":"ok","self":{"id":"<self-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle"}}
+{"version":1,"id":"<request-id>","status":"ok","self":{"id":"<self-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"idle","availability":"responsive","lastSeen":1780000000000}}
 {"version":1,"id":"<request-id>","status":"queued","messageId":"<message-id>"}
 {"version":1,"id":"<request-id>","status":"failed","error":"unknown or expired recipient"}
 {"version":1,"id":"<request-id>","status":"indeterminate","messageId":"<message-id>","error":"receipt timeout; queue insertion may have occurred; do not resend automatically"}
@@ -297,10 +343,11 @@ does not change an already-running compatible daemon:
 explicitly stop/start it and reattach affected launches to activate the fix.
 
 Inbox records include the exact recipient, sender identity, and deadline as Unix
-milliseconds. Optional `inReplyTo` is copied from the send request:
+milliseconds. Optional `inReplyTo` and `delivery` are copied from the send request;
+missing `delivery` means `followUp`. Receivers reject unknown delivery modes:
 
 ```json
-{"version":1,"id":"<message-id>","to":"<recipient-id>","from":{"id":"<sender-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"working"},"text":"Hello","expires":1780000000000}
+{"version":1,"id":"<message-id>","to":"<recipient-id>","from":{"id":"<sender-id>","sessionId":"<session-id>","name":"Fix login redirect","agentName":"Aiden Jasper","cwd":"/workspace","state":"working"},"text":"Hello","delivery":"steer","expires":1780000000000}
 {"version":1,"id":"<message-id>","to":"<recipient-id>","status":"queued"}
 ```
 

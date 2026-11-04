@@ -1,17 +1,23 @@
 package launcher
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type registration struct {
 	binary, id string
 	env        []string
 	processes  *processes
+	cancel     context.CancelFunc
+	done       chan struct{}
 }
 
 func bridgeBinary(root string) string {
@@ -22,11 +28,38 @@ func executable(path string) bool {
 	return err == nil && info.Mode().IsRegular() && info.Mode()&0111 != 0
 }
 func (r *registration) stop() {
+	if r.cancel != nil {
+		r.cancel()
+		<-r.done
+		r.cancel = nil
+	}
 	if r.id != "" {
 		r.processes.command(r.binary, []string{"unregister", "--id", r.id}, os.Stdin, os.Stdout, os.Stderr)
 		r.id = ""
 	}
 	r.env = nil
+}
+
+// Reconnect only to a running compatible daemon. Explicit stop stays stopped;
+// another launch or an explicit ensure brings the daemon back.
+func (r *registration) maintain(ctx context.Context, args []string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
+			output, err := exec.CommandContext(attempt, r.binary, args...).Output()
+			cancel()
+			if err == nil {
+				if id := strings.TrimSpace(string(output)); id != "" {
+					r.id = id
+				}
+			}
+		}
+	}
 }
 func (r *registration) start(root, pi, state string) {
 	r.env = nil
@@ -44,7 +77,7 @@ func (r *registration) start(root, pi, state string) {
 		fmt.Fprintln(os.Stderr, "Warning: Host bridge binary missing; run bin/build-bridge. Continuing without it.")
 		return
 	}
-	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-lifetime.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		if !isFile(filepath.Join(pi, resource)) {
 			fmt.Fprintln(os.Stderr, "Warning: Host bridge extension missing from selected Pi directory. Continuing without it.")
 			return
@@ -62,6 +95,13 @@ func (r *registration) start(root, pi, state string) {
 	if status == 0 && id != "" {
 		r.id = id
 		r.env = []string{"--env", "PISSBOX_BRIDGE_DIR=" + mailbox}
+		ctx, cancel := context.WithCancel(context.Background())
+		r.cancel, r.done = cancel, make(chan struct{})
+		args[0] = "reconnect"
+		go func() {
+			defer close(r.done)
+			r.maintain(ctx, args, 2*time.Second)
+		}()
 		return
 	}
 	r.id = ""

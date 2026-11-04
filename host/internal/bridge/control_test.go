@@ -126,6 +126,30 @@ func TestConcurrentStartupSharesDaemonAcrossStateRootsAndSurvivesStarter(t *test
 	})
 }
 
+func TestReconnectIsIdempotentAndDoesNotStartAStoppedDaemon(t *testing.T) {
+	p := processFixture(t)
+	mailbox, _ := fixture(t)
+	mailbox, _ = filepath.Abs(mailbox)
+	args := []string{"reconnect", "--mailbox", mailbox, "--owner-pid", fmt.Sprint(os.Getpid())}
+	if out, err := p.command(args...).CombinedOutput(); err == nil {
+		t.Fatalf("reconnect started a stopped daemon: %s", out)
+	}
+	p.cli("ensure")
+	first := strings.TrimSpace(string(p.cli(args...)))
+	if second := strings.TrimSpace(string(p.cli(args...))); first != second || p.status().Registrations != 1 {
+		t.Fatal("reconnect replaced a live registration")
+	}
+	if _, err := controlCall(p.dir, controlRequest{Op: "reconnect", Mailbox: mailbox, Owner: os.Getppid()}); err == nil {
+		t.Fatal("a different owner adopted the registration")
+	}
+	p.cli("stop")
+	waitFor(t, func() bool { _, err := controlCall(p.dir, controlRequest{Op: "status"}); return err == errUnavailable })
+	p.cli("ensure")
+	if next := strings.TrimSpace(string(p.cli(args...))); next == first {
+		t.Fatal("new daemon reused the old generation")
+	}
+}
+
 func TestStaleSocketAndLockRecoverAfterDaemonCrash(t *testing.T) {
 	p := processFixture(t)
 	p.cli("ensure")
@@ -190,7 +214,7 @@ func TestExplicitStopFallsBackToPreviousProtocol(t *testing.T) {
 			var req controlRequest
 			json.NewDecoder(conn).Decode(&req)
 			requests <- req
-			json.NewEncoder(conn).Encode(controlResponse{Version: 2})
+			json.NewEncoder(conn).Encode(controlResponse{Version: protocolVersion - 1})
 			conn.Close()
 		}
 	}()

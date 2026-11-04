@@ -1,12 +1,98 @@
 package launcher
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestBridgeWatchdogRestoresReturningDaemonWithoutUndoingExplicitStop(t *testing.T) {
+	f := newFixture(t)
+	t.Setenv("PISSBOX_LAUNCHER_TEST_PROCESS", "bridge-daemon")
+	t.Setenv("PISSBOX_BRIDGE_RUNTIME_DIR", f.root)
+	t.Setenv("PISSBOX_CONFIG", f.userConfig)
+	t.Setenv("GORACE", "atexit_sleep_ms=0")
+	cli := func(op string) []byte {
+		t.Helper()
+		out, err := exec.Command(f.exe, op).CombinedOutput()
+		if err != nil {
+			t.Fatalf("bridge %s: %v: %s", op, err, out)
+		}
+		return out
+	}
+	wait := func(check func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if check() {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatal("bridge recovery timed out")
+	}
+	cli("ensure")
+	t.Cleanup(func() {
+		cli("stop")
+		wait(func() bool { _, err := os.Stat(filepath.Join(f.root, "control.sock")); return os.IsNotExist(err) })
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	r := registration{binary: f.exe, processes: &processes{}, cancel: cancel, done: make(chan struct{})}
+	go func() {
+		defer close(r.done)
+		r.maintain(ctx, []string{"reconnect", "--mailbox", f.state, "--owner-pid", fmt.Sprint(os.Getpid())}, 20*time.Millisecond)
+	}()
+	defer r.stop()
+	if err := os.MkdirAll(f.state, 0700); err != nil {
+		t.Fatal(err)
+	}
+	registered := func() bool {
+		var status struct {
+			Registrations int `json:"registrations"`
+		}
+		if err := json.Unmarshal(cli("status"), &status); err != nil {
+			t.Fatal(err)
+		}
+		return status.Registrations == 1
+	}
+	wait(registered)
+	first, err := os.ReadFile(filepath.Join(f.state, "generation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli("stop")
+	wait(func() bool { _, err := os.Stat(filepath.Join(f.root, "control.sock")); return os.IsNotExist(err) })
+	time.Sleep(100 * time.Millisecond)
+	if out, err := exec.Command(f.exe, "status").CombinedOutput(); err == nil {
+		t.Fatalf("watchdog restarted an explicitly stopped daemon: %s", out)
+	}
+	cli("ensure")
+	wait(registered)
+	second, err := os.ReadFile(filepath.Join(f.state, "generation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) == string(second) {
+		t.Fatal("restart reused a generation")
+	}
+	r.stop()
+	if r.id != "" {
+		t.Fatal("stop retained the recovered registration")
+	}
+	var status struct {
+		Registrations int `json:"registrations"`
+	}
+	json.Unmarshal(cli("status"), &status)
+	if status.Registrations != 0 {
+		t.Fatal("stop did not unregister the recovered ID")
+	}
+}
 
 func TestBridgeHerdBindingAndResourceRefusal(t *testing.T) {
 	for _, tc := range []struct {
@@ -38,7 +124,7 @@ func TestBridgeHerdBindingAndResourceRefusal(t *testing.T) {
 			}
 		})
 	}
-	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, resource := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-lifetime.js", "extensions/lib/vault-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		t.Run(resource, func(t *testing.T) {
 			f := newFixture(t)
 			f.bridge()

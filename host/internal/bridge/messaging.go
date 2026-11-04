@@ -31,16 +31,27 @@ const maxIncarnationRecords = 4096
 var messagingID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type agentIdentity struct {
-	ID        string `json:"id"`
-	SessionID string `json:"sessionId"`
-	Name      string `json:"name"`
-	AgentName string `json:"agentName"`
-	Cwd       string `json:"cwd"`
-	State     string `json:"state"`
+	ID           string `json:"id"`
+	SessionID    string `json:"sessionId"`
+	Name         string `json:"name"`
+	AgentName    string `json:"agentName"`
+	Cwd          string `json:"cwd"`
+	State        string `json:"state"`
+	Availability string `json:"availability,omitempty"`
+	LastSeen     int64  `json:"lastSeen,omitempty"`
 }
 type presenceRecord struct {
-	Version int           `json:"version"`
-	Agent   agentIdentity `json:"agent"`
+	Version    int           `json:"version"`
+	Agent      agentIdentity `json:"agent"`
+	Generation string        `json:"generation"`
+}
+type closedRecord struct {
+	Version int    `json:"version"`
+	ID      string `json:"id"`
+}
+type agentCapabilities struct {
+	Version  int  `json:"version"`
+	Steering bool `json:"steering"`
 }
 type agentRequest struct {
 	Version   int            `json:"version"`
@@ -48,6 +59,7 @@ type agentRequest struct {
 	Op        string         `json:"op"`
 	To        string         `json:"to,omitempty"`
 	Text      string         `json:"text,omitempty"`
+	Delivery  string         `json:"delivery,omitempty"`
 	InReplyTo string         `json:"inReplyTo,omitempty"`
 	VaultOp   string         `json:"vaultOp,omitempty"`
 	Params    *vault.Request `json:"params,omitempty"`
@@ -58,6 +70,7 @@ type peerMessage struct {
 	To        string        `json:"to"`
 	From      agentIdentity `json:"from"`
 	Text      string        `json:"text"`
+	Delivery  string        `json:"delivery,omitempty"`
 	InReplyTo string        `json:"inReplyTo,omitempty"`
 	Expires   int64         `json:"expires"`
 }
@@ -90,6 +103,8 @@ type liveAgent struct {
 	requests        map[string]*agentResponse // nil means awaiting receipt
 	indexedMessages []string
 	indexPublished  bool
+	lastSeen        time.Time
+	responsive      bool
 }
 type pendingMessage struct {
 	message   peerMessage
@@ -195,14 +210,18 @@ func validIdentity(a agentIdentity) bool {
 }
 func (r *messageRouter) discover(d *daemon, now time.Time) {
 	d.mu.Lock()
-	registrations := make(map[string]string, len(d.regs))
+	type launch struct{ mailbox, generation string }
+	registrations := make(map[string]launch, len(d.regs))
 	for id, reg := range d.regs {
-		registrations[id] = reg.mailbox
+		registrations[id] = launch{reg.mailbox, reg.generation}
 	}
 	d.mu.Unlock()
-	seen := make(map[string]bool)
-	for registration, mailbox := range registrations {
-		root, err := os.OpenRoot(mailbox)
+	// Silence or filesystem errors are not evidence of process death.
+	for _, a := range r.agents {
+		a.responsive = false
+	}
+	for registration, launch := range registrations {
+		root, err := os.OpenRoot(launch.mailbox)
 		if err != nil {
 			continue
 		}
@@ -224,15 +243,23 @@ func (r *messageRouter) discover(d *daemon, now time.Time) {
 			if err != nil {
 				continue
 			}
-			var p presenceRecord
-			info, statErr := ar.Lstat("presence.json")
-			err = readRecord(ar, "presence.json", &p)
-			if err != nil || statErr != nil || now.Sub(info.ModTime()) > presenceTTL || info.ModTime().After(now.Add(time.Second)) || p.Version != 1 || p.Agent.ID != id || !validIdentity(p.Agent) {
+			a := r.agents[id]
+			if a != nil && a.registration != registration {
 				ar.Close()
 				continue
 			}
-			a := r.agents[id]
-			if a != nil && a.registration != registration {
+			var closed closedRecord
+			if readRecord(ar, "closed.json", &closed) == nil && closed.Version == 1 && closed.ID == id {
+				if a != nil {
+					r.retire(a)
+				}
+				ar.Close()
+				continue
+			}
+			var p presenceRecord
+			info, statErr := ar.Lstat("presence.json")
+			err = readRecord(ar, "presence.json", &p)
+			if err != nil || statErr != nil || info.ModTime().After(now.Add(time.Second)) || p.Version != 1 || p.Generation != launch.generation || p.Agent.ID != id || !validIdentity(p.Agent) {
 				ar.Close()
 				continue
 			}
@@ -247,15 +274,25 @@ func (r *messageRouter) discover(d *daemon, now time.Time) {
 				ar.Close()
 			}
 			a.identity = p.Agent
-			seen[id] = true
+			a.lastSeen = info.ModTime()
+			a.responsive = now.Sub(a.lastSeen) <= presenceTTL
 		}
 		agents.Close()
 	}
-	for id, a := range r.agents {
-		if !seen[id] {
+	for _, a := range r.agents {
+		if _, registered := registrations[a.registration]; !registered {
 			r.retire(a)
 		}
 	}
+}
+func (a *liveAgent) listedIdentity() agentIdentity {
+	identity := a.identity
+	identity.Availability = "unresponsive"
+	if a.responsive {
+		identity.Availability = "responsive"
+	}
+	identity.LastSeen = a.lastSeen.UnixMilli()
+	return identity
 }
 func (r *messageRouter) retire(a *liveAgent) {
 	delete(r.agents, a.identity.ID)
@@ -351,24 +388,35 @@ func (r *messageRouter) requests(a *liveAgent) {
 				response.Error = "vault request queue full; no operation performed"
 			}
 		case "list":
-			self := a.identity
+			self := a.listedIdentity()
 			response.Self = &self
 			response.Status = "ok"
 			for peerID, peer := range r.agents {
 				if peerID != a.identity.ID {
-					response.Peers = append(response.Peers, peer.identity)
+					response.Peers = append(response.Peers, peer.listedIdentity())
 				}
 			}
 			sort.Slice(response.Peers, func(i, j int) bool { return response.Peers[i].ID < response.Peers[j].ID })
 		case "send":
 			recipient := r.agents[req.To]
-			if req.Text == "" || len(req.Text) > maxTextBytes || !utf8.ValidString(req.Text) || (req.InReplyTo != "" && !messagingID.MatchString(req.InReplyTo)) {
+			if req.Text == "" || len(req.Text) > maxTextBytes || !utf8.ValidString(req.Text) || (req.InReplyTo != "" && !messagingID.MatchString(req.InReplyTo)) || (req.Delivery != "" && req.Delivery != "followUp" && req.Delivery != "steer") {
 				response.Error = "invalid message"
 				break
 			}
 			if recipient == nil {
 				response.Error = "unknown or expired recipient"
 				break
+			}
+			if !recipient.responsive {
+				response.Error = "recipient unresponsive; no message published"
+				break
+			}
+			if req.Delivery == "steer" {
+				var capabilities agentCapabilities
+				if readRecord(recipient.root, "capabilities.json", &capabilities) != nil || capabilities.Version != 1 || !capabilities.Steering {
+					response.Error = "recipient does not support steering; reload its Pi extension"
+					break
+				}
 			}
 			outgoing, incoming := 0, 0
 			for _, p := range r.pending {
@@ -395,7 +443,7 @@ func (r *messageRouter) requests(a *liveAgent) {
 				break
 			}
 			deadline := time.Now().Add(receiptTimeout)
-			message := peerMessage{Version: 1, ID: randomID(), To: req.To, From: a.identity, Text: req.Text, InReplyTo: req.InReplyTo, Expires: deadline.UnixMilli()}
+			message := peerMessage{Version: 1, ID: randomID(), To: req.To, From: a.identity, Text: req.Text, Delivery: req.Delivery, InReplyTo: req.InReplyTo, Expires: deadline.UnixMilli()}
 			err = publishRecord(inbox, message.ID+".json", message)
 			inbox.Close()
 			if err != nil {
@@ -484,7 +532,9 @@ func (d *daemon) runMessaging(ctx context.Context) {
 			r.discover(d, now)
 			r.receipts(now)
 			for _, a := range r.agents {
-				r.requests(a)
+				if a.responsive {
+					r.requests(a)
+				}
 			}
 			r.publishInboxIndexes()
 		}

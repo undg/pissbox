@@ -144,8 +144,11 @@ dependencies but never installs them automatically.
   per OS user, independent of checkout/state root. Launchers own opaque mailbox
   registrations, never the daemon PID. Cleanup unregisters; only explicit bridge `stop` terminates it.
   Keep the control socket host-only, retain the filesystem mailbox boundary, and
-  never silently replace an incompatible live daemon. After daemon failure,
-  existing Pi sessions need launcher reattach; registrations are memory-only.
+  never silently replace an incompatible live daemon. Registrations are memory-only;
+  active launchers reconnect their own mailboxes to a returning compatible daemon,
+  but never restart an explicitly stopped daemon. Generation-fence old requests.
+  Heartbeat gaps mark agents unresponsive, not dead; explicit session/process
+  closure or launch cleanup retires addresses. Recovery never replays requests.
 - Workspaces are live host mounts. New mounts, mappings, kit files, or images
   require a new sandbox name. Never silently remove/recreate a sandbox.
   Sandbox-local data survives restart, not removal; mounted state survives both.
