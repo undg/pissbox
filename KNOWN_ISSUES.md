@@ -51,6 +51,28 @@ Upstream's official Pi integration requires host Pi process detection, so merely
 forwarding its socket messages is insufficient for sandbox Pi. Review delivery
 and native session-log integration remain unresolved.
 
+- [ ] **Reconnect cancellation can orphan a bridge registration (P2):**
+      Introduced in `a1d651d`; still unfixed. If the daemon commits a reconnect
+      but the launcher cancels its helper before receiving the new registration
+      ID, `registration.stop()` unregisters the old ID and leaves the new one
+      active. See [launcher cleanup](host/internal/launcher/bridge.go#L30) and
+      [reconnect handling](host/internal/launcher/bridge.go#L45).
+      The conflict-menu path stops the bridge while keeping the launcher alive,
+      so owner-liveness cleanup does not immediately remove the orphan. With
+      Herd binding, a subsequent attach using a fresh mailbox on the same pane
+      fails with `mailbox or Herd pane already registered`; messaging and Herd
+      reporting remain unavailable for that attach.
+      Reproduction: restart an isolated daemon, delay the reconnect helper's
+      reply after server-side registration succeeds, then stop the launch
+      registration before that reply reaches the launcher. Observe one remaining
+      registration; registering a fresh mailbox for the same Herd pane fails.
+      Review reproduced this twice with a real isolated daemon and race-enabled
+      Go integration tests; real Herd/SBX reproduction remains unverified.
+      Workaround: exit the affected launcher completely, allow owner-liveness
+      cleanup to release its registration, then relaunch. No sandbox removal is
+      needed. A fix must make cleanup independent of receiving the reconnect
+      reply and prevent late reconnects from recreating a closed registration;
+      automatic message/request replay is not an acceptable recovery mechanism.
 - [x] **Sandbox agent visibility:** custom `pissbox-pi` lifecycle reporting is
       implemented; real Herd sidebar visibility still needs verification.
 - [x] **Finished-job notifications:** the initial bridge reports final Pi
