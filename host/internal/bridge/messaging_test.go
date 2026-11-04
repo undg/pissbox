@@ -190,9 +190,15 @@ func TestMessagingDeliveryModesAndRecipientCapabilities(t *testing.T) {
 			t.Fatalf("delivery changed: %+v; want %q", message, delivery)
 		}
 		b.acknowledge(t, message)
-		if response := a.response(t, id); response.Status != "queued" {
+		if response := a.response(t, id); response.Status != "queued" || response.MessageID != message.ID {
 			t.Fatal(response)
 		}
+		// The receipt response is published before inbox/index cleanup. Wait
+		// for that cleanup so the next receive cannot read this message again.
+		waitFor(t, func() bool {
+			var index inboxIndex
+			return readRecord(b.root, "inbox-index.json", &index) == nil && len(index.Messages) == 0
+		})
 	}
 	id = a.request(t, agentRequest{Op: "send", To: b.id, Text: "invalid", Delivery: "nextTurn"})
 	if response := a.response(t, id); response.Status != "failed" || response.Error != "invalid message" {
