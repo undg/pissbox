@@ -26,5 +26,4 @@ pi-agent/settings.json.replaced*
 #   -outform PEM \
 #   -out sbx-kit/ca.crt
 sbx-kit/ca.crt
-/.worktrees/
 /.wk
