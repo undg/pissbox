@@ -216,6 +216,58 @@ func TestSearchRootNotesTagsFiltersBacklinksAndPagination(t *testing.T) {
 	}
 }
 
+func TestBrowseSkipsArchiveAndRootAgentsFile(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "AGENTS.md", "conventions FINDING #agents")
+	put(t, dir, "_index.md", "index FINDING")
+	put(t, dir, "live.md", "live FINDING")
+	put(t, dir, "links.md", "[[AGENTS]] [[_archive/old|old]] [[live]]\n")
+	put(t, dir, "_archive/old.md", "archived FINDING #old")
+	put(t, dir, "_archive/source.md", "[[live]]")
+	put(t, dir, "folder/live.md", "folder live FINDING")
+	put(t, dir, "folder/_archive/old.md", "nested archived FINDING #nested")
+
+	list := execute(t, s, "list", Request{}).(Listing)
+	assertPaths := func(label string, result Listing, want ...string) {
+		t.Helper()
+		if len(result.Notes) != len(want) {
+			t.Fatalf("%s: %+v", label, result)
+		}
+		seen := map[string]bool{}
+		for _, note := range result.Notes {
+			seen[note.Path] = true
+		}
+		for _, path := range want {
+			if !seen[path] {
+				t.Fatalf("%s missing %s: %+v", label, path, result)
+			}
+		}
+	}
+	assertPaths("list", list, "_index.md", "folder/live.md", "links.md", "live.md")
+	assertPaths("search", execute(t, s, "search", Request{Query: "FINDING"}).(Listing), "_index.md", "folder/live.md", "live.md")
+	assertPaths("archive list", execute(t, s, "list", Request{Folder: "_archive"}).(Listing), "_archive/old.md", "_archive/source.md")
+	assertPaths("nested archive list", execute(t, s, "list", Request{Folder: "folder/_archive"}).(Listing), "folder/_archive/old.md")
+	assertPaths("archive search", execute(t, s, "search", Request{Folder: "_archive", Query: "FINDING"}).(Listing), "_archive/old.md")
+
+	tags := execute(t, s, "tags", Request{}).(TagListing)
+	if len(tags.Tags) != 0 {
+		t.Fatal(tags)
+	}
+	archivedTags := execute(t, s, "tags", Request{Folder: "_archive"}).(TagListing)
+	if !reflect.DeepEqual(archivedTags.Tags, []TagCount{{"old", 1}}) {
+		t.Fatal(archivedTags)
+	}
+
+	assertPaths("backlinks to conventions", execute(t, s, "backlinks", Request{Path: "AGENTS.md"}).(Listing), "links.md")
+	assertPaths("backlinks to archived", execute(t, s, "backlinks", Request{Path: "_archive/old.md"}).(Listing), "links.md")
+	assertPaths("backlinks skip archived sources", execute(t, s, "backlinks", Request{Path: "live.md"}).(Listing), "links.md")
+
+	agents := execute(t, s, "read", Request{Path: "AGENTS.md"}).(Note)
+	execute(t, s, "save", Request{Path: "AGENTS.md", Revision: agents.Revision, Content: "updated"})
+	archived := execute(t, s, "read", Request{Path: "_archive/old.md"}).(Note)
+	execute(t, s, "save", Request{Path: "_archive/old.md", Revision: archived.Revision, Content: "updated archived"})
+}
+
 func TestTagChangesPreserveOtherFrontmatterAndBody(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		s, dir := service(t, false)

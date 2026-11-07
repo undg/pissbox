@@ -74,7 +74,9 @@ Available tools:
 | `vault_daily` | Read/create `Daily/YYYY-MM-DD.md` using the host's local date, tagged `daily` and `journal` |
 | `vault_open` | Open an existing note using the host's Obsidian URI handler |
 
-Search/list/tags cover all configured vaults by default. Single-note operations
+Search/list/tags cover all configured vaults by default. Browse skips directories
+named `_archive` and the root `AGENTS.md`; explicit paths still read and write
+both, and naming a folder inside `_archive` browses it. Single-note operations
 require a vault name if multiple vaults exist; they never guess the first vault.
 Filename date filters are inclusive ISO dates, not file modification dates.
 Tag filters match nested tags. Tags count each tag once per note across the

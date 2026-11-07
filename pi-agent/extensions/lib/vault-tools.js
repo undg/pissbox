@@ -16,8 +16,8 @@ const filter = {
 	...page,
 };
 const definitions = [
-	["list", "List shared vault names and Markdown notes, including root-level notes. No host paths are exposed.", { ...filter, pattern: text("Optional vault-relative filename glob using *, ** and ? (for example **/*.md).", { maxLength: 1024 }) }, []],
-	["search", "Find notes by case-insensitive literal text or an explicit regular expression. Returns paths, line numbers and snippets. Follow nextOffset or narrow the folder when truncated.", {
+	["list", "List shared vault names and Markdown notes, including root-level notes. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to inspect archived notes. No host paths are exposed.", { ...filter, pattern: text("Optional vault-relative filename glob using *, ** and ? (for example **/*.md).", { maxLength: 1024 }) }, []],
+	["search", "Find notes by case-insensitive literal text or an explicit regular expression. Returns paths, line numbers and snippets. Follow nextOffset or narrow the folder when truncated. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to inspect archived notes.", {
 		...filter, query: text("Text to find, or a Go/RE2 pattern when regex is true.", { maxLength: 1024 }),
 		regex: { type: "boolean", description: "Use a case-sensitive RE2 regular expression instead of literal text." },
 		backlinks: { type: "boolean", description: "Also include notes with wikilinks to matching notes within the same vault and filters." },
@@ -36,8 +36,8 @@ const definitions = [
 	["edit", "Persist a targeted edit to a shared note. oldText must occur exactly once; every other byte is preserved. Requires the current revision.", { vault, path: notePath, revision, oldText: content, newText: content }, ["path", "revision", "oldText", "newText"]],
 	["append", "Persist text appended exactly to a shared note. Include any desired separating newlines. Requires its current revision.", { vault, path: notePath, revision, content }, ["path", "revision", "content"]],
 	["tag", "Add or remove one frontmatter tag, preserving other fields and the body. Does not change inline #tags. Requires the current revision.", { vault, path: notePath, revision, tag: text("Tag without #."), action: { type: "string", enum: ["add", "remove"] } }, ["path", "revision", "tag", "action"]],
-	["tags", "List frontmatter and inline tags with counts of notes containing each tag. Supports pagination and the same scope filters as search.", filter, []],
-	["backlinks", "Find notes in this vault that wikilink to the target note (including aliases and headings). Bare-name wikilinks may be ambiguous when filenames repeat.", { vault, path: notePath, ...page }, ["path"]],
+	["tags", "List frontmatter and inline tags with counts of notes containing each tag. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to include archived notes. Supports pagination and the same scope filters as search.", filter, []],
+	["backlinks", "Find notes in this vault that wikilink to the target note (including aliases and headings). Bare-name wikilinks may be ambiguous when filenames repeat. Archived notes and root `AGENTS.md` are not scanned as sources.", { vault, path: notePath, ...page }, ["path"]],
 	["daily", "Read or create today's Daily/YYYY-MM-DD.md with standard frontmatter, using the host's local date. Returns its revision; large existing daily notes may require vault_read pagination.", { vault }, []],
 	["open", "Open an existing shared note in Obsidian on the user's host desktop. Only when the user asks to open/show a note.", { vault, path: notePath }, ["path"]],
 ];

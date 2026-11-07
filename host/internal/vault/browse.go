@@ -85,6 +85,14 @@ func walkNotes(ctx context.Context, root *os.Root, folder string, visit func(str
 		if entry.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
+		// Retired notes and the vault's convention file are not note content.
+		// An explicitly named archive folder is still browsable.
+		if entry.IsDir() && entry.Name() == "_archive" && name != start {
+			return fs.SkipDir
+		}
+		if !entry.IsDir() && name == "AGENTS.md" {
+			return nil
+		}
 		if !entry.IsDir() && strings.EqualFold(path.Ext(name), ".md") {
 			if err := notePath(name); err != nil {
 				return nil
