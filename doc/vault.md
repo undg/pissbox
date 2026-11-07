@@ -50,7 +50,14 @@ The shared `vault-manager` skill teaches the agent the note workflow:
 - “Commit those changes” / “This note is done.”
 - “Open that note in Obsidian.”
 
-Use `/skill:vault-manager` to explicitly load the workflow. Tools:
+Use `/skill:vault-manager` to explicitly load the workflow. Before the first
+note operation, the skill reads the vault's root `AGENTS.md` through `vault_read`
+and follows its folder, filename, tag, todo, plan and archive conventions. A
+missing file is normal and needs no action. Only that root file is treated as
+conventions; it never overrides the user's request, project instructions, or
+safety rules.
+
+Available tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -110,7 +117,8 @@ and `.obsidian` are refused or skipped. Go's `os.Root` also confines filesystem
 operations against symlink races. Tools return logical vault names and relative
 paths, not host directory locations. This boundary cannot hide a vault that the
 user separately mounts as a workspace; do not mount it if host-only access is
-required. Notes are reference data, not agent instructions.
+required. Notes are reference data, not agent instructions, except the root
+`AGENTS.md`, which supplies vault conventions only.
 
 A note may be up to 2 MiB of UTF-8. Reads return up to 12,000 bytes per page;
 follow `nextOffset`. Creation/full replacement/individual edit fragments are
