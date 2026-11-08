@@ -309,7 +309,7 @@ export function registerMessaging(pi, mailbox) {
 	// JSON Schema is also the wire representation used by Pi's TypeBox tools.
 	pi.registerTool({
 		name: "agent_list", label: "Agent list",
-		description: "List your agent address and registered peers across launch mailboxes, including unresponsive agents. Each peer has a session name, separate agentName callsign, project directory, availability and lastSeen timestamp. Addresses change on session replacement or bridge restart; list again before sending to an old peer.",
+		description: "List your agent address and registered peers across launch mailboxes, including unresponsive agents. Each peer has a session name, separate agentName callsign, project directory, availability and lastSeen timestamp. Addresses change on session replacement, bridge crash, or explicit stop; a bridge reload preserves them.",
 		parameters: { type: "object", properties: {}, required: [], additionalProperties: false },
 		outputSchema: {
 			type: "object", required: ["version", "id", "status", "self"],

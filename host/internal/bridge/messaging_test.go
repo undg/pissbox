@@ -359,3 +359,37 @@ func TestMessagingTimeoutAndOverflowAreHonest(t *testing.T) {
 		t.Fatalf("timeout reported false certainty: %+v", response)
 	}
 }
+
+func TestInboxIndexSeedsExistingRecordsAndPrunesConsumedOnes(t *testing.T) {
+	mailbox, mailboxRoot := fixture(t)
+	id := randomID()
+	if err := publishRecord(mailboxRoot, "generation", id); err != nil {
+		t.Fatal(err)
+	}
+	a := newSimulatedAgent(t, mailbox)
+	message := peerMessage{Version: 1, ID: randomID(), To: a.id, From: agentIdentity{ID: randomID(), SessionID: "sender", Name: "sender", AgentName: "Sender", Cwd: "/workspace", State: "idle"}, Text: "before reload", Expires: time.Now().Add(time.Minute).UnixMilli()}
+	if err := publishRecord(a.root, "inbox/"+message.ID+".json", message); err != nil {
+		t.Fatal(err)
+	}
+	d := daemon{regs: map[string]*registration{id: {mailbox: mailbox, generation: id}}}
+	r := messageRouter{agents: make(map[string]*liveAgent), retired: make(map[string]bool), pending: make(map[string]*pendingMessage)}
+	now := time.Now()
+	r.discover(&d, now)
+	t.Cleanup(func() {
+		for _, agent := range r.agents {
+			agent.root.Close()
+		}
+	})
+	r.publishInboxIndexes(now)
+	var index inboxIndex
+	if err := readRecord(a.root, "inbox-index.json", &index); err != nil || len(index.Messages) != 1 || index.Messages[0] != message.ID {
+		t.Fatalf("existing inbox was not seeded: %+v, %v", index, err)
+	}
+	if err := a.root.Remove("inbox/" + message.ID + ".json"); err != nil {
+		t.Fatal(err)
+	}
+	r.publishInboxIndexes(now.Add(2 * time.Second))
+	if err := readRecord(a.root, "inbox-index.json", &index); err != nil || len(index.Messages) != 0 {
+		t.Fatalf("consumed inbox record was not pruned: %+v, %v", index, err)
+	}
+}
