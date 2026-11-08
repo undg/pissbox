@@ -340,3 +340,17 @@ func TestLifecycleEventQueuedDuringReloadReachesHerd(t *testing.T) {
 		t.Fatalf("queued release was lost across reload: %+v", r)
 	}
 }
+
+func TestExplicitStopClearsAStaleHandoffWithoutADaemon(t *testing.T) {
+	p := processFixture(t)
+	mailbox, id := handoffMailbox(t)
+	if err := writeHandoff(p.dir, []handoffRegistration{{ID: id, Mailbox: mailbox, Owner: os.Getpid()}}); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := p.command("stop").CombinedOutput(); err == nil {
+		t.Fatalf("stop without a daemon unexpectedly succeeded: %s", out)
+	}
+	if _, err := os.Stat(handoffPath(p.dir)); !os.IsNotExist(err) {
+		t.Fatal("explicit stop left a stale handoff")
+	}
+}
