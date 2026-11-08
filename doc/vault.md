@@ -68,6 +68,7 @@ Available tools:
 | `vault_save` | Replace an existing note's complete Markdown, revision required |
 | `vault_edit` | Replace exactly one matching text fragment, revision required |
 | `vault_append` | Append exact text, revision required |
+| `vault_move` | Move or rename one note in one vault; creates parents, refuses overwrite, reports pre-move backlinks |
 | `vault_tag` | Change only frontmatter tags, revision required |
 | `vault_tags` | List frontmatter/inline tags and per-note usage counts |
 | `vault_backlinks` | Find incoming wikilinks, including heading/alias forms |
@@ -88,6 +89,23 @@ Tag filters match nested tags. Tags count each tag once per note across the
 selected vaults. Backlinks are wikilinks, not a full Obsidian link resolver;
 bare basenames can be ambiguous.
 
+`vault_move` moves or renames a note within one vault; cross-vault and folder
+moves are not supported, and there is still no delete tool. Destination parents
+are created; an existing destination is refused. Publication uses an exclusive
+hard link before removing the old name, so a filesystem without hard-link
+support fails before the source is removed and there is no copy fallback. A
+crash between link and removal can leave the note under both names: a visible
+duplicate, not data loss. Links and frontmatter are never rewritten. Before the
+move, the host scans the entire vault (excluding `_archive/` sources) for
+wikilinks to the old path and returns up to 20 source paths. A
+`backlinksComplete: false` result carries a warning and means the list may be
+partial; a missing link is meaningful only when it is true. A rename breaks
+bare `[[name]]` wikilinks; moving between folders keeps them valid, while
+path-form links break in both cases. The result includes the destination
+revision unless it could not be re-read; reread before editing after such a
+warning. Moves require no revision. Destination names need not be kebab-case,
+so existing legacy notes can be renamed.
+
 No delete, shell, arbitrary-path, or commit tool is exposed.
 
 ## Persistence and history
@@ -103,25 +121,31 @@ other external writer. Avoid simultaneous edits to the same note in Obsidian.
 
 History is an internal host detail. With `git = true` (default), an existing Git
 repository rooted exactly at the vault directory records each changed note with
-`vault: <relative/path.md>`. New repositories are not initialized automatically;
-parent repositories are never used. Unrelated staged and unstaged files are not
-committed. Hooks and commit signing are disabled for these automatic commits;
-there are no pushes or other remote operations. Git author identity must already
-be configured on the host. A failed history operation returns the saved note's
-revision and a warning: the note **has been saved**. Do not retry the write.
-Failures may leave that note staged; fix the host repository explicitly. A later
-save of the same content can record outstanding history without changing it.
+`vault: <relative/path.md>` and each move with
+`vault: move <oldPath> -> <newPath>`. A move commits the new path and, when Git
+tracked it, the old path as a deletion; an untracked old path is not staged.
+New repositories are not initialized automatically; parent repositories are
+never used. Unrelated staged and unstaged files are not committed. Hooks and
+commit signing are disabled for these automatic commits; there are no pushes or
+other remote operations. Git author identity must already be configured on the
+host. A failed history operation returns the successful result (saved or moved
+note) and a warning: the note **has been saved or moved**. Do not retry the
+operation. Failures may leave paths staged; fix the host repository explicitly.
+A later save of the same content can record outstanding history without
+changing it.
 
 A bridge request ID is deduplicated for the lifetime of that agent address.
-Cancellation/timeout does not prove that a write was canceled; it may already
-have completed. Read to establish the outcome before another mutation. Never
-retry automatically. Bridge restart loses in-memory deduplication state.
+Cancellation/timeout does not prove that a write or move was canceled; it may
+already have completed. Read or list to establish the outcome before another
+mutation. Never retry automatically. Bridge restart loses in-memory
+deduplication state.
 
 ## Boundaries and limits
 
 Only configured vaults and non-hidden `.md` files are accessible. Absolute paths,
 parent traversal, symlinks, special files, and hidden directories such as `.git`
-and `.obsidian` are refused or skipped. Go's `os.Root` also confines filesystem
+and `.obsidian` are refused or skipped; moves apply the same rules to both
+paths. Go's `os.Root` also confines filesystem
 operations against symlink races. Tools return logical vault names and relative
 paths, not host directory locations. This boundary cannot hide a vault that the
 user separately mounts as a workspace; do not mount it if host-only access is

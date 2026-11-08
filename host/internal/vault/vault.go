@@ -38,6 +38,8 @@ type Definition struct {
 type Request struct {
 	Vault     string   `json:"vault,omitempty"`
 	Path      string   `json:"path,omitempty"`
+	OldPath   string   `json:"oldPath,omitempty"`
+	NewPath   string   `json:"newPath,omitempty"`
 	Kind      string   `json:"kind,omitempty"`
 	Folder    string   `json:"folder,omitempty"`
 	Query     string   `json:"query,omitempty"`
@@ -66,6 +68,18 @@ type Note struct {
 	Content    string `json:"content,omitempty"`
 	NextOffset *int   `json:"nextOffset,omitempty"`
 	Warning    string `json:"warning,omitempty"`
+}
+
+// Move is returned after a successful move. Backlinks is always a list and is
+// complete only when the whole vault was scanned without hitting its cap.
+type Move struct {
+	Vault             string   `json:"vault"`
+	OldPath           string   `json:"oldPath"`
+	NewPath           string   `json:"newPath"`
+	Revision          string   `json:"revision,omitempty"`
+	Backlinks         []string `json:"backlinks"`
+	BacklinksComplete bool     `json:"backlinksComplete"`
+	Warning           string   `json:"warning,omitempty"`
 }
 
 // Service is shared across all agents; a host opener is injectable for tests.
@@ -134,6 +148,9 @@ func (s *Service) Execute(ctx context.Context, op string, req Request) (any, err
 		return nil, errors.New("vault unavailable")
 	}
 	defer root.Close()
+	if op == "move" {
+		return s.move(ctx, root, d, req)
+	}
 	if op == "daily" {
 		req.Path = "Daily/" + time.Now().Format("2006-01-02") + ".md"
 	}
@@ -252,6 +269,96 @@ func readNote(root *os.Root, d Definition, r Request) (Note, error) {
 
 var kebab = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*\.md$`)
 
+var errBacklinkLimit = errors.New("backlink limit reached")
+
+// move publishes without overwriting: an exclusive hard link, then removal of
+// the old name. Links are never rewritten, so the scan result is reported.
+func (s *Service) move(ctx context.Context, root *os.Root, d Definition, r Request) (any, error) {
+	if err := notePath(r.OldPath); err != nil {
+		return nil, err
+	}
+	if err := notePath(r.NewPath); err != nil {
+		return nil, err
+	}
+	if r.OldPath == r.NewPath {
+		return nil, errors.New("oldPath and newPath must differ")
+	}
+	if _, err := readContent(root, r.OldPath); err != nil {
+		return nil, err
+	}
+	if _, err := root.Lstat(r.NewPath); err == nil {
+		return nil, errors.New("destination already exists; choose another path")
+	} else if !os.IsNotExist(err) {
+		return nil, errors.New("cannot inspect destination")
+	}
+	if err := safeParents(root, r.NewPath, true); err != nil {
+		return nil, err
+	}
+
+	scanCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	backlinks, scanErr := scanBacklinks(scanCtx, root, r.OldPath)
+	cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	warnings := []string{}
+	if scanErr != nil {
+		switch {
+		case errors.Is(scanErr, errBacklinkLimit):
+			warnings = append(warnings, "Backlink list stopped at 20; it is partial.")
+		case errors.Is(scanErr, context.DeadlineExceeded):
+			warnings = append(warnings, "Backlink scan timed out; the list may be partial.")
+		default:
+			warnings = append(warnings, "Backlink scan failed; the list may be partial.")
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := root.Link(r.OldPath, r.NewPath); err != nil {
+		return nil, errors.New("cannot move note; destination may have been created concurrently")
+	}
+	if err := root.Remove(r.OldPath); err != nil {
+		if rollback := root.Remove(r.NewPath); rollback != nil {
+			return nil, errors.New("note move incomplete: the note now exists at both oldPath and newPath")
+		}
+		return nil, errors.New("cannot remove the old note; the note was not moved")
+	}
+
+	result := Move{Vault: d.Name, OldPath: r.OldPath, NewPath: r.NewPath, Backlinks: backlinks, BacklinksComplete: scanErr == nil}
+	if data, err := readContent(root, r.NewPath); err != nil {
+		warnings = append(warnings, "Note moved, but its new revision could not be read; reread before editing.")
+	} else {
+		result.Revision = revision(data)
+	}
+	if d.Git {
+		if err := recordHistory(ctx, d, "vault: move "+r.OldPath+" -> "+r.NewPath, r.OldPath, r.NewPath); err != nil {
+			warnings = append(warnings, "Note moved, but automatic history recording failed. Do not repeat the move; tell the user to check the host vault.")
+		}
+	}
+	result.Warning = strings.Join(warnings, " ")
+	return result, nil
+}
+
+func scanBacklinks(ctx context.Context, root *os.Root, target string) ([]string, error) {
+	paths := []string{}
+	err := walkVault(ctx, root, "", false, func(name string, _ fs.DirEntry) error {
+		data, err := readContent(root, name)
+		if err != nil {
+			return err
+		}
+		if backlinkEntry("", name, string(data), target) == nil {
+			return nil
+		}
+		if len(paths) == 20 {
+			return errBacklinkLimit
+		}
+		paths = append(paths, name)
+		return nil
+	})
+	return paths, err
+}
+
 func (s *Service) mutate(ctx context.Context, root *os.Root, d Definition, op string, r Request) (any, error) {
 	before, err := readContent(root, r.Path)
 	exists := err == nil
@@ -296,7 +403,7 @@ func (s *Service) mutate(ctx context.Context, root *os.Root, d Definition, op st
 		n.Content = content
 	}
 	if d.Git {
-		if err := recordHistory(ctx, d, r.Path); err != nil {
+		if err := recordHistory(ctx, d, "vault: "+r.Path, r.Path); err != nil {
 			n.Warning = "Note saved, but automatic history recording failed. Do not repeat the write; tell the user to check the host vault."
 		}
 	}

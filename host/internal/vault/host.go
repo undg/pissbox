@@ -23,7 +23,7 @@ func hostCommand(ctx context.Context, dir, command string, args ...string) *exec
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0", "GIT_LITERAL_PATHSPECS=1")
 	return cmd
 }
-func recordHistory(ctx context.Context, d Definition, name string) error {
+func recordHistory(ctx context.Context, d Definition, message string, names ...string) error {
 	// A parent repository must never silently become this vault's history.
 	if _, err := os.Lstat(filepath.Join(d.Path, ".git")); os.IsNotExist(err) {
 		return nil
@@ -42,12 +42,25 @@ func recordHistory(ctx context.Context, d Definition, name string) error {
 	if err != nil || canonical != d.Path {
 		return errors.New("history root differs from vault")
 	}
+	// A move stages the old name as a deletion only when Git already tracked it;
+	// an untracked path would make git add fail. Other paths exist after a write.
+	paths := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, err := os.Lstat(filepath.Join(d.Path, filepath.FromSlash(name))); err == nil {
+			paths = append(paths, name)
+		} else if _, err := git("ls-files", "--error-unmatch", "--", name); err == nil {
+			paths = append(paths, name)
+		}
+	}
+	if len(paths) == 0 {
+		return nil
+	}
 	// --only excludes all unrelated staged changes. No shell, hooks, pushes, or
 	// user-provided commit arguments are allowed across this boundary.
-	if _, err = git("add", "--", name); err != nil {
+	if _, err = git(append([]string{"add", "--"}, paths...)...); err != nil {
 		return errors.New("cannot record note")
 	}
-	cmd := hostCommand(ctx, d.Path, "git", "diff", "--cached", "--quiet", "--", name)
+	cmd := hostCommand(ctx, d.Path, "git", append([]string{"diff", "--cached", "--quiet", "--"}, paths...)...)
 	err = cmd.Run()
 	if err == nil {
 		return nil
@@ -56,7 +69,7 @@ func recordHistory(ctx context.Context, d Definition, name string) error {
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
 		return errors.New("cannot inspect history")
 	}
-	_, err = git("commit", "--only", "-m", "vault: "+name, "--", name)
+	_, err = git(append([]string{"commit", "--only", "-m", message, "--"}, paths...)...)
 	if err != nil {
 		return errors.New("cannot record note history")
 	}

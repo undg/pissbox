@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -316,6 +317,132 @@ func TestFolderListingKindsFiltersAndPagination(t *testing.T) {
 	reject(t, s, "list", Request{Kind: "files"})
 }
 
+func TestMovePreservesNoteAndCreatesParents(t *testing.T) {
+	s, dir := service(t, false)
+	source := "Legacy Source.md"
+	put(t, dir, source, "---\nid: legacy\naliases: [Old]\ntags: [topic]\n---\nBody\n")
+	if err := os.Chmod(filepath.Join(dir, source), 0640); err != nil {
+		t.Fatal(err)
+	}
+	result := execute(t, s, "move", Request{OldPath: source, NewPath: "New Folder/Target Name.md"}).(Move)
+	if result.Vault != "personal" || result.OldPath != source || result.NewPath != "New Folder/Target Name.md" || !result.BacklinksComplete || result.Warning != "" {
+		t.Fatal(result)
+	}
+	if _, err := os.Stat(filepath.Join(dir, source)); !os.IsNotExist(err) {
+		t.Fatal("source still exists", err)
+	}
+	destination := filepath.Join(dir, "New Folder", "Target Name.md")
+	data, err := os.ReadFile(destination)
+	if err != nil || string(data) != "---\nid: legacy\naliases: [Old]\ntags: [topic]\n---\nBody\n" {
+		t.Fatal(string(data), err)
+	}
+	info, err := os.Stat(destination)
+	if err != nil || info.Mode().Perm() != 0640 {
+		t.Fatal(info, err)
+	}
+	read := execute(t, s, "read", Request{Path: result.NewPath}).(Note)
+	if read.Revision != result.Revision || read.Content != string(data) {
+		t.Fatal(read)
+	}
+	archived := execute(t, s, "move", Request{OldPath: result.NewPath, NewPath: "Archive/_archive/Target Name.md"}).(Move)
+	if archived.NewPath != "Archive/_archive/Target Name.md" || archived.Warning != "" {
+		t.Fatal(archived)
+	}
+	restored := execute(t, s, "move", Request{OldPath: archived.NewPath, NewPath: "archive-restored.md"}).(Move)
+	if restored.NewPath != "archive-restored.md" || restored.Warning != "" {
+		t.Fatal(restored)
+	}
+}
+
+func TestMoveRefusesExistingMissingUnsafeAndUnboundedTargets(t *testing.T) {
+	s, dir := service(t, false)
+	outside := t.TempDir()
+	put(t, outside, "secret.md", "outside")
+	put(t, dir, "source.md", "source")
+	put(t, dir, "exists.md", "destination")
+	put(t, dir, "huge.md", strings.Repeat("x", MaxNoteBytes+1))
+	put(t, dir, "invalid.md", string([]byte{0xff}))
+	if err := os.Symlink(filepath.Join(outside, "secret.md"), filepath.Join(dir, "symlink.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "fifo.md"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []Request{
+		{OldPath: "source.md", NewPath: "exists.md"},
+		{OldPath: "missing.md", NewPath: "new.md"},
+		{OldPath: "source.md", NewPath: "source.md"},
+		{OldPath: "../source.md", NewPath: "new.md"},
+		{OldPath: "source.md", NewPath: "../new.md"},
+		{OldPath: "source.md", NewPath: ".hidden/new.md"},
+		{OldPath: "source.md", NewPath: "new.txt"},
+		{OldPath: "symlink.md", NewPath: "new.md"},
+		{OldPath: "fifo.md", NewPath: "new.md"},
+		{OldPath: "huge.md", NewPath: "new.md"},
+		{OldPath: "invalid.md", NewPath: "new.md"},
+	} {
+		reject(t, s, "move", request)
+	}
+	for _, name := range []string{"source.md", "exists.md", "huge.md", "invalid.md"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatal("refused move changed", name, err)
+		}
+	}
+	if data, _ := os.ReadFile(filepath.Join(outside, "secret.md")); string(data) != "outside" {
+		t.Fatal("followed symlink")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "new.md")); !os.IsNotExist(err) {
+		t.Fatal("refused move published a note", err)
+	}
+}
+
+func TestMoveReportsBacklinksWithoutRewritingThem(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "Area/Old.md", "target body")
+	put(t, dir, "links/path.md", "[[Area/Old]]\n")
+	put(t, dir, "links/base.md", "[[Old|alias]]\n")
+	put(t, dir, "_archive/retired.md", "[[Old]]\n")
+	result := execute(t, s, "move", Request{OldPath: "Area/Old.md", NewPath: "New Folder/Old.md"}).(Move)
+	if !result.BacklinksComplete || !reflect.DeepEqual(result.Backlinks, []string{"links/base.md", "links/path.md"}) {
+		t.Fatal(result)
+	}
+	for name, want := range map[string]string{"links/path.md": "[[Area/Old]]\n", "links/base.md": "[[Old|alias]]\n"} {
+		if data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name))); err != nil || string(data) != want {
+			t.Fatal(name, string(data), err)
+		}
+	}
+	backlinks := execute(t, s, "backlinks", Request{Path: result.NewPath}).(Listing)
+	if len(backlinks.Notes) != 1 || backlinks.Notes[0].Path != "links/base.md" || backlinks.Notes[0].Kind != "note" {
+		t.Fatal(backlinks)
+	}
+}
+
+func TestMoveBacklinkCapAndScanFailureAreExplicit(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "target.md", "target")
+	for i := range 21 {
+		put(t, dir, fmt.Sprintf("links/%02d.md", i), "[[target]]")
+	}
+	capped := execute(t, s, "move", Request{OldPath: "target.md", NewPath: "moved.md"}).(Move)
+	if len(capped.Backlinks) != 20 || capped.BacklinksComplete || capped.Warning != "Backlink list stopped at 20; it is partial." {
+		t.Fatal(capped)
+	}
+	if capped.Revision == "" {
+		t.Fatal("missing revision", capped)
+	}
+
+	s, dir = service(t, false)
+	put(t, dir, "target.md", "target")
+	put(t, dir, "bad.md", string([]byte{0xff}))
+	failed := execute(t, s, "move", Request{OldPath: "target.md", NewPath: "moved.md"}).(Move)
+	if failed.BacklinksComplete || failed.Warning != "Backlink scan failed; the list may be partial." || failed.Revision == "" {
+		t.Fatal(failed)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "moved.md")); err != nil {
+		t.Fatal("scan failure blocked the move", err)
+	}
+}
+
 func TestTagChangesPreserveOtherFrontmatterAndBody(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		s, dir := service(t, false)
@@ -444,7 +571,7 @@ func TestAutomaticHistoryCommitsOnlyChangedNoteAndPreservesUnrelatedStaging(t *t
 	if got := git(t, dir, "log", "-1", "--format=%s"); got != "vault: new-note.md" {
 		t.Fatal(got)
 	}
-	if got := git(t, dir, "show", "--format=", "--name-only", "HEAD"); got != "new-note.md" {
+	if got := git(t, dir, "show", "--format=", "--name-only", "--no-renames", "HEAD"); got != "new-note.md" {
 		t.Fatal(got)
 	}
 	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "unrelated.md" {
@@ -466,6 +593,47 @@ func TestAutomaticHistoryCommitsOnlyChangedNoteAndPreservesUnrelatedStaging(t *t
 	result := execute(t, s, "append", Request{Path: n.Path, Revision: n.Revision, Content: " more"}).(Note)
 	if result.Warning == "" || !strings.HasSuffix(execute(t, s, "read", Request{Path: n.Path}).(Note).Content, " more") {
 		t.Fatal("save failure state hidden", result)
+	}
+}
+
+func TestMoveHistoryCommitsBothPathsAndSkipsUntrackedSource(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, dir := service(t, true)
+	git(t, dir, "init")
+	git(t, dir, "config", "user.name", "Vault Test")
+	git(t, dir, "config", "user.email", "vault@example.invalid")
+	create(t, s, "project/old-note.md", "tracked")
+	put(t, dir, "unrelated.md", "staged work")
+	git(t, dir, "add", "unrelated.md")
+	moved := execute(t, s, "move", Request{OldPath: "project/old-note.md", NewPath: "Archive/New Name.md"}).(Move)
+	if moved.Warning != "" || moved.Revision == "" {
+		t.Fatal(moved)
+	}
+	if got := git(t, dir, "log", "-1", "--format=%s"); got != "vault: move project/old-note.md -> Archive/New Name.md" {
+		t.Fatal(got)
+	}
+	committed := strings.Split(git(t, dir, "show", "--format=", "--name-only", "--no-renames", "HEAD"), "\n")
+	if !reflect.DeepEqual(committed, []string{"Archive/New Name.md", "project/old-note.md"}) {
+		t.Fatal(committed)
+	}
+	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "unrelated.md" {
+		t.Fatal("lost unrelated staging", got)
+	}
+	if got := git(t, dir, "ls-files", "project/old-note.md"); got != "" {
+		t.Fatal("old tracked path remains", got)
+	}
+
+	put(t, dir, "untracked-old.md", "untracked")
+	untracked := execute(t, s, "move", Request{OldPath: "untracked-old.md", NewPath: "moved-untracked.md"}).(Move)
+	if untracked.Warning != "" {
+		t.Fatal(untracked)
+	}
+	committed = strings.Split(git(t, dir, "show", "--format=", "--name-only", "--no-renames", "HEAD"), "\n")
+	if !reflect.DeepEqual(committed, []string{"moved-untracked.md"}) {
+		t.Fatal(committed)
+	}
+	if got := git(t, dir, "diff", "--cached", "--name-only"); got != "unrelated.md" {
+		t.Fatal("lost unrelated staging", got)
 	}
 }
 
@@ -550,6 +718,10 @@ func TestDisabledHistoryAndParentRepositoriesAreNotTouched(t *testing.T) {
 	git(t, dir, "init")
 	if n := create(t, s, "no-history.md", "x"); n.Warning != "" {
 		t.Fatal(n)
+	}
+	put(t, dir, "move-me.md", "x")
+	if moved := execute(t, s, "move", Request{OldPath: "move-me.md", NewPath: "moved.md"}).(Move); moved.Warning != "" {
+		t.Fatal(moved)
 	}
 	if got := git(t, dir, "ls-files"); got != "" {
 		t.Fatal(got)
