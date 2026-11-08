@@ -8,11 +8,11 @@ export QUALITY_BASE = $(BASE)
 export QUALITY_DRY_RUN = $(DRY_RUN)
 export ARTIFACT_ARCHIVE = $(ARCHIVE)
 
-.PHONY: help install build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
+.PHONY: help install build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts setup-quality-tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
 
 ## help: Show available commands (default)
 help:
-	@awk '/^## / { line = substr($$0, 4); pos = index(line, ":"); printf "  %-18s %s\n", substr(line, 1, pos - 1), substr(line, pos + 2) }' $(MAKEFILE_LIST)
+	@awk '/^## / { line = substr($$0, 4); pos = index(line, ":"); printf "  %-22s %s\n", substr(line, 1, pos - 1), substr(line, pos + 2) }' $(MAKEFILE_LIST)
 	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047host/internal/bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
 
 ## install: Check dependencies, build this host's environment and link ~/.local/bin/pissbox
@@ -56,9 +56,10 @@ import-artifacts:
 	@test -n "$$ARTIFACT_ARCHIVE" || { echo 'Set ARCHIVE=path/to/artifacts.tar.gz' >&2; exit 1; }
 	bin/artifacts --import "$$ARTIFACT_ARCHIVE"
 
-## tools: Install pinned quality tools under .cache (network required)
-tools:
-	$(PYTHON) tools/quality/run.py tools
+## setup-quality-tools: Cross-build Go tools and install npm quality tools (network required)
+setup-quality-tools:
+	bin/build-quality-tools --all
+	$(PYTHON) tools/quality/run.py install-js
 
 ## test: Run Go, JavaScript and Python tests
 test: test-go test-js test-python
@@ -81,7 +82,7 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher bin/build-quality-tools sbx-kit/files/home/.pissbox/scripts/*.sh; do \
 		bash -n "$$script" || exit; \
 	done
 

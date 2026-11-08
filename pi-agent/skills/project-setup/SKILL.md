@@ -23,11 +23,11 @@ Place it in the primary workspace. Supported keys are arrays of strings: `worksp
 4. Setup runs once on creation, as UID 1000, in one strict Bash process starting in the primary workspace. Use repeat-safe dependency installation with the project's lockfile policy. Check required compiler/toolchain versions. Include existing quality-tool installation targets when agents are expected to run those checks; downloads need network access. Do not run formatting, tidy, tests, or application builds automatically merely to prepare an agent.
 5. Setup exports do not persist into Pi. Existing sandbox attachments neither rerun setup nor change mounts. Tell the user to use a new sandbox name for changed isolation/mounts; never delete a sandbox automatically.
 
-Example for a Go project with a `bin` build directory and an existing `make tools` target:
+Example for a Go project with a `bin` build directory and an existing `make setup-quality-tools` target:
 
 ```toml
 isolated_directories = ["bin"]
-setup = ["go mod download", "make tools"]
+setup = ["go mod download", "make setup-quality-tools"]
 ```
 
 ## .wk.toml — worktree lifecycle

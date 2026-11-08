@@ -17,7 +17,7 @@ class MakeBuildTests(unittest.TestCase):
         self.directory = Path(directory.name)
         (self.directory / "bin").mkdir()
         self.log = self.directory / "calls"
-        for name in ("install", "build-image", "build-bridge", "build-launcher", "artifacts"):
+        for name in ("install", "build-image", "build-bridge", "build-launcher", "build-quality-tools", "artifacts"):
             script = self.directory / "bin" / name
             script.write_text(
                 '#!/bin/sh\n'
@@ -51,6 +51,18 @@ class MakeBuildTests(unittest.TestCase):
                 result = self.run_make(target)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(self.log.read_text().splitlines(), command)
+
+    def test_setup_quality_tools_cross_builds_then_installs_npm_tools(self):
+        python = self.directory / "python3"
+        python.write_text('#!/bin/sh\nprintf "%s\\n" "$0" "$@" >> "$MAKE_BUILD_LOG"\n')
+        python.chmod(0o755)
+        self.log.write_text("")
+        result = self.run_make("setup-quality-tools", variables=(f"PYTHON={python}",))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.log.read_text().splitlines(), [
+            "bin/build-quality-tools", "--all",
+            str(python), "tools/quality/run.py", "install-js",
+        ])
 
     def test_artifact_targets_forward_archive_as_one_argument_and_preserve_failures(self):
         archive = "runtime artifacts; touch unexpected.tar.gz"
@@ -93,7 +105,7 @@ class MakeBuildTests(unittest.TestCase):
 
     def test_wrapper_failures_fail_make(self):
         for target in ("install", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
-                       "build-launcher", "build-launcher-all"):
+                       "build-launcher", "build-launcher-all", "setup-quality-tools"):
             with self.subTest(target=target):
                 result = self.run_make(target, status="37")
                 self.assertNotEqual(result.returncode, 0)
@@ -104,7 +116,7 @@ class MakeBuildTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         names = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("  ")]
         for target in ("install", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
-                       "build-launcher", "build-launcher-all"):
+                       "build-launcher", "build-launcher-all", "setup-quality-tools"):
             self.assertIn(target, names)
         self.assertNotIn("build-all", names)
         for target in ("export-artifacts", "import-artifacts"):

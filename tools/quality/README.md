@@ -7,7 +7,7 @@ SBX as part of `make check`.
 ## Setup and ordinary checks
 
 ```bash
-make tools       # Explicit network install; never runs as a test dependency
+make setup-quality-tools  # Explicit network install; never runs as a test dependency
 make check       # Go -race, all JS suites, Python tests, vet, Bash syntax, diff check
 make metrics     # Fresh coverage plus complexity/CRAP reports for Go and extensions
 ```
@@ -25,9 +25,15 @@ Ordinary tests, coverage, and mutation baselines use Node's recursive
 filename lists or suite-to-suite imports. Pi only auto-loads `.js` and `.ts`
 extensions, so the `.test.mjs` suites do not run when Pi starts.
 
-`make tools` installs Gremlins v0.6.0 and go-crap v0.5.1 into
-`.cache/quality-tools/bin/<os>-<arch>/`, and npm tools into
-`.cache/quality-tools/js/`. npm versions are locked in the adjacent package files:
+`make setup-quality-tools` runs `bin/build-quality-tools --all` and then
+installs npm tools. The build script cross-compiles Gremlins v0.6.0 and go-crap
+v0.5.1 for macOS/Linux on amd64/arm64. Inside a Pissbox sandbox it writes
+`$PISSBOX_STATE_DIR/bin/<tool>-<os>-<arch>`; the shared state is mounted into
+every sandbox, so worktrees reuse the same binaries. Elsewhere it uses
+`${XDG_CACHE_HOME:-$HOME/.cache}/pissbox/bin`. Existing binaries with the same pinned version are
+reused; only a version change triggers a rebuild. npm tools remain in the
+checkout's `.cache/quality-tools/js/`. npm versions are locked in the adjacent
+package files:
 StrykerJS 10.0.0, c8 10.1.3, and `@danibram/crap4ts` 0.6.0. The `qs` override pins
 a patched transitive dependency of Stryker's dashboard client. Install scripts
 are disabled. These are development tools, not bridge runtime dependencies.

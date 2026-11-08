@@ -59,7 +59,7 @@ These are interface examples to implement, not assumed existing commands:
 
 ```bash
 make help
-make tools
+make setup-quality-tools
 make test-mutants FILES="internal/parser.go"
 make test-mutants FILES="internal/parser.go internal/options.go"
 make test-mutants BASE=<actual-feature-base>

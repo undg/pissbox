@@ -12,9 +12,18 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def shared_state_dir():
+    if state := os.environ.get("PISSBOX_STATE_DIR"):
+        return Path(state)
+    cache = os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache"
+    return Path(cache) / "pissbox"
+
+
+STATE = shared_state_dir()
 TOOLS = ROOT / ".cache/quality-tools"
-GREMLINS = "github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0"
-GO_CRAP = "github.com/padiazg/go-crap@v0.5.1"
+BIN_DIR = STATE / "bin"
 
 
 def run(args, *, cwd=ROOT, **kwargs):
@@ -78,28 +87,31 @@ def select_files(args, language):
     return sorted(set(candidates) & supported)
 
 
-def install_tools():
+def install_js_tools():
     TOOLS.mkdir(parents=True, exist_ok=True)
     js = TOOLS / "js"
     js.mkdir(exist_ok=True)
     for name in ("package.json", "package-lock.json"):
         shutil.copyfile(ROOT / "tools/quality" / name, js / name)
     run(["npm", "ci", "--ignore-scripts", "--prefix", js])
-    bin_dir = go_bin_dir()
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "GOBIN": str(bin_dir)}
-    for tool in (GREMLINS, GO_CRAP):
-        run(["go", "install", tool], env=env)
 
 
-def go_bin_dir():
+def host_target():
     host = run(["go", "env", "GOHOSTOS", "GOHOSTARCH"], stdout=subprocess.PIPE, text=True).stdout.split()
-    return TOOLS / "bin" / "-".join(host)
+    return "-".join(host)
+
+
+def tool_path(name):
+    return BIN_DIR / f"{name}-{host_target()}"
 
 
 def require_tool(path):
     if not path.is_file():
-        raise ValueError(f"Missing {path.relative_to(ROOT)}; run make tools first")
+        try:
+            shown = path.relative_to(ROOT)
+        except ValueError:
+            shown = path
+        raise ValueError(f"Missing {shown}; run make setup-quality-tools first")
     return path
 
 
@@ -121,7 +133,7 @@ def go_coverage():
 
 
 def mutation_go(args, selected):
-    binary = require_tool(go_bin_dir() / "gremlins")
+    binary = require_tool(tool_path("gremlins"))
     output = ROOT / ".cache/mutation/go"
     output.mkdir(parents=True, exist_ok=True)
     temporary = output / "tmp"
@@ -145,7 +157,7 @@ def mutation_go(args, selected):
 
 
 def crap_go(selected):
-    binary = require_tool(go_bin_dir() / "go-crap")
+    binary = require_tool(tool_path("go-crap"))
     profile = go_coverage()
     output = ROOT / ".cache/crap/go"
     output.mkdir(parents=True, exist_ok=True)
@@ -161,7 +173,7 @@ def crap_go(selected):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["tools", "mutation-go", "mutation-js", "crap-go", "crap-js", "coverage-go", "coverage-js"])
+    parser.add_argument("command", choices=["install-js", "mutation-go", "mutation-js", "crap-go", "crap-js", "coverage-go", "coverage-js"])
     parser.add_argument("--base", help="Compare the working tree with the merge base of HEAD and this ref")
     parser.add_argument("--all", action="store_true", help="Deliberately select every supported source file")
     parser.add_argument("--list", action="store_true", help="Print selection without invoking tools")
@@ -169,8 +181,8 @@ def main():
     parser.add_argument("files", nargs="*", help="Exact checkout-relative source files (override BASE)")
     args = parser.parse_intermixed_args()
     args.dry_run |= os.environ.get("QUALITY_DRY_RUN", "") == "1"
-    if args.command == "tools":
-        install_tools()
+    if args.command == "install-js":
+        install_js_tools()
         return
     if args.command == "coverage-go":
         go_coverage()

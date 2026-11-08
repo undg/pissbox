@@ -14,7 +14,10 @@ from launcher_harness import checkout_root
 ROOT = checkout_root()
 LAUNCHER = ROOT / "bin" / "pissbox"
 PI_DIR = ROOT / "pi-agent"
-STATE_DIR = ROOT / ".cache"
+BUILD_CACHE = ROOT / ".cache"
+FIXTURES = BUILD_CACHE / "test-fixtures"
+CACHE_HOME = FIXTURES / "host-cache"
+STATE_DIR = CACHE_HOME / "pissbox"
 
 
 def without_optional_bridge_diagnostics(stderr):
@@ -26,9 +29,9 @@ def without_optional_bridge_diagnostics(stderr):
 
 class LauncherTests(unittest.TestCase):
     def setUp(self):
-        fixtures = STATE_DIR / "test-fixtures"
-        fixtures.mkdir(parents=True, exist_ok=True)
-        self.bridge_runtime = tempfile.mkdtemp(prefix="ls-", dir=fixtures)
+        FIXTURES.mkdir(parents=True, exist_ok=True)
+        CACHE_HOME.mkdir(parents=True, exist_ok=True)
+        self.bridge_runtime = tempfile.mkdtemp(prefix="ls-", dir=FIXTURES)
         self.addCleanup(self.stop_test_bridge)
         config_dir = tempfile.mkdtemp(prefix="config-")
         self.addCleanup(shutil.rmtree, config_dir)
@@ -39,7 +42,7 @@ class LauncherTests(unittest.TestCase):
         if not (Path(self.bridge_runtime) / "control.sock").exists():
             return
         arch = {"aarch64": "arm64", "arm64": "arm64", "x86_64": "amd64"}.get(platform.machine())
-        binary = STATE_DIR / f"bin/go-bridge-{platform.system().lower()}-{arch}"
+        binary = BUILD_CACHE / f"bin/go-bridge-{platform.system().lower()}-{arch}"
         subprocess.run([str(binary), "stop"], env=self.environment(), capture_output=True, timeout=6)
 
     def environment(self, **overrides):
@@ -49,6 +52,7 @@ class LauncherTests(unittest.TestCase):
             if not key.startswith(("PISSBOX_", "TEST_SBX_", "HERDR_"))
         }
         env["PATH"] = str(ROOT / "tests" / "fixtures") + os.pathsep + env["PATH"]
+        env["XDG_CACHE_HOME"] = str(CACHE_HOME)
         env["PISSBOX_BRIDGE_RUNTIME_DIR"] = self.bridge_runtime
         env["PISSBOX_CONFIG"] = str(self.global_config)
         env.update(overrides)
@@ -84,7 +88,7 @@ class LauncherTests(unittest.TestCase):
         return self.launch(answers=answers, TEST_SBX_MODE="conflict", **env)
 
     def pi_directory(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="pi-", dir=fixtures))
         for name in ("settings-co.json", "settings-go.json"):
@@ -92,7 +96,7 @@ class LauncherTests(unittest.TestCase):
         return directory
 
     def manage(self, *args, listing=None, raw_listing=None, **kwargs):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="management-", dir=fixtures))
         log = directory / "calls.jsonl"
@@ -162,7 +166,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.stdout.count("(none)"), 2)
 
     def test_list_header_colors_respect_terminal_and_no_color(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="list-colors-", dir=fixtures))
         for term, no_color, colored in (("xterm-256color", None, True), ("xterm-256color", "", False), ("dumb", None, False)):
@@ -233,7 +237,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls, [["ls", "--json"]])
 
     def test_delete_resolves_spaces_relative_paths_and_symlinks(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="delete-", dir=fixtures))
         target = directory / "workspace with spaces"
@@ -330,7 +334,7 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls, [["ls", "--json"]])
 
     def test_management_reports_missing_jq_before_calling_sbx(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         commands = Path(tempfile.mkdtemp(prefix="no-jq-", dir=fixtures))
         for command in ("bash", "dirname", "readlink", "uname"):
@@ -368,7 +372,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(result.stderr, "")
 
     def test_project_setup_is_forwarded_to_sandbox_not_executed_on_host(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory) / "primary workspace"
             project.mkdir()
@@ -380,7 +384,7 @@ class LauncherTests(unittest.TestCase):
             self.assertFalse((project / "host-marker").exists())
 
     def test_configured_parent_is_added_for_bare_yes_and_dot_launches(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             parent = Path(directory)
             project = parent / "project"
@@ -396,7 +400,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(mounts, [primary, str(parent), str(PI_DIR), str(STATE_DIR)])
 
     def test_configured_workspaces_add_to_cli_paths_not_caller_or_secondary_config(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             root = Path(directory)
             project = root / "primary"
@@ -415,7 +419,7 @@ class LauncherTests(unittest.TestCase):
                              [str(project), str(extra), str(configured), str(PI_DIR), str(STATE_DIR)])
 
     def test_ignore_config_workspaces_keeps_cli_mounts_and_skips_directory_checks(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             root = Path(directory)
             project = root / "project"
@@ -442,7 +446,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(config.read_text(), text)
 
     def test_ignore_config_workspaces_still_validates_toml_and_schema(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             for text in ('workspaces = ["..",', 'workspaces = ".."', 'setup = 5'):
@@ -453,7 +457,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(calls, [])
 
     def test_ignore_config_workspaces_after_separator_is_a_path_not_a_flag(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             caller = Path(directory)
             flag = "--ignore-config-workspaces"
@@ -467,7 +471,7 @@ class LauncherTests(unittest.TestCase):
                              [flag, str(caller), str(PI_DIR), str(STATE_DIR)])
 
     def test_ignore_config_workspaces_does_not_change_existing_reattach(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / ".pissbox.toml").write_text('workspaces = ["missing"]\n')
@@ -483,7 +487,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_symlinked_config_resolves_workspaces_from_primary_not_link_target(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             root = Path(directory)
             project = root / "project"
@@ -501,7 +505,7 @@ class LauncherTests(unittest.TestCase):
                              [str(project), str(root), str(extra), str(PI_DIR), str(STATE_DIR)])
 
     def test_duplicate_cli_configured_and_shared_workspaces_are_removed(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             root = Path(directory)
             project = root / "project"
@@ -518,7 +522,7 @@ class LauncherTests(unittest.TestCase):
                              [".", str(extra), str(root), str(PI_DIR), str(STATE_DIR)])
 
     def test_dash_prefixed_workspace_after_separator_is_not_a_cd_option(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             caller = Path(directory)
             project = caller / "--project"
@@ -528,7 +532,7 @@ class LauncherTests(unittest.TestCase):
             self.assertIn("PISSBOX_WORKSPACE_DIR=" + str(project), calls[0])
 
     def test_configured_paths_are_literal_not_shell_expansions(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             names = ["$(touch host-marker)", "$HOME", "*"]
@@ -543,7 +547,7 @@ class LauncherTests(unittest.TestCase):
             self.assertFalse((project / "host-marker").exists())
 
     def test_invalid_project_config_fails_before_settings_state_or_sbx(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             config = project / ".pissbox.toml"
@@ -562,7 +566,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertFalse(state.exists())
 
     def test_configured_workspaces_must_be_existing_directories(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / "plain-file").write_text("not a directory")
@@ -575,7 +579,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(calls, [])
 
     def test_broken_project_config_link_fails_on_host_before_sbx(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / ".pissbox.toml").symlink_to("missing-config")
@@ -585,7 +589,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(calls, [])
 
     def test_config_requires_host_parser_tools_before_launching(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / ".pissbox.toml").write_text("workspaces = []\n")
@@ -602,7 +606,7 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(calls, [])
 
     def test_management_and_help_ignore_project_config(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / ".pissbox.toml").write_text("not valid TOML")
@@ -619,7 +623,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(calls, [["ls", "--json"], ["rm", "--force", "existing"]])
 
     def test_configured_workspaces_do_not_change_existing_sandbox_reattach(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
             (project / ".pissbox.toml").write_text('workspaces = [".."]\n')
@@ -660,7 +664,7 @@ class LauncherTests(unittest.TestCase):
 
     def test_state_directory_overrides_are_relative_to_caller(self):
         cwd = ROOT / "tests" / "fixtures"
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="launcher-", dir=fixtures))
         for index, option in enumerate(("environment", "separate", "equals", "repeated")):
@@ -684,7 +688,7 @@ class LauncherTests(unittest.TestCase):
                 self.assertEqual(calls[0][-3:], [str(cwd), str(PI_DIR), str(state)])
 
     def test_state_directory_symlink_is_canonicalized_before_mounting(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="launcher-", dir=fixtures))
         target = directory / "state"
@@ -735,7 +739,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_missing_settings_profile_never_launches_sbx(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         pi = Path(tempfile.mkdtemp(prefix="pi-missing-", dir=fixtures))
         missing = "settings-go.json"
@@ -994,7 +998,7 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_help_needs_only_wrapper_utilities_not_runtime_commands(self):
-        fixtures = STATE_DIR / "test-fixtures"
+        fixtures = FIXTURES
         fixtures.mkdir(parents=True, exist_ok=True)
         commands = Path(tempfile.mkdtemp(prefix="help-path-", dir=fixtures))
         for command in ("bash", "cat", "dirname", "readlink", "uname"):

@@ -49,7 +49,14 @@ func run(root, host string, args []string) int {
 		return p.command(binary, []string{"stop"}, os.Stdin, os.Stdout, os.Stderr)
 	}
 	pi := fallback(o.piDir, fallback(os.Getenv("PISSBOX_PI_DIR"), filepath.Join(root, "pi-agent")))
-	state := fallback(o.stateDir, fallback(os.Getenv("PISSBOX_STATE_DIR"), filepath.Join(root, ".cache")))
+	state := fallback(o.stateDir, os.Getenv("PISSBOX_STATE_DIR"))
+	if state == "" {
+		var err error
+		state, err = defaultStateDir()
+		if err != nil {
+			return fail("Cannot determine shared state directory: %s", err)
+		}
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fail("%s", err)
@@ -241,4 +248,16 @@ func (p *processes) existing(root, pi, state, name string, o options, bridge *re
 			fmt.Fprintln(os.Stderr, "Please choose p, c, s, d, or q.")
 		}
 	}
+}
+
+func defaultStateDir() (string, error) {
+	cache := os.Getenv("XDG_CACHE_HOME")
+	if cache == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		cache = filepath.Join(home, ".cache")
+	}
+	return filepath.Join(cache, "pissbox"), nil
 }
