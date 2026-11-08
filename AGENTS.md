@@ -209,7 +209,7 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
 | `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |
 | `make build-launcher` / `make build-launcher-all` | Go launcher build / all supported cross-builds |
-| `make tools` | Explicit network installation of pinned quality tools |
+| `make setup-quality-tools` | Explicit network installation of pinned quality tools |
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |
 | `make metrics BASE=origin/main` | Fresh coverage and scoped CRAP/complexity reports |

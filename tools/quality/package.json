@@ -2,7 +2,7 @@
   "name": "pissbox-quality-tools",
   "private": true,
   "version": "1.0.0",
-  "description": "Development-only mutation and coverage tools; installed under .cache by make tools",
+  "description": "Development-only mutation and coverage tools; installed under .cache by make setup-quality-tools",
   "engines": { "node": ">=22" },
   "overrides": {
     "qs": "6.16.1"

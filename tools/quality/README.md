@@ -7,7 +7,7 @@ SBX as part of `make check`.
 ## Setup and ordinary checks
 
 ```bash
-make tools       # Explicit network install; never runs as a test dependency
+make setup-quality-tools  # Explicit network install; never runs as a test dependency
 make check       # Go -race, all JS suites, Python tests, vet, Bash syntax, diff check
 make metrics     # Fresh coverage plus complexity/CRAP reports for Go and extensions
 ```
@@ -25,7 +25,7 @@ Ordinary tests, coverage, and mutation baselines use Node's recursive
 filename lists or suite-to-suite imports. Pi only auto-loads `.js` and `.ts`
 extensions, so the `.test.mjs` suites do not run when Pi starts.
 
-`make tools` installs Gremlins v0.6.0 and go-crap v0.5.1 into
+`make setup-quality-tools` installs Gremlins v0.6.0 and go-crap v0.5.1 into
 `.cache/quality-tools/bin/<os>-<arch>/`, and npm tools into
 `.cache/quality-tools/js/`. npm versions are locked in the adjacent package files:
 StrykerJS 10.0.0, c8 10.1.3, and `@danibram/crap4ts` 0.6.0. The `qs` override pins

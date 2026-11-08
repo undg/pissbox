@@ -99,7 +99,7 @@ def go_bin_dir():
 
 def require_tool(path):
     if not path.is_file():
-        raise ValueError(f"Missing {path.relative_to(ROOT)}; run make tools first")
+        raise ValueError(f"Missing {path.relative_to(ROOT)}; run make setup-quality-tools first")
     return path
 
 

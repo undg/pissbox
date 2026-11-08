@@ -220,14 +220,14 @@ all discover them recursively. Shared helpers and fixtures remain in `tests/`.
 ```bash
 make help        # All targets and scope options; also the default for make
 make check       # Go/JS/Python tests, Go vet, Bash syntax, whitespace checks
-make tools       # Explicit network install of pinned quality tools into .cache/
+make setup-quality-tools  # Explicit network install of pinned quality tools into .cache/
 make coverage    # Fresh Go and JavaScript coverage reports
 make metrics     # Fresh coverage plus complexity and CRAP risk reports
 make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
 make mutation-go FILES="host/internal/bridge/mailbox.go"
 ```
 
-`make check` does not install quality tools or run mutation testing. `make tools`
+`make check` does not install quality tools or run mutation testing. `make setup-quality-tools`
 installs Gremlins and go-crap for Go, plus StrykerJS, c8, and crap4ts for
 JavaScript. Building these tools requires Go 1.26.2+ (or automatic toolchain
 download); JavaScript quality tooling requires Node 22+ and npm.

@@ -173,7 +173,7 @@ sys.exit(int(os.environ.get('TOOL_STATUS', '0')))
 
     @unittest.skipUnless(
         shutil.which("node") and (ROOT / ".cache/quality-tools/js/node_modules/@stryker-mutator/core/package.json").is_file(),
-        "run make tools to enable the real Stryker literal-path check",
+        "run make setup-quality-tools to enable the real Stryker literal-path check",
     )
     def test_js_runners_discover_colocated_tests_and_stryker_mutates_only_the_literal_path(self):
         shutil.copyfile(ROOT / "tools/quality/javascript.mjs", self.root / "tools/quality/javascript.mjs")
@@ -246,7 +246,7 @@ appendFileSync(process.env.DISCOVERY_LOG, "nested\\n");
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(name, result.stdout)
-        self.assertIn("run make tools first", result.stderr)
+        self.assertIn("run make setup-quality-tools first", result.stderr)
         self.assertFalse((self.root / "SHOULD_NOT_EXIST.go").exists())
 
 

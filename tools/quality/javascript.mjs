@@ -87,6 +87,6 @@ try {
 	else if (command === "crap") await crap();
 	else throw new Error(`Unknown quality command: ${command}`);
 } catch (error) {
-	console.error(error.code === "MODULE_NOT_FOUND" ? "Missing quality dependencies; run make tools first" : error);
+	console.error(error.code === "MODULE_NOT_FOUND" ? "Missing quality dependencies; run make setup-quality-tools first" : error);
 	process.exitCode = 1;
 }
