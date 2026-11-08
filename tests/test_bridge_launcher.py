@@ -195,7 +195,8 @@ class BridgeLauncherTests(unittest.TestCase):
             check=True, capture_output=True, timeout=60,
         )
         runtime = tempfile.mkdtemp(prefix="", dir=os.environ.get("PISSBOX_BRIDGE_TEST_FIXTURE_DIR") or ROOT / ".cache/test-fixtures")
-        env = self.environment(PISSBOX_BRIDGE_RUNTIME_DIR=runtime, TEST_SBX_MODE="wait")
+        state = self.checkout / ".cache/bridge-state"
+        env = self.environment(PISSBOX_BRIDGE_RUNTIME_DIR=runtime, PISSBOX_STATE_DIR=str(state), TEST_SBX_MODE="wait")
 
         def control(operation):
             return subprocess.run(
@@ -241,7 +242,7 @@ class BridgeLauncherTests(unittest.TestCase):
                 f"last control status={result.returncode}, stdout={result.stdout!r}, stderr={result.stderr!r}"
             )
         pid = json.loads(result.stdout)["pid"]
-        mailbox = next((self.checkout / ".cache").glob("bridge-launch.*"))
+        mailbox = next(state.glob("bridge-launch.*"))
         self.assertTrue((mailbox / "ready").exists())
         generation = (mailbox / "generation").read_text()
         stop_daemon()
