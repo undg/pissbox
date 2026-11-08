@@ -16,7 +16,11 @@ const filter = {
 	...page,
 };
 const definitions = [
-	["list", "List shared vault names and Markdown notes, including root-level notes. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to inspect archived notes. No host paths are exposed.", { ...filter, pattern: text("Optional vault-relative filename glob using *, ** and ? (for example **/*.md).", { maxLength: 1024 }) }, []],
+	["list", "List shared vault names, Markdown notes, folders, or both. The scan root is not listed, so an empty folder lists top-level directories. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to inspect archived notes. No host paths are exposed.", {
+		...filter,
+		kind: { type: "string", enum: ["notes", "folders", "all"], description: "Entry kinds to list (default notes). Tag and date filters apply to notes only." },
+		pattern: text("Optional vault-relative path glob using *, ** and ? (for example **/*.md). Matches notes and folders alike.", { maxLength: 1024 }),
+	}, []],
 	["search", "Find notes by case-insensitive literal text or an explicit regular expression. Returns paths, line numbers and snippets. Follow nextOffset or narrow the folder when truncated. Skips `_archive/` and root `AGENTS.md`; name a folder inside `_archive` to inspect archived notes.", {
 		...filter, query: text("Text to find, or a Go/RE2 pattern when regex is true.", { maxLength: 1024 }),
 		regex: { type: "boolean", description: "Use a case-sensitive RE2 regular expression instead of literal text." },

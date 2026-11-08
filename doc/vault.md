@@ -61,7 +61,7 @@ Available tools:
 
 | Tool | Purpose |
 | --- | --- |
-| `vault_list` | Discover vault names and list notes, including root-level notes; optional `*`, `**`, `?` filename glob |
+| `vault_list` | Discover vault names; list notes (`kind: notes`, default), folders (`folders`), or both (`all`); optional `*`, `**`, `?` path glob |
 | `vault_search` | Literal or RE2 text search, folder/tag/date filters, optional backlinks |
 | `vault_read` | Read Markdown and its revision, with byte-based pagination |
 | `vault_new` | Exclusively create a kebab-case note with standard frontmatter |
@@ -76,13 +76,19 @@ Available tools:
 
 Search/list/tags cover all configured vaults by default. Browse skips directories
 named `_archive` and the root `AGENTS.md`; explicit paths still read and write
-both, and naming a folder inside `_archive` browses it. Single-note operations
+both, and naming a folder inside `_archive` browses it. `vault_list` returns
+notes by default; `kind: folders` lists directories and `kind: all` lists both.
+The scan root is never listed, so an empty folder shows its top-level
+directories. Folders carry only vault, path and kind; the JSON key stays
+`notes`. `folder` and `pattern` narrow both kinds; tag and filename-date filters
+apply to notes only, and pagination counts both kinds. Single-note operations
 require a vault name if multiple vaults exist; they never guess the first vault.
 Filename date filters are inclusive ISO dates, not file modification dates.
 Tag filters match nested tags. Tags count each tag once per note across the
 selected vaults. Backlinks are wikilinks, not a full Obsidian link resolver;
-bare basenames can be ambiguous. No delete, shell, arbitrary-path, or commit
-tool is exposed.
+bare basenames can be ambiguous.
+
+No delete, shell, arbitrary-path, or commit tool is exposed.
 
 ## Persistence and history
 

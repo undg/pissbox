@@ -14,6 +14,7 @@ test("vault adapter exposes domain operations, revisions and structured note dat
 	for (const name of ["save", "edit", "append", "tag"]) {
 		assert.ok(tools.get(`vault_${name}`).parameters.required.includes("revision"));
 	}
+	assert.deepEqual(tools.get("vault_list").parameters.properties.kind.enum, ["notes", "folders", "all"]);
 	const signal = new AbortController().signal;
 	const params = { path: "ideas.md", revision: result.revision, oldText: "old", newText: "new" };
 	const response = await tools.get("vault_edit").execute("call", params, signal);

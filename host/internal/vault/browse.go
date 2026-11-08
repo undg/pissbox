@@ -16,6 +16,7 @@ import (
 type Entry struct {
 	Vault    string `json:"vault"`
 	Path     string `json:"path"`
+	Kind     string `json:"kind"`
 	Line     int    `json:"line,omitempty"`
 	Match    string `json:"match,omitempty"`
 	Size     int64  `json:"size,omitempty"`
@@ -51,7 +52,10 @@ func folderValid(folder string) bool {
 	}
 	return true
 }
-func walkNotes(ctx context.Context, root *os.Root, folder string, visit func(string, fs.DirEntry) error) error {
+
+// walkVault visits notes and, when folders is set, directories. The scan root
+// itself is never visited; an explicitly named _archive folder stays browsable.
+func walkVault(ctx context.Context, root *os.Root, folder string, folders bool, visit func(string, fs.DirEntry) error) error {
 	if !folderValid(folder) {
 		return errors.New("invalid vault-relative folder")
 	}
@@ -76,7 +80,10 @@ func walkNotes(ctx context.Context, root *os.Root, folder string, visit func(str
 		if count > 10000 {
 			return errors.New("scan limit reached; narrow the folder")
 		}
-		if name != "." && strings.HasPrefix(entry.Name(), ".") {
+		if name == start {
+			return nil
+		}
+		if strings.HasPrefix(entry.Name(), ".") {
 			if entry.IsDir() {
 				return fs.SkipDir
 			}
@@ -85,15 +92,20 @@ func walkNotes(ctx context.Context, root *os.Root, folder string, visit func(str
 		if entry.Type()&fs.ModeSymlink != 0 {
 			return nil
 		}
-		// Retired notes and the vault's convention file are not note content.
-		// An explicitly named archive folder is still browsable.
-		if entry.IsDir() && entry.Name() == "_archive" && name != start {
-			return fs.SkipDir
+		if entry.IsDir() {
+			// Retired notes are hidden unless the caller names an archive folder.
+			if entry.Name() == "_archive" {
+				return fs.SkipDir
+			}
+			if !folders || !folderValid(name) {
+				return nil
+			}
+			return visit(name, entry)
 		}
-		if !entry.IsDir() && name == "AGENTS.md" {
+		if name == "AGENTS.md" {
 			return nil
 		}
-		if !entry.IsDir() && strings.EqualFold(path.Ext(name), ".md") {
+		if strings.EqualFold(path.Ext(name), ".md") {
 			if err := notePath(name); err != nil {
 				return nil
 			}
@@ -143,6 +155,9 @@ func shortLine(text string) string {
 func validateBrowse(r Request) error {
 	if !folderValid(r.Folder) || r.Offset < 0 || r.Limit < 0 || r.Limit > 50 {
 		return errors.New("invalid folder, offset, or limit (maximum 50)")
+	}
+	if r.Kind != "" && r.Kind != "notes" && r.Kind != "folders" && r.Kind != "all" {
+		return errors.New("kind must be notes, folders, or all")
 	}
 	for _, date := range []string{r.DateFrom, r.DateTo} {
 		if date != "" {
@@ -264,16 +279,23 @@ func (s *Service) browse(ctx context.Context, op string, r Request) (any, error)
 	return result, nil
 }
 func (s *scanner) run(ctx context.Context) error {
-	if err := walkNotes(ctx, s.root, s.request.Folder, s.visit); err != nil {
+	folders := s.op == "list" && (s.request.Kind == "folders" || s.request.Kind == "all")
+	if err := walkVault(ctx, s.root, s.request.Folder, folders, s.visit); err != nil {
 		return err
 	}
 	if s.op == "search" && s.request.Backlinks && len(s.matches) > 0 {
-		return walkNotes(ctx, s.root, s.request.Folder, func(name string, _ fs.DirEntry) error { return s.includeBacklink(name) })
+		return walkVault(ctx, s.root, s.request.Folder, false, func(name string, _ fs.DirEntry) error { return s.includeBacklink(name) })
 	}
 	return nil
 }
 func (s *scanner) visit(name string, entry fs.DirEntry) error {
 	if s.op == "list" && s.pattern != nil && !s.pattern.MatchString(name) {
+		return nil
+	}
+	if entry.IsDir() {
+		return s.list(name, entry)
+	}
+	if s.op == "list" && s.request.Kind == "folders" {
 		return nil
 	}
 	if !dateAllowed(name, s.request) {
@@ -308,11 +330,15 @@ func (s *scanner) visit(name string, entry fs.DirEntry) error {
 	return nil
 }
 func (s *scanner) list(name string, entry fs.DirEntry) error {
+	if entry.IsDir() {
+		s.page.add(Entry{Vault: s.definition.Name, Path: name, Kind: "folder"})
+		return nil
+	}
 	info, err := entry.Info()
 	if err != nil {
 		return errors.New("cannot inspect note")
 	}
-	s.page.add(Entry{Vault: s.definition.Name, Path: name, Size: info.Size(), Modified: info.ModTime().UTC().Format(time.RFC3339)})
+	s.page.add(Entry{Vault: s.definition.Name, Path: name, Kind: "note", Size: info.Size(), Modified: info.ModTime().UTC().Format(time.RFC3339)})
 	return nil
 }
 func (s *scanner) search(name, text string) {
@@ -322,7 +348,7 @@ func (s *scanner) search(name, text string) {
 			found = s.pattern.MatchString(line)
 		}
 		if found {
-			s.page.add(Entry{Vault: s.definition.Name, Path: name, Line: i + 1, Match: shortLine(line)})
+			s.page.add(Entry{Vault: s.definition.Name, Path: name, Kind: "note", Line: i + 1, Match: shortLine(line)})
 			s.matches[name] = true
 		}
 	}
@@ -342,7 +368,7 @@ func (s *scanner) includeBacklink(name string) error {
 	for i, line := range strings.Split(string(data), "\n") {
 		for target := range s.matches {
 			if linksTo(line, target) {
-				s.page.add(Entry{Vault: s.definition.Name, Path: name, Line: i + 1, Match: shortLine(line)})
+				s.page.add(Entry{Vault: s.definition.Name, Path: name, Kind: "note", Line: i + 1, Match: shortLine(line)})
 				return nil
 			}
 		}
@@ -374,7 +400,7 @@ func linksTo(line, target string) bool {
 func backlinkEntry(vault, name, text, target string) *Entry {
 	for i, line := range strings.Split(text, "\n") {
 		if linksTo(line, target) {
-			return &Entry{Vault: vault, Path: name, Line: i + 1, Match: shortLine(line)}
+			return &Entry{Vault: vault, Path: name, Kind: "note", Line: i + 1, Match: shortLine(line)}
 		}
 	}
 	return nil
@@ -387,7 +413,7 @@ func (s *Service) backlinks(ctx context.Context, root *os.Root, d Definition, r 
 		return nil, err
 	}
 	page := newPage(r)
-	err := walkNotes(ctx, root, "", func(name string, _ fs.DirEntry) error {
+	err := walkVault(ctx, root, "", false, func(name string, _ fs.DirEntry) error {
 		data, err := readContent(root, name)
 		if err != nil {
 			return err
