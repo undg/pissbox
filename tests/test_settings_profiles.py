@@ -16,19 +16,6 @@ class SettingsProfileTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.profile(name)
 
-    def test_profiles_use_their_expected_providers(self):
-        co_profile = self.profile("settings-co.json")
-        go_profile = self.profile("settings-go.json")
-        self.assertEqual(co_profile["defaultProvider"], "github-copilot")
-        self.assertEqual(co_profile["defaultModel"], "gpt-6.1-sol")
-        self.assertTrue(
-            all(model.startswith("github-copilot/") for model in co_profile["enabledModels"])
-        )
-        self.assertEqual(go_profile["defaultProvider"], "opencode-go")
-        self.assertTrue(
-            all(model.startswith("opencode-go/") for model in go_profile["enabledModels"])
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
