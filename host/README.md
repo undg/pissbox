@@ -121,6 +121,7 @@ Use the matching binary for your host (example: macOS arm64):
 ```bash
 .cache/bin/go-bridge-darwin-arm64 ensure  # Start if absent; otherwise check compatibility
 .cache/bin/go-bridge-darwin-arm64 status  # JSON: protocol version, PID, registration count
+.cache/bin/go-bridge-darwin-arm64 reload  # Hand off registrations and replace the daemon
 .cache/bin/go-bridge-darwin-arm64 stop    # Explicitly stop and release all registrations
 ```
 
@@ -141,7 +142,8 @@ retry window. Socket paths are limited to 103 bytes for macOS compatibility.
 `PISSBOX_BRIDGE_RUNTIME_DIR` overrides the private runtime directory for isolated
 tests; setting different overrides intentionally creates separate daemons. Do not
 mount the runtime directory into SBX. `pissbox --bridge-stop` stops the compatible
-host daemon without touching sandboxes; use it before rebuilding the bridge.
+host daemon without touching sandboxes. `pissbox --bridge-reload` replaces it
+without releasing agents or Herd panes.
 
 Registrations exist only in memory. Each active launcher retries the host-only
 `reconnect` operation every two seconds. It restores its own mailbox registration
@@ -157,10 +159,38 @@ requests published immediately before a crash. Uncertain operations fail locally
 and are never replayed automatically. Old launchers without reconnect support
 still need reattach after daemon death. No sandbox recreation is needed.
 
-For a binary upgrade, close active launches, run `stop` with the old matching
-binary, build/install the replacement, then launch again. An incompatible live
-daemon is never silently replaced or killed. A protocol-compatible existing
-daemon continues running its old executable until explicitly stopped. When moving
+### Reload versus stop
+
+`reload` is a graceful restart, not an in-process hot reload; the daemon PID
+changes. The old daemon writes a versioned `handoff.json` in the private runtime
+directory and exits without its final drain, Herd release, or readiness removal.
+The replacement binary adopts the same registration IDs and generations before
+it binds the control socket, then consumes the handoff. Agent addresses and
+existing Herd sidebar entries survive, queued lifecycle events remain in their
+mailboxes, and already-published inbox records stay discoverable. The
+replacement also re-reads the global configuration, including vault tables.
+
+Adoption requires the canonical mailbox, a live launcher owner, an existing
+`generation` equal to the registration ID, and a `ready` marker. A matching
+`retired` marker written by unregister wins, so a launcher removed during the
+handoff is not resurrected. Malformed, duplicate, dead-owner, and retired
+entries are skipped, and a dead owner's Herd pane is released; at most 256
+registrations are adopted. New registrations are rejected while reloading, and
+the launcher retries its initial registration briefly.
+
+In-flight sends and vault mutations are not transactional across a reload. A
+send that crossed the restart can time out as indeterminate because pending-send
+metadata is deliberately not handed off; vault jobs in the old process are
+cancelled. Never resend automatically. The first upgrade from a daemon built
+before reload support still needs one explicit `--bridge-stop` and launch; the
+old daemon rejects the unknown operation instead of silently doing a destructive
+cold restart.
+
+For a binary upgrade, build the replacement, then run `pissbox --bridge-reload`.
+Explicit `stop` remains destructive: it clears any handoff, drains and releases
+all registrations, and removes readiness. An incompatible live daemon is never
+silently replaced or killed. A protocol-compatible existing daemon continues
+running its old executable until reloaded or explicitly stopped. When moving
 from the old per-launch model, first close launches that still own per-launch
 helpers; the singleton cannot adopt them. The launcher reconnect watchdog does
 not automatically restart a stopped daemon.
