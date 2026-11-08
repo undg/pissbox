@@ -250,9 +250,9 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 		// an upgraded CLI can gracefully stop its old live daemon.
 		response, err = controlCallVersion(dir, req, protocolVersion-1)
 	}
-	if op == "stop" {
+	if op == "stop" && (err == nil || errors.Is(err, errUnavailable)) {
 		// Explicit stop also clears a handoff left by a failed or interrupted
-		// reload, including when no daemon is running to receive the request.
+		// reload. Do not clear one while a concurrent reload is shutting down.
 		if removeErr := removeHandoff(dir); err == nil && removeErr != nil {
 			return removeErr
 		}
