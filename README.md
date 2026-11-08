@@ -182,7 +182,11 @@ Both modes remain peer-agent content, not user instructions. Herd is not
 required; when launched inside Herd, the bridge also reports working, idle, and
 blocked states.
 `bin/pissbox --bridge-stop` explicitly stops the host bridge without removing
-sandboxes; use it when upgrading or recovering from a protocol mismatch.
+sandboxes; use it when recovering from a protocol mismatch or for the first
+upgrade from a daemon without reload support. `bin/pissbox --bridge-reload`
+replaces the daemon without releasing agent addresses or Herd panes and re-reads
+the global configuration, including vault tables. In-flight sends and vault
+writes can still fail as indeterminate; never resend them automatically.
 `make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64. See the
 [bridge guide](host/README.md) for setup and daemon lifecycle.
 

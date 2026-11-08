@@ -51,6 +51,13 @@ Upstream's official Pi integration requires host Pi process detection, so merely
 forwarding its socket messages is insufficient for sandbox Pi. Review delivery
 and native session-log integration remain unresolved.
 
+- [ ] **Bridge reload is not transactional for in-flight work:** reload preserves
+      registration IDs, generations, readiness, Herd bindings, and already-published
+      inbox records, but deliberately does not hand off pending-send metadata or
+      running vault jobs. A send or vault mutation crossing the replacement can fail
+      as indeterminate; never retry it automatically. The daemon PID also changes.
+      The first upgrade from a daemon without `reload` still needs one explicit
+      `--bridge-stop` and launch.
 - [ ] **Reconnect cancellation can orphan a bridge registration (P2):**
       Introduced in `a1d651d`; still unfixed. If the daemon commits a reconnect
       but the launcher cancels its helper before receiving the new registration
