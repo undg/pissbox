@@ -402,7 +402,8 @@ func TestMoveReportsBacklinksWithoutRewritingThem(t *testing.T) {
 	put(t, dir, "links/path.md", "[[Area/Old]]\n")
 	put(t, dir, "links/base.md", "[[Old|alias]]\n")
 	put(t, dir, "_archive/retired.md", "[[Old]]\n")
-	result := execute(t, s, "move", Request{OldPath: "Area/Old.md", NewPath: "New Folder/Old.md"}).(Move)
+	// A stale folder filter must not narrow the pre-move scan.
+	result := execute(t, s, "move", Request{OldPath: "Area/Old.md", NewPath: "New Folder/Old.md", Folder: "Area"}).(Move)
 	if !result.BacklinksComplete || !reflect.DeepEqual(result.Backlinks, []string{"links/base.md", "links/path.md"}) {
 		t.Fatal(result)
 	}
@@ -440,6 +441,77 @@ func TestMoveBacklinkCapAndScanFailureAreExplicit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "moved.md")); err != nil {
 		t.Fatal("scan failure blocked the move", err)
+	}
+}
+
+// Execute refuses an already-dead context, so reach move directly to prove the
+// publish step rechecks the job context after the scan.
+func TestMoveRefusesWhenJobContextExpiresBeforePublish(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "source.md", "body")
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	_, err = s.move(ctx, root, Definition{Name: "personal", Path: dir}, Request{OldPath: "source.md", NewPath: "moved.md"})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("expected the job context to stop the move", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "source.md")); err != nil {
+		t.Fatal("source lost", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "moved.md")); !os.IsNotExist(err) {
+		t.Fatal("expired job context published a note", err)
+	}
+}
+
+func TestMoveRefusesUninspectableAndSymlinkedDestinationParents(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "source.md", "source")
+	put(t, dir, "real/keep.md", "keep")
+	if err := os.Symlink("real", filepath.Join(dir, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	for _, request := range []Request{
+		{OldPath: "source.md", NewPath: "source.md/child.md"},
+		{OldPath: "source.md", NewPath: "alias/new.md"},
+	} {
+		reject(t, s, "move", request)
+	}
+	if data, err := os.ReadFile(filepath.Join(dir, "source.md")); err != nil || string(data) != "source" {
+		t.Fatal(string(data), err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "real", "new.md")); !os.IsNotExist(err) {
+		t.Fatal("refused move wrote through a symlink", err)
+	}
+}
+
+func TestMoveWarnsWhenHistoryFailsAfterPublishing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	s, dir := service(t, true)
+	git(t, dir, "init")
+	git(t, dir, "config", "user.name", "Vault Test")
+	git(t, dir, "config", "user.email", "vault@example.invalid")
+	create(t, s, "project/old-note.md", "tracked")
+	lock := filepath.Join(dir, ".git", "index.lock")
+	if err := os.WriteFile(lock, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	moved := execute(t, s, "move", Request{OldPath: "project/old-note.md", NewPath: "project/new-note.md"}).(Move)
+	if moved.Revision == "" || !strings.Contains(moved.Warning, "automatic history recording failed") || !strings.Contains(moved.Warning, "Do not repeat the move") {
+		t.Fatal(moved)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "project", "new-note.md")); err != nil {
+		t.Fatal("history failure undid the move", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "project", "old-note.md")); !os.IsNotExist(err) {
+		t.Fatal("old note survived", err)
+	}
+	if err := os.Remove(lock); err != nil {
+		t.Fatal(err)
 	}
 }
 
