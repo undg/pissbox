@@ -127,7 +127,10 @@ command = "/definitely/not/a/real/command"
 func TestDefaultGlobalStarterCreationAndCreationFailureWarning(t *testing.T) {
 	f := newFixture(t)
 	xdg := filepath.Join(f.configDir, "xdg")
-	out, status, calls := f.launch("", map[string]string{"PISSBOX_CONFIG": "", "XDG_CONFIG_HOME": xdg})
+	// The fixture lives under the checkout, which may itself be under HOME.
+	// A separate HOME keeps the expected schema path independent of that.
+	home := t.TempDir()
+	out, status, calls := f.launch("", map[string]string{"PISSBOX_CONFIG": "", "XDG_CONFIG_HOME": xdg, "HOME": home})
 	if status != 0 || kinds(calls) != "run" {
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
@@ -146,7 +149,7 @@ func TestDefaultGlobalStarterCreationAndCreationFailureWarning(t *testing.T) {
 
 	notDirectory := filepath.Join(f.configDir, "not-a-directory")
 	f.write(notDirectory, "x")
-	out, status, calls = f.launch("", map[string]string{"PISSBOX_CONFIG": "", "XDG_CONFIG_HOME": notDirectory})
+	out, status, calls = f.launch("", map[string]string{"PISSBOX_CONFIG": "", "XDG_CONFIG_HOME": notDirectory, "HOME": home})
 	if status != 0 || kinds(calls) != "run" {
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
