@@ -329,6 +329,26 @@ test("daemon restart rotates addresses automatically and fences old requests", a
 	assert.equal(b.messages.length, 1);
 });
 
+test("bridge reload preserves addresses and keeps routing messages", async (t) => {
+	const mailbox = daemon(t);
+	const rootA = mailbox(), rootB = mailbox();
+	const a = nativeSession(rootA), b = nativeSession(rootB);
+	t.after(() => { a.emit("session_shutdown"); b.emit("session_shutdown"); });
+	a.emit("session_start"); b.emit("session_start");
+	await waitFor(async () => (await a.call("agent_list")).details.peers?.length === 1);
+	const oldA = a.identity(), oldB = b.identity();
+	const pid = JSON.parse(mailbox.cli("status")).pid;
+	mailbox.cli("reload");
+	assert.notEqual(JSON.parse(mailbox.cli("status")).pid, pid, "reload must replace the process");
+	assert.equal(a.identity().id, oldA.id, "reload preserves the sender address");
+	assert.equal(b.identity().id, oldB.id, "reload preserves the recipient address");
+	await waitFor(async () => (await a.call("agent_list")).details.peers?.length === 1);
+	const sent = await a.call("agent_send", { to: b.identity().id, text: "after reload" });
+	assert.equal(sent.details.status, "queued");
+	await waitFor(() => b.messages.length === 1);
+	assert.match(b.messages[0].message.content, /after reload/);
+});
+
 test("lifetime observer retires a killed Pi process, not a stopped event loop", async (t) => {
 	const mailbox = mkdtempSync(path.join(fixtures, "process-lifetime-"));
 	writeReady(mailbox);

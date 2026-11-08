@@ -102,6 +102,8 @@ type liveAgent struct {
 	root            *os.Root
 	requests        map[string]*agentResponse // nil means awaiting receipt
 	indexedMessages []string
+	restoredInbox   []string
+	inboxScanned    time.Time
 	indexPublished  bool
 	lastSeen        time.Time
 	responsive      bool
@@ -268,7 +270,7 @@ func (r *messageRouter) discover(d *daemon, now time.Time) {
 					ar.Close()
 					continue
 				}
-				a = &liveAgent{registration: registration, root: ar, requests: make(map[string]*agentResponse)}
+				a = &liveAgent{registration: registration, root: ar, requests: make(map[string]*agentResponse), restoredInbox: inboxRecordIDs(ar), inboxScanned: now}
 				r.agents[id] = a
 			} else {
 				ar.Close()
@@ -488,15 +490,30 @@ func (r *messageRouter) receipts(now time.Time) {
 		delete(r.pending, id)
 	}
 }
-func (r *messageRouter) publishInboxIndexes() {
+func (r *messageRouter) publishInboxIndexes(now time.Time) {
 	for id, a := range r.agents {
-		index := inboxIndex{Version: 1, To: id, Messages: make([]string, 0)}
-		for messageID, pending := range r.pending {
-			if pending.recipient == a {
-				index.Messages = append(index.Messages, messageID)
+		// Existing records predate this router after a reload. Rescan slowly;
+		// pending deliveries already drive the fast path.
+		if now.Sub(a.inboxScanned) >= time.Second {
+			a.restoredInbox = inboxRecordIDs(a.root)
+			a.inboxScanned = now
+		}
+		seen := make(map[string]bool, len(a.restoredInbox)+len(r.pending))
+		messages := make([]string, 0, len(a.restoredInbox)+len(r.pending))
+		for _, messageID := range a.restoredInbox {
+			if !seen[messageID] {
+				seen[messageID] = true
+				messages = append(messages, messageID)
 			}
 		}
-		sort.Strings(index.Messages)
+		for messageID, pending := range r.pending {
+			if pending.recipient == a && !seen[messageID] {
+				seen[messageID] = true
+				messages = append(messages, messageID)
+			}
+		}
+		sort.Strings(messages)
+		index := inboxIndex{Version: 1, To: id, Messages: messages}
 		if a.indexPublished && slices.Equal(a.indexedMessages, index.Messages) {
 			continue
 		}
@@ -507,6 +524,25 @@ func (r *messageRouter) publishInboxIndexes() {
 			a.indexPublished = true
 		}
 	}
+}
+
+func inboxRecordIDs(root *os.Root) []string {
+	dir, err := recordDirectory(root, "inbox")
+	if err != nil {
+		return nil
+	}
+	defer dir.Close()
+	names, err := recordNames(dir, maxPending)
+	if err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(names))
+	for _, name := range names {
+		if len(name) == 37 && messagingID.MatchString(name[:32]) && name[32:] == ".json" {
+			ids = append(ids, name[:32])
+		}
+	}
+	return ids
 }
 
 func (d *daemon) runMessaging(ctx context.Context) {
@@ -536,7 +572,7 @@ func (d *daemon) runMessaging(ctx context.Context) {
 					r.requests(a)
 				}
 			}
-			r.publishInboxIndexes()
+			r.publishInboxIndexes(now)
 		}
 	}
 }
