@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"pissbox/host/config"
 )
 
 func TestGlobalSecretsRegisterOnCreationAndNotOnAttach(t *testing.T) {
@@ -134,7 +136,7 @@ func TestDefaultGlobalStarterCreationAndCreationFailureWarning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "#:schema " + filepath.Join(f.root, "host", "config", "global-schema.json") + "\n"
+	want := config.Starter(f.root)
 	if string(data) != want {
 		t.Fatalf("got %q want %q", data, want)
 	}
