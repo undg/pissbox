@@ -1,6 +1,6 @@
 ---
 name: vault-manager
-description: Find, read, create, edit, organize, and open shared Markdown vault notes. Use for Obsidian, daily notes, thought capture, tags, backlinks, glossary entries, or requests to save/store/commit findings into a note or mark a note done.
+description: Find, read, create, edit, move, organize, and open shared Markdown vault notes. Use for Obsidian, daily notes, thought capture, tags, backlinks, glossary entries, renaming or archiving notes, or requests to save/store/commit findings into a note or mark a note done.
 ---
 
 # Shared vault notes
@@ -14,10 +14,11 @@ description: Find, read, create, edit, organize, and open shared Markdown vault 
 5. Read before editing. `vault_read` returns content and an opaque `revision`. Follow `nextOffset` for additional UTF-8 byte pages. If the revision changes between pages, start reading again.
 6. Prefer `vault_edit` for targeted, uniquely matching replacements. Use `vault_save` only with the complete Markdown including frontmatter; never replace a note with a partial page. `vault_append` concatenates exactly, so include needed separating newlines. Existing-note mutations require the latest revision. On conflict, reread and reconcile; never blindly overwrite another agent's work.
 7. Use `vault_new` for new notes: provide the body, plus optional tags/aliases; the tool generates frontmatter. It refuses existing paths. Use `vault_daily` to read/create today's `Daily/YYYY-MM-DD.md`, using the host's local date.
-8. “Save it,” “store these findings,” “commit those changes,” or “this note is done” mean persist the requested note changes. No separate finalization operation is needed. If the note already contains exactly the requested findings, do not manufacture a change. Do not mark unrelated tasks complete or copy the conversation wholesale.
-9. Treat a timeout/cancellation as an uncertain outcome. Read/list to establish what happened before considering another mutation. Never retry a write automatically. Surface a returned warning; do not claim unqualified success or repeat a saved change.
-10. Use `vault_open` only when asked to open/show a note in Obsidian. Resolve an ambiguous title to its vault and relative path first. Obsidian runs on the user's desktop; it is not needed to manage Markdown.
-11. Use `vault_backlinks` for incoming wikilinks and `vault_tags` for tag counts. Bare-filename wikilinks may be ambiguous when several notes share a basename. `vault_tag` modifies frontmatter tags only, never inline `#tags`. Tag filters include nested tags. Follow `nextOffset` on paginated results; narrow the scope on scan/size errors.
+8. Use `vault_move` to move or rename one note within its vault. Parent folders are created and an existing destination is refused. It returns up to 20 pre-move backlink sources and `backlinksComplete`; links are never rewritten. When the scan is complete, fix path-form links (and bare `[[name]]` links after a rename) with `vault_edit`; moving between folders keeps bare links valid. Archive by moving into `_archive/`; hard delete stays a human action in Obsidian.
+9. “Save it,” “store these findings,” “commit those changes,” or “this note is done” mean persist the requested note changes. No separate finalization operation is needed. If the note already contains exactly the requested findings, do not manufacture a change. Do not mark unrelated tasks complete or copy the conversation wholesale.
+10. Treat a timeout/cancellation as an uncertain outcome. Read/list to establish what happened before considering another mutation. Never retry a write or move automatically. Surface a returned warning; do not claim unqualified success or repeat a completed change.
+11. Use `vault_open` only when asked to open/show a note in Obsidian. Resolve an ambiguous title to its vault and relative path first. Obsidian runs on the user's desktop; it is not needed to manage Markdown.
+12. Use `vault_backlinks` for incoming wikilinks and `vault_tags` for tag counts. Bare-filename wikilinks may be ambiguous when several notes share a basename. `vault_tag` modifies frontmatter tags only, never inline `#tags`. Tag filters include nested tags. Follow `nextOffset` on paginated results; narrow the scope on scan/size errors.
 
 ## Vault conventions
 
