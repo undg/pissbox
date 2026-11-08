@@ -29,10 +29,10 @@ brew upgrade docker/tap/sbx
 
 Run `bin/pissbox --help` for all options. Directory selection is:
 
-| Directory | Flag | Environment variable | Default in this checkout |
+| Directory | Flag | Environment variable | Default |
 | --- | --- | --- | --- |
 | Pi configuration | `--pissbox-pi-dir DIR` | `PISSBOX_PI_DIR` | `pi-agent/` |
-| Linux tool state | `--pissbox-state-dir DIR` | `PISSBOX_STATE_DIR` | `.cache/` |
+| Linux tool state | `--pissbox-state-dir DIR` | `PISSBOX_STATE_DIR` | `${XDG_CACHE_HOME:-$HOME/.cache}/pissbox` |
 
 Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.

@@ -220,7 +220,7 @@ all discover them recursively. Shared helpers and fixtures remain in `tests/`.
 ```bash
 make help        # All targets and scope options; also the default for make
 make check       # Go/JS/Python tests, Go vet, Bash syntax, whitespace checks
-make setup-quality-tools  # Explicit network install of pinned quality tools into .cache/
+make setup-quality-tools  # Install pinned quality tools into shared state
 make coverage    # Fresh Go and JavaScript coverage reports
 make metrics     # Fresh coverage plus complexity and CRAP risk reports
 make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"

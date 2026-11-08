@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BUILD_ALL=false
+GREMLINS=github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
+GO_CRAP=github.com/padiazg/go-crap@v0.5.1
+STAGE=""
+
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} [--all]
+
+Build Gremlins and go-crap. Requires Go 1.26.2 or newer.
+
+Options:
+  --all       Cross-compile macOS/Linux, each for arm64 and amd64
+  -h, --help  Show this help
+
+Without --all, build for the current host OS and architecture.
+Writes to \$PISSBOX_STATE_DIR/bin when set, otherwise
+\${XDG_CACHE_HOME:-\$HOME/.cache}/pissbox/bin. Version markers stay in the same
+state root under quality-tools/. Existing binaries with the same pinned version
+are reused.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+	--all) BUILD_ALL=true ;;
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	*)
+		echo "Unexpected argument: $1. Use --help for usage." >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+cleanup() {
+	if [[ -n $STAGE ]]; then
+		rm -rf "$STAGE"
+	fi
+}
+trap cleanup EXIT
+
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+STATE_DIR=${PISSBOX_STATE_DIR:-"${XDG_CACHE_HOME:-$HOME/.cache}/pissbox"}
+OUTPUT_DIR="$STATE_DIR/bin"
+VERSION_DIR="$STATE_DIR/quality-tools"
+
+if ! command -v go >/dev/null 2>&1; then
+	echo "Building quality tools requires Go 1.26.2 or newer." >&2
+	exit 1
+fi
+
+unset GOBIN
+HOST_OS=$(go env GOHOSTOS)
+HOST_ARCH=$(go env GOHOSTARCH)
+MOD_CACHE=$(go env GOMODCACHE)
+case "$HOST_OS/$HOST_ARCH" in
+darwin/arm64 | darwin/amd64 | linux/arm64 | linux/amd64) ;;
+*)
+	echo "Unsupported quality-tool host: $HOST_OS/$HOST_ARCH" >&2
+	exit 1
+	;;
+esac
+
+mkdir -p "$OUTPUT_DIR" "$VERSION_DIR"
+
+build_tool() {
+	local module=$1 name=$2 os=$3 arch=$4
+	local target="$OUTPUT_DIR/$name-$os-$arch"
+	local version_file="$VERSION_DIR/$name-$os-$arch.version"
+	if [[ -x $target && -f $version_file && $(<"$version_file") == "$module" ]]; then
+		return
+	fi
+	echo "Building $name for $os/$arch" >&2
+	STAGE=$(mktemp -d "$VERSION_DIR/build.XXXXXX")
+	GOPATH="$STAGE/gopath" GOMODCACHE="$MOD_CACHE" GOOS="$os" GOARCH="$arch" \
+		CGO_ENABLED=0 go install "$module"
+	local binary
+	if [[ $os == "$HOST_OS" && $arch == "$HOST_ARCH" ]]; then
+		binary="$STAGE/gopath/bin/$name"
+	else
+		binary="$STAGE/gopath/bin/${os}_${arch}/$name"
+	fi
+	if [[ ! -f $binary ]]; then
+		echo "go install produced no $name binary for $os/$arch" >&2
+		exit 1
+	fi
+	mv "$binary" "$target"
+	printf '%s\n' "$module" > "$version_file"
+	rm -rf "$STAGE"
+	STAGE=""
+}
+
+build_target() {
+	local os=$1 arch=$2
+	build_tool "$GREMLINS" gremlins "$os" "$arch"
+	build_tool "$GO_CRAP" go-crap "$os" "$arch"
+}
+
+if [[ $BUILD_ALL == true ]]; then
+	for OS in darwin linux; do
+		for ARCH in arm64 amd64; do
+			build_target "$OS" "$ARCH"
+		done
+	done
+else
+	build_target "$HOST_OS" "$HOST_ARCH"
+fi

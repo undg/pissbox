@@ -2,6 +2,7 @@
 
 import json
 import os
+from pathlib import Path
 import sys
 
 args = sys.argv[1:]
@@ -9,6 +10,8 @@ if args == ["env", "GOHOSTOS"]:
     print(os.environ.get("TEST_GO_OS", "linux"))
 elif args == ["env", "GOHOSTARCH"]:
     print(os.environ.get("TEST_GO_ARCH", "arm64"))
+elif args == ["env", "GOMODCACHE"]:
+    print(os.environ.get("TEST_GO_MODCACHE", "/tmp/quality-tools-modcache"))
 elif args[:1] == ["build"]:
     print("go:" + json.dumps({
         "args": args,
@@ -16,6 +19,29 @@ elif args[:1] == ["build"]:
         "os": os.environ.get("GOOS"),
         "arch": os.environ.get("GOARCH"),
         "cgo": os.environ.get("CGO_ENABLED"),
+    }))
+    sys.exit(int(os.environ.get("TEST_GO_STATUS", "0")))
+elif args[:1] == ["install"]:
+    name = "gremlins" if "gremlins" in args[1] else "go-crap"
+    goos = os.environ["GOOS"]
+    goarch = os.environ["GOARCH"]
+    host_os = os.environ.get("TEST_GO_OS", "linux")
+    host_arch = os.environ.get("TEST_GO_ARCH", "arm64")
+    directory = Path(os.environ["GOPATH"]) / "bin"
+    if (goos, goarch) != (host_os, host_arch):
+        directory /= f"{goos}_{goarch}"
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / name
+    target.write_text("test binary\n")
+    target.chmod(0o755)
+    print("go:" + json.dumps({
+        "args": args,
+        "cwd": os.getcwd(),
+        "os": goos,
+        "arch": goarch,
+        "cgo": os.environ.get("CGO_ENABLED"),
+        "gopath": os.environ.get("GOPATH"),
+        "gomodcache": os.environ.get("GOMODCACHE"),
     }))
     sys.exit(int(os.environ.get("TEST_GO_STATUS", "0")))
 else:

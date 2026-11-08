@@ -1,10 +1,17 @@
 # Shared Linux tool state
 
-The launcher mounts a host-owned Linux state directory, defaulting to this
-checkout's gitignored `.cache/`. It survives sandbox removal. Override it with
-`--pissbox-state-dir DIR` or `PISSBOX_STATE_DIR`; the flag wins and relative
-paths use the caller's directory. Keep it separate from native/macOS caches
-and Pi configuration.
+The launcher mounts a host-owned Linux state directory, defaulting to
+`${XDG_CACHE_HOME:-$HOME/.cache}/pissbox` on the host. It survives sandbox
+removal. Override it with `--pissbox-state-dir DIR` or `PISSBOX_STATE_DIR`; the
+flag wins and relative paths use the caller's directory. Keep it separate from
+native/macOS caches and Pi configuration.
+
+Existing checkout `.cache/` state is not migrated automatically. Pass
+`--pissbox-state-dir` to keep using an old location, or move the data manually.
+
+The default is per host. To share across machines, point `PISSBOX_STATE_DIR` at
+a shared or synchronized directory; nothing synchronizes `~/.cache` between
+hosts.
 
 ## Mappings
 
@@ -47,7 +54,7 @@ not migrate an existing local cache.
   these locations. Sharing directories does not install tools or grant network access.
 - Avoid simultaneous colgrep writes to the same project's index until upstream
   locking is verified. Use dedicated state roots and manage ignore rules for
-  locations outside this checkout's `.cache/`.
+  locations outside the shared state root.
 
 ## Verify from the host
 

@@ -9,6 +9,31 @@ import (
 	"testing"
 )
 
+func TestDefaultStateDirUsesXDGCache(t *testing.T) {
+	cache := filepath.Join(t.TempDir(), "cache")
+	t.Setenv("XDG_CACHE_HOME", cache)
+	state, err := defaultStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected := filepath.Join(cache, "pissbox"); state != expected {
+		t.Fatalf("state = %q, want %q", state, expected)
+	}
+}
+
+func TestDefaultStateDirFallsBackToHomeCache(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("HOME", home)
+	state, err := defaultStateDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected := filepath.Join(home, ".cache", "pissbox"); state != expected {
+		t.Fatalf("state = %q, want %q", state, expected)
+	}
+}
+
 func TestParserPreservesInterspersedOptionsAndLastValues(t *testing.T) {
 	o, err := parse([]string{"one", "--name=old", "--pissbox-pi-dir=old", "two", "-c", "--name", "new", "--pissbox-pi-dir", "new", "--pissbox-state-dir=state", "-y", "--ignore-config-workspaces", "--", "-c", "--yes"})
 	if err != nil {

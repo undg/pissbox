@@ -56,9 +56,10 @@ import-artifacts:
 	@test -n "$$ARTIFACT_ARCHIVE" || { echo 'Set ARCHIVE=path/to/artifacts.tar.gz' >&2; exit 1; }
 	bin/artifacts --import "$$ARTIFACT_ARCHIVE"
 
-## setup-quality-tools: Install pinned quality tools under .cache (network required)
+## setup-quality-tools: Cross-build Go tools and install npm quality tools (network required)
 setup-quality-tools:
-	$(PYTHON) tools/quality/run.py tools
+	bin/build-quality-tools --all
+	$(PYTHON) tools/quality/run.py install-js
 
 ## test: Run Go, JavaScript and Python tests
 test: test-go test-js test-python
@@ -81,7 +82,7 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher bin/build-quality-tools sbx-kit/files/home/.pissbox/scripts/*.sh; do \
 		bash -n "$$script" || exit; \
 	done
 

@@ -32,6 +32,7 @@ class QualityTests(unittest.TestCase):
                     if not key.startswith("QUALITY_")
                     and key not in ("PISSBOX_BRIDGE_TEST_FIXTURE_DIR", "PISSBOX_LAUNCHER_TEST_RESOURCE_DIR")}
         self.env["PYTHONDONTWRITEBYTECODE"] = "1"
+        self.env["PISSBOX_STATE_DIR"] = str(self.root / ".cache")
 
     def write(self, name, text):
         path = self.root / name
@@ -128,7 +129,7 @@ class QualityTests(unittest.TestCase):
         stub_bin.mkdir()
         go = self.write("stubs/go", "#!/bin/sh\nprintf 'test-os\\ntest-arch\\n'\n")
         go.chmod(0o755)
-        tool = self.write(".cache/quality-tools/bin/test-os-test-arch/gremlins", """#!/usr/bin/env python3
+        tool = self.write(".cache/bin/gremlins-test-os-test-arch", """#!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
 Path(os.environ['CALL_LOG']).write_text(json.dumps({

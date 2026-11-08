@@ -8,6 +8,7 @@ or directory name. User guides start at [README.md](README.md).
 
 - `bin/pissbox`: native Go executable-selection wrapper.
   `bin/build-image`: build, save, and SBX import.
+  `bin/build-quality-tools`: cross-build pinned Gremlins and go-crap.
 - `bin/install`: check host dependencies, build, and link `~/.local/bin/pissbox`.
   Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
@@ -17,7 +18,8 @@ or directory name. User guides start at [README.md](README.md).
   Keep its `AGENTS.md` brief and general; repository rules belong here.
 - `pi-agent/APPEND_SYSTEM.md`: user-authored personality prompt; do not rewrite
   during environment work. Use the `bash-cli-style` skill for Bash changes.
-- `.cache/`: gitignored, host-owned Linux tool state, bridge binaries, and test fixtures.
+- `.cache/`: gitignored per-worktree build/test artifacts, bridge binaries, and test fixtures.
+  Shared Linux tool state lives outside the checkout.
 - `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
   and tests in `internal/bridge`. Default launcher entrypoint in `cmd/pissbox`,
   implementation/tests in `internal/launcher`. `host/config` is the pure global
@@ -91,7 +93,7 @@ dependencies but never installs them automatically.
   source/destination mappings. Mount symlink targets explicitly.
 - Keep linear option parsing: options may appear among workspaces; `--` ends parsing.
   Repeated settings use the last value. Directory precedence is CLI flag >
-  `PISSBOX_PI_DIR` / `PISSBOX_STATE_DIR` > checkout defaults. Canonicalize before
+  `PISSBOX_PI_DIR` / `PISSBOX_STATE_DIR` > defaults. Canonicalize before
   mounting; relative overrides use the caller's directory. Do not discover
   native Pi configuration or use `PI_HOST_CONFIG_DIR`.
 - Pass the local kit, workspaces, Pi directory, and state root to `sbx run`, with
@@ -171,8 +173,8 @@ dependencies but never installs them automatically.
   new `settings-*.json` profiles rather than editing the generated link.
   Regular settings files are backed up as `settings.json.replaced*`. Pi writes
   through the link into the tracked profile, including runtime defaults.
-- Shared Linux state defaults to `.cache/`. Keep it separate from native/macOS
-  caches. Add tool mappings in
+- Shared Linux state defaults to `${XDG_CACHE_HOME:-$HOME/.cache}/pissbox`.
+  Keep it separate from native/macOS caches. Add tool mappings in
   `sbx-kit/files/home/.pissbox/shared-directories.conf`, not per-tool launcher
   code. Rows are literal `state-relative|home-relative` paths without dot
   segments or expansion. Setup accepts matching links and refuses existing
