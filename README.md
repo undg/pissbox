@@ -99,9 +99,8 @@ the production wrapper, rather than trusting a previously built executable.
 `make check` also runs instrumented Go launcher tests. The former Bash launcher,
 its host-side isolation helper, and dual-implementation test selection have been
 removed; sandbox setup and shared schema validation still use Bash. See
-[host development](host/README.md#launcher-verification) and the
-[post-merge human checklist](plan-launcher-migration.md#final-human-checklist--after-merge-to-main)
-for pending final verification.
+[host development](host/README.md#launcher-verification). Real-host final
+verification is still pending.
 
 ## Transfer built artifacts
 

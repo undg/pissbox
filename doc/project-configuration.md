@@ -47,7 +47,7 @@ control characters either.
 
 Isolation is **experimental**, using hidden SBX mounts tested on macOS with
 SBX v0.49.1 for the original Bash launcher. Real-SBX verification of the Go port
-remains on the [human checklist](../plan-launcher-migration.md#final-human-checklist--after-merge-to-main).
+is still pending on real hosts.
 Use `pissbox`, not direct `sbx run`; `--name` is optional.
 
 Setup runs only after isolated mounts are verified. Failed staging blocks Pi

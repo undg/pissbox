@@ -182,8 +182,7 @@ dependencies but never installs them automatically.
 - Custom tool/XDG paths may bypass shared links. Avoid concurrent colgrep index
   writers until upstream locking is verified. Preserve old state-path links
   while existing sandboxes depend on them. See
-  [shared directories](sbx-kit/SHARED-DIRECTORIES.md) for current mappings and
-  [known issues](KNOWN_ISSUES.md) for the missing npm cache mapping.
+  [shared directories](sbx-kit/SHARED-DIRECTORIES.md) for current mappings.
 
 ## Verification
 
