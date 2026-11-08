@@ -321,3 +321,22 @@ func TestAdoptionReleasesAHerdPaneWhoseOwnerDied(t *testing.T) {
 		t.Fatal("dead owner retained readiness")
 	}
 }
+
+func TestLifecycleEventQueuedDuringReloadReachesHerd(t *testing.T) {
+	p := processFixture(t)
+	p.cli("ensure")
+	socket := filepath.Join(p.dir, "herd.sock")
+	requests := herdFixture(t, socket)
+	mailbox, _ := fixture(t)
+	mailbox, _ = filepath.Abs(mailbox)
+	registerProcess(t, p, mailbox, socket, "pane-a", os.Getpid())
+	if _, err := controlCall(p.dir, controlRequest{Op: "reload"}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return lockReleased(p.dir) })
+	queue(t, mailbox, 1, `{"version":1,"kind":"release"}`)
+	p.cli("ensure")
+	if r := receive(t, requests); r.Method != "pane.release_agent" || r.Params["pane_id"] != "pane-a" {
+		t.Fatalf("queued release was lost across reload: %+v", r)
+	}
+}
