@@ -268,6 +268,54 @@ func TestBrowseSkipsArchiveAndRootAgentsFile(t *testing.T) {
 	execute(t, s, "save", Request{Path: "_archive/old.md", Revision: archived.Revision, Content: "updated archived"})
 }
 
+func TestFolderListingKindsFiltersAndPagination(t *testing.T) {
+	s, dir := service(t, false)
+	put(t, dir, "topic/note.md", "---\ntags: [only]\n---\nbody")
+	put(t, dir, "topic/2026-01-02.md", "---\ntags: [only]\n---\ntagged")
+	put(t, dir, "other/unrelated.md", "unrelated")
+	put(t, dir, "links.md", "[[topic/note]]")
+	put(t, dir, "_archive/old.md", "archived")
+	for _, folder := range []string{"topic/empty", "other/child", "_archive/retired", ".hidden"} {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.FromSlash(folder)), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(dir, "topic"), filepath.Join(dir, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	assertEntries := func(label string, result Listing, want ...string) {
+		t.Helper()
+		got := []string{}
+		for _, entry := range result.Notes {
+			got = append(got, entry.Kind+" "+entry.Path)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%s: got %v; want %v", label, got, want)
+		}
+	}
+	assertEntries("default", execute(t, s, "list", Request{}).(Listing), "note links.md", "note other/unrelated.md", "note topic/2026-01-02.md", "note topic/note.md")
+	assertEntries("folders", execute(t, s, "list", Request{Kind: "folders"}).(Listing), "folder other", "folder other/child", "folder topic", "folder topic/empty")
+	assertEntries("all", execute(t, s, "list", Request{Kind: "all"}).(Listing), "note links.md", "folder other", "folder other/child", "note other/unrelated.md", "folder topic", "note topic/2026-01-02.md", "folder topic/empty", "note topic/note.md")
+	assertEntries("nested root excluded", execute(t, s, "list", Request{Folder: "topic", Kind: "all"}).(Listing), "note topic/2026-01-02.md", "folder topic/empty", "note topic/note.md")
+	assertEntries("archive folders", execute(t, s, "list", Request{Folder: "_archive", Kind: "folders"}).(Listing), "folder _archive/retired")
+	assertEntries("archive all", execute(t, s, "list", Request{Folder: "_archive", Kind: "all"}).(Listing), "note _archive/old.md", "folder _archive/retired")
+	assertEntries("pattern folders", execute(t, s, "list", Request{Kind: "folders", Pattern: "topic/*"}).(Listing), "folder topic/empty")
+	assertEntries("tag notes only", execute(t, s, "list", Request{Kind: "all", Tag: "only"}).(Listing), "folder other", "folder other/child", "folder topic", "note topic/2026-01-02.md", "folder topic/empty", "note topic/note.md")
+	assertEntries("date notes only", execute(t, s, "list", Request{Kind: "all", DateFrom: "2026-01-02", DateTo: "2026-01-02"}).(Listing), "folder other", "folder other/child", "folder topic", "note topic/2026-01-02.md", "folder topic/empty")
+
+	first := execute(t, s, "list", Request{Kind: "folders", Limit: 2}).(Listing)
+	assertEntries("pagination first", first, "folder other", "folder other/child")
+	if !first.Truncated || first.NextOffset == nil {
+		t.Fatal(first)
+	}
+	assertEntries("pagination second", execute(t, s, "list", Request{Kind: "folders", Offset: *first.NextOffset, Limit: 2}).(Listing), "folder topic", "folder topic/empty")
+
+	search := execute(t, s, "search", Request{Query: "tagged"}).(Listing)
+	assertEntries("search kind", search, "note topic/2026-01-02.md")
+	assertEntries("backlink kind", execute(t, s, "backlinks", Request{Path: "topic/note.md"}).(Listing), "note links.md")
+	reject(t, s, "list", Request{Kind: "files"})
+}
+
 func TestTagChangesPreserveOtherFrontmatterAndBody(t *testing.T) {
 	for _, newline := range []string{"\n", "\r\n"} {
 		s, dir := service(t, false)

@@ -38,6 +38,7 @@ type Definition struct {
 type Request struct {
 	Vault     string   `json:"vault,omitempty"`
 	Path      string   `json:"path,omitempty"`
+	Kind      string   `json:"kind,omitempty"`
 	Folder    string   `json:"folder,omitempty"`
 	Query     string   `json:"query,omitempty"`
 	Pattern   string   `json:"pattern,omitempty"`
