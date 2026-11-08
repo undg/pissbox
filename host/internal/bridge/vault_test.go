@@ -171,3 +171,46 @@ func TestHostVaultConfigurationMissingDefaultAndInvalidExplicit(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestReloadLoadsReplacementVaultConfigurationWithoutRestart(t *testing.T) {
+	p := processFixture(t)
+	vaultA, vaultB := t.TempDir(), t.TempDir()
+	configPath := filepath.Join(p.dir, "config.toml")
+	writeConfig := func(text string) {
+		t.Helper()
+		if err := os.WriteFile(configPath, []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeConfig("[vault.a]\npath = " + strconv.Quote(vaultA) + "\ngit = false\n")
+	p.cli("ensure")
+	a := newSimulatedAgent(t, messagingMailbox(t, p, "", ""))
+	id := a.request(t, agentRequest{Op: "vault", VaultOp: "new", Params: &vault.Request{Path: "a.md", Content: "one"}})
+	if response := a.response(t, id); response.Status != "ok" {
+		t.Fatal(response)
+	}
+	if _, err := os.Stat(filepath.Join(vaultA, "a.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	writeConfig("[vault.b]\npath = " + strconv.Quote(vaultB) + "\ngit = false\n")
+	p.cli("reload")
+	id = a.request(t, agentRequest{Op: "vault", VaultOp: "new", Params: &vault.Request{Path: "b.md", Content: "two"}})
+	if response := a.response(t, id); response.Status != "ok" {
+		t.Fatal(response)
+	}
+	if _, err := os.Stat(filepath.Join(vaultB, "b.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	writeConfig("secret-marker-not-for-output = true\n")
+	p.cli("reload")
+	id = a.request(t, agentRequest{Op: "vault", VaultOp: "new", Params: &vault.Request{Path: "c.md", Content: "three"}})
+	if response := a.response(t, id); response.Status != "failed" || !strings.Contains(response.Error, "vault configuration unavailable") || strings.Contains(response.Error, "secret-marker") {
+		t.Fatalf("invalid replacement config: %+v", response)
+	}
+	listID := a.request(t, agentRequest{Op: "list"})
+	if response := a.response(t, listID); response.Status != "ok" || response.Self == nil || response.Self.ID != a.id {
+		t.Fatalf("invalid vault config disabled messaging: %+v", response)
+	}
+}
