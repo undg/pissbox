@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -484,5 +485,56 @@ func TestControlRejectsUnboundedPathsAndUnsafeRuntime(t *testing.T) {
 	defer os.Chmod(p.dir, 0700)
 	if out, err := p.command("ensure").CombinedOutput(); err == nil {
 		t.Fatalf("daemon unexpectedly started in an unsafe directory: %s", out)
+	}
+}
+
+func TestRegisterRetriesBrieflyWhileTheDaemonReloads(t *testing.T) {
+	p := processFixture(t)
+	mailbox, _ := fixture(t)
+	mailbox, _ = filepath.Abs(mailbox)
+	listener, err := net.Listen("unix", filepath.Join(p.dir, "control.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		listener.Close()
+		os.Remove(filepath.Join(p.dir, "control.sock"))
+	})
+	var mu sync.Mutex
+	registerCalls := 0
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			var req controlRequest
+			if json.NewDecoder(conn).Decode(&req) == nil {
+				response := controlResponse{Version: protocolVersion, PID: os.Getpid()}
+				if req.Op == "register" {
+					mu.Lock()
+					registerCalls++
+					if registerCalls < 3 {
+						response.Error = errRetrying.Error()
+					} else {
+						response.ID = "retried-registration"
+					}
+					mu.Unlock()
+				} else {
+					response.Error = errRetrying.Error()
+				}
+				json.NewEncoder(conn).Encode(response)
+			}
+			conn.Close()
+		}
+	}()
+	response, err := registerWithRetry(context.Background(), p.dir, controlRequest{Op: "register", Mailbox: mailbox, Owner: os.Getpid()})
+	if err != nil || response.ID != "retried-registration" {
+		t.Fatalf("register did not retry a reloading daemon: %+v, %v", response, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if registerCalls != 3 {
+		t.Fatalf("register retried %d times", registerCalls)
 	}
 }

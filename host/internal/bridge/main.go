@@ -14,6 +14,7 @@ type bridge struct {
 	root      *os.Root
 	target    adapter
 	warn      func(string)
+	preserve  func() bool
 	attempted bool
 	warned    bool
 }
@@ -58,8 +59,13 @@ func (b *bridge) run(ctx context.Context, ownerPID int) error {
 	if err := markReady(b.root); err != nil {
 		return fmt.Errorf("cannot create mailbox readiness marker")
 	}
-	defer b.root.Remove("ready")
 	defer func() {
+		if b.preserve != nil && b.preserve() {
+			// A reload keeps readiness and queued lifecycle events for the
+			// replacement worker. Herd entries must stay bound as well.
+			return
+		}
+		b.root.Remove("ready")
 		// Pick up the final idle/release event even if Pi exits between polls.
 		finish, cancel := context.WithTimeout(context.Background(), 750*time.Millisecond)
 		defer cancel()
