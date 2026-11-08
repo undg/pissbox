@@ -75,6 +75,15 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertEqual(events, [{"kind": "stop"}])
         self.assertFalse((self.checkout / "sbx.jsonl").exists())
 
+    def test_bridge_reload_uses_matching_binary_without_starting_sandbox(self):
+        result, calls, events = self.launch(
+            args=("--bridge-reload",), TEST_SBX_CALL_LOG=str(self.checkout / "sbx.jsonl"),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [])
+        self.assertEqual(events, [{"kind": "reload"}])
+        self.assertFalse((self.checkout / "sbx.jsonl").exists())
+
     def test_registration_uses_host_pane_and_passes_only_mailbox_to_sandbox(self):
         result, calls, events = self.launch()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -88,6 +97,8 @@ class BridgeLauncherTests(unittest.TestCase):
         self.assertNotIn("host-only.sock", calls[0])
         self.assertNotIn("w1:p7", calls[0])
         self.assertFalse((Path(start["mailbox"]) / "ready").exists())
+        retired = json.loads((Path(start["mailbox"]) / "retired").read_text())
+        self.assertEqual((retired["version"], retired["id"]), (1, start["id"]))
 
     def test_reattach_gets_a_fresh_mailbox_and_registration(self):
         result, calls, events = self.launch("p\n", TEST_SBX_MODE="conflict")
