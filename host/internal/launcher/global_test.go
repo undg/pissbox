@@ -201,7 +201,7 @@ func TestManagementCommandsBypassGlobalConfig(t *testing.T) {
 	f := newFixture(t)
 	f.bridge()
 	missing := filepath.Join(f.configDir, "missing.toml")
-	for _, args := range [][]string{{"--help"}, {"--ls"}, {"--delete", "."}, {"--bridge-stop"}} {
+	for _, args := range [][]string{{"--help"}, {"--ls"}, {"--delete", "."}, {"--bridge-stop"}, {"--bridge-reload"}} {
 		out, status, _ := f.launch("", map[string]string{"PISSBOX_CONFIG": missing}, args...)
 		if strings.Contains(out, "Global configuration") {
 			t.Fatalf("%v read global config: %d %s", args, status, out)

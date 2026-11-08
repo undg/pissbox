@@ -42,7 +42,7 @@ func TestParserPreservesInterspersedOptionsAndLastValues(t *testing.T) {
 	if o.name != "new" || o.piDir != "new" || o.stateDir != "state" || !o.yes || !o.ignoreConfig || !o.continued || fmt.Sprint(o.workspaces) != "[one two -c --yes]" {
 		t.Fatalf("%+v", o)
 	}
-	for _, args := range [][]string{{"--name"}, {"--name="}, {"--name", "-y"}, {"-d"}, {"--delete="}, {"--pissbox-state-dir", ""}, {"--pissbox-pi-dir="}, {"--unknown"}, {"--bridge-stop", "-y"}} {
+	for _, args := range [][]string{{"--name"}, {"--name="}, {"--name", "-y"}, {"-d"}, {"--delete="}, {"--pissbox-state-dir", ""}, {"--pissbox-pi-dir="}, {"--unknown"}, {"--bridge-stop", "-y"}, {"--bridge-reload", "-y"}} {
 		if _, err := parse(args); err == nil {
 			t.Fatalf("accepted %q", args)
 		}

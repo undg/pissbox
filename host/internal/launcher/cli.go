@@ -7,10 +7,10 @@ import (
 )
 
 type options struct {
-	name, deleteDir, piDir, stateDir                     string
-	yes, list, bridgeStop, ignoreConfig, help, continued bool
-	workspaces                                           []string
-	secrets                                              []secret
+	name, deleteDir, piDir, stateDir                                   string
+	yes, list, bridgeStop, bridgeReload, ignoreConfig, help, continued bool
+	workspaces                                                         []string
+	secrets                                                            []secret
 }
 
 func parse(args []string) (options, error) {
@@ -44,6 +44,11 @@ func parse(args []string) (options, error) {
 				return o, fmt.Errorf("--bridge-stop must be used by itself")
 			}
 			o.bridgeStop = true
+		case "--bridge-reload":
+			if i != len(args)-1 {
+				return o, fmt.Errorf("--bridge-reload must be used by itself")
+			}
+			o.bridgeReload = true
 		case "--":
 			o.workspaces = append(o.workspaces, args[i+1:]...)
 			return o, nil

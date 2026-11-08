@@ -170,3 +170,46 @@ func TestBridgeOnlyStartsAfterIsolationFinalization(t *testing.T) {
 		})
 	}
 }
+
+func TestBridgeReloadBypassesConfigSettingsAndSandbox(t *testing.T) {
+	f := newFixture(t)
+	f.bridge()
+	f.config("invalid toml")
+	out, status, calls := f.launch("", nil, "--bridge-reload")
+	if status != 0 || kinds(calls) != "bridge-reload" {
+		t.Fatalf("%d %v %s", status, calls, out)
+	}
+	if _, err := os.Stat(f.state); !os.IsNotExist(err) {
+		t.Fatal("bridge reload prepared state")
+	}
+	os.Remove(bridgeBinary(f.root))
+	out, status, calls = f.launch("", nil, "--bridge-reload")
+	if status == 0 || len(calls) != 0 || !strings.Contains(out, "binary is missing") {
+		t.Fatalf("%d %v %s", status, calls, out)
+	}
+}
+
+func TestBridgeUnregisterWritesLauncherRetirementMarker(t *testing.T) {
+	f := newFixture(t)
+	f.bridge()
+	out, status, calls := f.launch("", nil)
+	if status != 0 || kinds(calls) != "bridge-register,run,bridge-unregister" {
+		t.Fatalf("%d %v %s", status, calls, out)
+	}
+	mailbox := flagValue(calls[0], "--mailbox")
+	id := flagValue(calls[2], "--id")
+	if mailbox == "" || id == "" {
+		t.Fatalf("missing mailbox or registration ID: %v", calls)
+	}
+	data, err := os.ReadFile(filepath.Join(mailbox, "retired"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var marker struct {
+		Version int    `json:"version"`
+		ID      string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &marker); err != nil || marker.Version != 1 || marker.ID != id {
+		t.Fatalf("invalid launcher retirement marker: %+v, %v", marker, err)
+	}
+}

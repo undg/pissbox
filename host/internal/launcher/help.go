@@ -20,6 +20,7 @@ Options:
   --pissbox-state-dir DIR
                        Override the shared Linux tool-state directory
   --bridge-stop        Stop the compatible host bridge daemon
+  --bridge-reload      Restart the compatible bridge without releasing agents
   -h, --help           Show this help
   --                   Treat remaining arguments as workspaces
 

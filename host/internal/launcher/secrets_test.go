@@ -218,7 +218,7 @@ func TestSecretFlagsNeverRegisterOnExistingSandboxActions(t *testing.T) {
 }
 
 func TestSecretManagementConflictsAndHelpHaveNoEffects(t *testing.T) {
-	for _, extra := range [][]string{{"--ls"}, {"--delete", "."}, {"--bridge-stop"}, {"--help"}} {
+	for _, extra := range [][]string{{"--ls"}, {"--delete", "."}, {"--bridge-stop"}, {"--bridge-reload"}, {"--help"}} {
 		f := newFixture(t)
 		args := append([]string{"--secret", "API", "example.com", "get_token"}, extra...)
 		out, status, calls := f.launch("", nil, args...)

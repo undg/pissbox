@@ -33,20 +33,24 @@ func run(root, host string, args []string) int {
 		fmt.Fprint(os.Stdout, helpText)
 		return 0
 	}
-	if len(o.secrets) > 0 && (o.deleteDir != "" || o.list || o.bridgeStop) {
-		return fail("--secret cannot be combined with list, delete, or bridge-stop")
+	if len(o.secrets) > 0 && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
+		return fail("--secret cannot be combined with list, delete, bridge-stop, or bridge-reload")
 	}
 	p := newProcesses()
 	defer p.close()
 	if o.deleteDir != "" || o.list {
 		return p.manage(o)
 	}
-	if o.bridgeStop {
+	if o.bridgeStop || o.bridgeReload {
 		binary := bridgeBinary(root)
 		if !executable(binary) {
 			return fail("Matching host bridge binary is missing or unsupported.")
 		}
-		return p.command(binary, []string{"stop"}, os.Stdin, os.Stdout, os.Stderr)
+		op := "stop"
+		if o.bridgeReload {
+			op = "reload"
+		}
+		return p.command(binary, []string{op}, os.Stdin, os.Stdout, os.Stderr)
 	}
 	pi := fallback(o.piDir, fallback(os.Getenv("PISSBOX_PI_DIR"), filepath.Join(root, "pi-agent")))
 	state := fallback(o.stateDir, os.Getenv("PISSBOX_STATE_DIR"))

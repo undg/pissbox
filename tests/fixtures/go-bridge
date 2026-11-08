@@ -8,7 +8,7 @@ import secrets
 import sys
 
 parser = argparse.ArgumentParser()
-parser.add_argument("operation", choices=("register", "reconnect", "unregister", "stop"))
+parser.add_argument("operation", choices=("register", "reconnect", "unregister", "stop", "reload"))
 parser.add_argument("--mailbox")
 parser.add_argument("--herdr-socket")
 parser.add_argument("--herdr-pane")
@@ -36,6 +36,9 @@ elif args.operation == "unregister":
     (Path(registration["mailbox"]) / "ready").unlink(missing_ok=True)
     with log.open("a") as output:
         output.write(json.dumps({**registration, "kind": "unregister"}) + "\n")
+elif args.operation == "reload":
+    with log.open("a") as output:
+        output.write(json.dumps({"kind": "reload"}) + "\n")
 else:
     with log.open("a") as output:
         output.write(json.dumps({"kind": "stop"}) + "\n")
