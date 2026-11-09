@@ -1,6 +1,6 @@
 {
   "$schema": "https://pi.dev/schemas/settings.schema.json",
-  "lastChangelogVersion": "1.4.0",
+  "lastChangelogVersion": "1.5.0",
   "hideThinkingBlock": true,
   "extensions": [
     "extensions/pi-notifier/index.ts",
@@ -44,5 +44,8 @@
     "github-copilot/gpt-6.1-sol",
     "github-copilot/gpt-6-luna",
     "github-copilot/gpt-6.1-terra"
-  ]
+  ],
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:@gotgenes/pi-colgrep\",\"scope\":\"user\"}": "2.0.0"
+  }
 }
