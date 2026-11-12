@@ -117,9 +117,9 @@ class BridgeLauncherTests(unittest.TestCase):
                                      "PISSBOX_BRIDGE_DIR=" + events[-2]["mailbox"], "--", "--continue"])
 
     def test_continue_flag_follows_bridge_environment(self):
-        for mode, extra in (("success", ()), ("conflict", ("-y",))):
+        for mode in ("success", "conflict"):
             with self.subTest(mode=mode):
-                result, calls, events = self.launch(args=("--continue", *extra), TEST_SBX_MODE=mode)
+                result, calls, events = self.launch(args=("--continue",), TEST_SBX_MODE=mode)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("PISSBOX_BRIDGE_DIR=" + events[-2]["mailbox"], calls[-1])
                 self.assertEqual(calls[-1][-2:], ["--", "--continue"])

@@ -7,7 +7,7 @@ const helpText = `Usage: pissbox [OPTIONS] [WORKSPACE ...]
 Start Pi in an SBX sandbox.
 
 Options:
-  -c, --continue       Continue the previous Pi session
+  -c, --continue       Continue the previous Pi session without the menu
   -d, --delete DIR     Delete matching sandboxes; loses sandbox-local data
   -y, --yes            Skip the existing-sandbox menu or delete confirmation
   -l, --ls             List sandboxes, current-directory matches first
@@ -26,7 +26,7 @@ Options:
 
 Examples:
   pissbox
-  pissbox --yes --continue
+  pissbox --continue
   pissbox --secret GH_TOKEN api.github.com '/usr/local/bin/get-token'
 
 Documentation: sbx-kit/README.md (usage), doc/secrets.md (secrets).

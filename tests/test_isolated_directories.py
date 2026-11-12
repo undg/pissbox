@@ -96,7 +96,7 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed", "--", "--continue"])
         self.assertFalse((self.project / "setup-marker").exists())
 
-    def test_continue_flag_applies_after_isolation_setup_and_on_yes_attach(self):
+    def test_continue_flag_applies_after_isolation_setup_and_attaches_without_menu(self):
         self.configure()
         result, calls = self.launch("-c")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -105,8 +105,9 @@ class IsolatedDirectoriesTests(unittest.TestCase):
         self.assertTrue((self.project / "setup-marker").exists())
         (self.root / "calls.jsonl").unlink()
 
-        result, calls = self.launch("--continue", "-y")
+        result, calls = self.launch("--continue")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
         self.assertEqual([call[0] for call in calls], ["create", "exec", "run"])
         self.assertEqual(calls[-1], ["run", "--name", "sbx-assigned-not-guessed", "--", "--continue"])
 

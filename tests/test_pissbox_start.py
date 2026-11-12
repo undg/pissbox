@@ -779,10 +779,12 @@ class LauncherTests(unittest.TestCase):
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertEqual(calls[0][-6:], [".", "workspace with spaces", str(PI_DIR),
                                                     str(STATE_DIR), "--", "--continue"])
-            for extra, answers in (((), "p"), (("-y",), "")):
+            for extra in ((), ("-y",)):
                 with self.subTest(flag=flag, extra=extra):
-                    result, calls = self.launch(flag, *extra, answers=answers, TEST_SBX_MODE="conflict")
+                    result, calls = self.launch(flag, *extra, answers="", TEST_SBX_MODE="conflict")
                     self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertNotIn("Choose [P/c/s/d/q]", result.stderr)
+                    self.assertNotIn("c) Continue previous Pi session", result.stderr)
                     self.assertEqual(calls[1:], [["readiness", "pi-existing"],
                                                 ["run", "--name", "pi-existing", "--", "--continue"]])
 
@@ -991,7 +993,7 @@ class LauncherTests(unittest.TestCase):
         result, calls = self.launch("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         for text in ("Options:", "--secret ENV_NAME HOST COMMAND", "creation only (repeatable)",
-                     "loses sandbox-local data", "Examples:", "pissbox --yes --continue",
+                     "loses sandbox-local data", "Examples:", "pissbox --continue",
                      "pissbox --secret GH_TOKEN api.github.com", "sbx-kit/README.md", "doc/secrets.md"):
             with self.subTest(text=text):
                 self.assertIn(text, result.stdout)

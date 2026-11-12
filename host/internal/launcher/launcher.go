@@ -208,12 +208,12 @@ func conflictName(diagnostic string, isolated bool, requested string) string {
 	return match[1]
 }
 func (p *processes) existing(root, pi, state, name string, o options, bridge *registration) int {
-	if !o.yes {
+	if !o.yes && !o.continued {
 		fmt.Fprintf(os.Stderr, "Sandbox '%s' already exists.\n\n  p) Open Pi [default]\n  c) Continue previous Pi session\n  s) Open shell\n  d) Delete sandbox\n  q) Quit\n\n", name)
 	}
 	for {
 		choice := "p"
-		if !o.yes {
+		if !o.yes && !o.continued {
 			fmt.Fprint(os.Stderr, "Choose [P/c/s/d/q]: ")
 			var status int
 			choice, status = p.readInput(true)

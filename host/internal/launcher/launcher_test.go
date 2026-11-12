@@ -435,6 +435,24 @@ func TestExistingSandboxChoicesAndStatuses(t *testing.T) {
 		})
 	}
 }
+func TestContinueFlagsAttachWithoutPrompt(t *testing.T) {
+	for _, flag := range []string{"-c", "--continue"} {
+		t.Run(flag, func(t *testing.T) {
+			f := newFixture(t)
+			out, status, calls := f.launch("", map[string]string{"CONFLICT": "1"}, flag)
+			if status != 0 || kinds(calls) != "run,exec,run" {
+				t.Fatalf("%d %v: %s", status, calls, out)
+			}
+			if strings.Contains(out, "Choose [P/c/s/d/q]") || strings.Contains(out, "c) Continue previous Pi session") {
+				t.Fatalf("unexpected menu: %s", out)
+			}
+			last := calls[len(calls)-1]
+			if fmt.Sprint(last) != fmt.Sprint([]string{"run", "--name", "reported", "--", "--continue"}) {
+				t.Fatal(last)
+			}
+		})
+	}
+}
 func TestBridgeLifecycleDoesNotReplaceSessionFailure(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(strconv.FormatBool(failed), func(t *testing.T) {

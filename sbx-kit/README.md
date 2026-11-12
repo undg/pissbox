@@ -203,8 +203,9 @@ pissbox . /path/to/other -y
 The menu's `c` choice and the launcher's `-c` / `--continue` flags forward Pi's
 `--continue` to resume the previous session for the workspace, including
 dependency-isolated sandboxes. Flags apply on new launches and existing Pi
-attaches, not shell attaches. Use `pissbox -y -c` to continue without the menu;
-`--yes` alone still selects the ordinary Pi action.
+attaches, not shell attaches. Use `pissbox -c` to continue without the menu;
+`--yes` is unnecessary with `--continue`. Alone, `--yes` still selects the
+ordinary Pi action.
 
 New launches forward all workspaces as usual. Attaching to an existing sandbox
 keeps its existing mounts; `--yes` does not add or change them. After `--`, all
