@@ -41,8 +41,7 @@
       "required": ["path"],
       "properties": {
         "path": { "description": "Host directory, absolute or starting with ~/.", "type": "string", "minLength": 1 },
-        "git": { "description": "Automatically commit each changed note when this directory is a Git repository; defaults to true.", "type": "boolean" },
-        "obsidian": { "description": "Obsidian vault name for opening notes; defaults to the directory basename.", "type": "string", "minLength": 1 }
+        "git": { "description": "Automatically commit each changed note when this directory is a Git repository; defaults to true.", "type": "boolean" }
       }
     },
     "secret": {

@@ -91,7 +91,7 @@ func openDesktop(ctx context.Context, uri string) error {
 	return nil
 }
 func (s *Service) openNote(ctx context.Context, d Definition, name string) (any, error) {
-	values := url.Values{"vault": {d.Obsidian}, "file": {name}}
+	values := url.Values{"path": {filepath.Join(d.Path, filepath.FromSlash(name))}}
 	if err := s.Open(ctx, "obsidian://open?"+values.Encode()); err != nil {
 		return nil, err
 	}

@@ -12,10 +12,9 @@ import (
 
 // Vault describes a shared host-only Markdown collection. Git defaults to true.
 type Vault struct {
-	Name     string `toml:"-"`
-	Path     string `toml:"path"`
-	Git      *bool  `toml:"git"`
-	Obsidian string `toml:"obsidian"`
+	Name string `toml:"-"`
+	Path string `toml:"path"`
+	Git  *bool  `toml:"git"`
 }
 
 // LoadVaults reads the same validated global document as Load. It does not

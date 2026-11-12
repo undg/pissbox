@@ -13,7 +13,6 @@ func TestVaultConfigurationCoexistsWithSecretsAndExpandsHome(t *testing.T) {
 	write(t, path, `[vault.work]
 path = "~/notes/work"
 git = false
-obsidian = "Work Notes"
 [vault.personal]
 path = "/host/notes/personal"
 [secrets.API]
@@ -24,7 +23,7 @@ command = "fetch-token"
 	if err != nil || len(values) != 2 {
 		t.Fatal(values, err)
 	}
-	if values[0].Name != "personal" || values[0].Git != nil || values[1].Name != "work" || values[1].Path != filepath.Join(home, "notes/work") || values[1].Git == nil || *values[1].Git || values[1].Obsidian != "Work Notes" {
+	if values[0].Name != "personal" || values[0].Git != nil || values[1].Name != "work" || values[1].Path != filepath.Join(home, "notes/work") || values[1].Git == nil || *values[1].Git {
 		t.Fatal(values)
 	}
 	if secrets, err := Load(path); err != nil || len(secrets) != 1 {
@@ -39,7 +38,7 @@ func TestInvalidVaultConfigurationFailsBothLoaders(t *testing.T) {
 		"[vault.a]\npath = 'relative/notes'\n",
 		"[vault.a]\npath = '/notes'\ncommand = 'shell'\n",
 		"[vault.a]\npath = '/notes'\ngit = 'yes'\n",
-		"[vault.a]\npath = '/notes'\nobsidian = ''\n",
+		"[vault.a]\npath = '/notes'\nobsidian = 'Notes'\n",
 		"[vault.a]\ngit = true\n",
 		"[vault.a]\npath = '/notes'\n[vault.b]\npath = '/notes/.'\n",
 		"[vault.' ']\npath = '/notes'\n",

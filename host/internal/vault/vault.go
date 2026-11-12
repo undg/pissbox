@@ -30,8 +30,8 @@ const MaxContentBytes = 16 * 1024
 
 // Definition is trusted host configuration, never supplied by a tool call.
 type Definition struct {
-	Name, Path, Obsidian string
-	Git                  bool
+	Name, Path string
+	Git        bool
 }
 
 // Request uses vault-relative paths. Revision is the token from a read or write.
@@ -108,9 +108,6 @@ func New(definitions []Definition) (*Service, error) {
 		}
 		seen[canonical] = true
 		d.Path = canonical
-		if d.Obsidian == "" {
-			d.Obsidian = filepath.Base(canonical)
-		}
 	}
 	return &Service{definitions: definitions, Open: openDesktop}, nil
 }

@@ -16,13 +16,15 @@ Do not put vault paths in `.pissbox.toml` workspaces.
 [vault.personal]
 path = "~/Documents/Notes"
 # git = true                    # Default; records changes if this is a Git repo.
-# obsidian = "Notes"            # Default: directory basename, not table name.
 
 [vault.work]
 path = "/absolute/host/path/to/work-notes"
-obsidian = "Work Notes"
 git = false
 ```
+
+Notes open in Obsidian using their absolute host path; no separate Obsidian
+vault name is needed. The former `obsidian` configuration key is no longer
+accepted; remove it from existing vault tables.
 
 Directories must already exist and refer to distinct physical directories.
 Paths must be absolute or start with `~/`. The launcher validates configuration

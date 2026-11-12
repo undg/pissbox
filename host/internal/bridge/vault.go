@@ -39,7 +39,7 @@ func hostVaultService() (*vault.Service, error) {
 	}
 	values := make([]vault.Definition, 0, len(definitions))
 	for _, d := range definitions {
-		values = append(values, vault.Definition{Name: d.Name, Path: d.Path, Obsidian: d.Obsidian, Git: d.Git == nil || *d.Git})
+		values = append(values, vault.Definition{Name: d.Name, Path: d.Path, Git: d.Git == nil || *d.Git})
 	}
 	return vault.New(values)
 }

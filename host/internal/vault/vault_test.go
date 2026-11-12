@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,7 +20,7 @@ import (
 func service(t *testing.T, git bool) (*Service, string) {
 	t.Helper()
 	dir := t.TempDir()
-	s, err := New([]Definition{{Name: "personal", Path: dir, Git: git, Obsidian: "My vault & stuff"}})
+	s, err := New([]Definition{{Name: "personal", Path: dir, Git: git}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +561,7 @@ func TestTagChangesPreserveOtherFrontmatterAndBody(t *testing.T) {
 }
 
 func TestDailyAndHostObsidianOpening(t *testing.T) {
-	s, _ := service(t, false)
+	s, dir := service(t, false)
 	today := "Daily/" + time.Now().Format("2006-01-02") + ".md"
 	n := execute(t, s, "daily", Request{}).(Note)
 	if n.Path != today || !strings.Contains(n.Content, time.Now().Format("2006-01-02")) || !strings.Contains(n.Content, "aliases: []") {
@@ -577,8 +578,13 @@ func TestDailyAndHostObsidianOpening(t *testing.T) {
 	var uri string
 	s.Open = func(_ context.Context, value string) error { uri = value; return nil }
 	execute(t, s, "open", Request{Path: today})
-	if !strings.HasPrefix(uri, "obsidian://open?") || !strings.Contains(uri, "vault=My+vault+%26+stuff") || !strings.Contains(uri, "file=Daily%2F") {
-		t.Fatal(uri)
+	notePath, err := filepath.EvalSymlinks(filepath.Join(dir, filepath.FromSlash(today)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opened, err := url.Parse(uri)
+	if err != nil || opened.Scheme != "obsidian" || opened.Host != "open" || len(opened.Query()) != 1 || opened.Query().Get("path") != notePath {
+		t.Fatal(uri, err)
 	}
 	s.Open = func(context.Context, string) error { return errors.New("desktop unavailable") }
 	reject(t, s, "open", Request{Path: today})
@@ -771,17 +777,22 @@ func TestDesktopOpenerUsesHostCommandWithEncodedURI(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bin, command), []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	s, _ := service(t, false)
-	create(t, s, "note.md", "body")
-	execute(t, s, "open", Request{Path: "note.md"})
+	s, dir := service(t, false)
+	const name = "Folder & notes/note #1?.md"
+	put(t, dir, name, "body")
+	execute(t, s, "open", Request{Path: name})
+	notePath, err := filepath.EvalSymlinks(filepath.Join(dir, filepath.FromSlash(name)))
+	if err != nil {
+		t.Fatal(err)
+	}
 	data, err := os.ReadFile(capture)
-	if err != nil || string(data) != "obsidian://open?file=note.md&vault=My+vault+%26+stuff\n" {
+	if err != nil || string(data) != "obsidian://open?path="+url.QueryEscape(notePath)+"\n" {
 		t.Fatal(string(data), err)
 	}
 	if err := os.Remove(filepath.Join(bin, command)); err != nil {
 		t.Fatal(err)
 	}
-	reject(t, s, "open", Request{Path: "note.md"})
+	reject(t, s, "open", Request{Path: name})
 }
 
 func TestDisabledHistoryAndParentRepositoriesAreNotTouched(t *testing.T) {
