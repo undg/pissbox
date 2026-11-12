@@ -23,8 +23,7 @@ git = false
 ```
 
 Notes open in Obsidian using their absolute host path; no separate Obsidian
-vault name is needed. The former `obsidian` configuration key is no longer
-accepted; remove it from existing vault tables.
+vault name is needed.
 
 Directories must already exist and refer to distinct physical directories.
 Paths must be absolute or start with `~/`. The launcher validates configuration
