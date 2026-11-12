@@ -38,6 +38,11 @@ Flags override environment variables. Relative paths use the caller's working
 directory. Keep both directories separate from native/macOS tool state.
 The state directory is created if missing; shared Linux caches live there.
 
+`--completion bash|zsh|fish|powershell` generates host-shell completion; see
+[shell setup](../README.md#shell-completion). Completion covers flags and mount
+directories without reading configuration or launching anything. Operations stay
+flag-only: bare `help`, `completion`, and `list` are workspace paths, not commands.
+
 `--help` is a quick reference for usage, options, and examples. This guide covers
 workspaces, configuration, and lifecycle; [proxy-managed secrets](../doc/secrets.md)
 covers credential registration and host command safety.

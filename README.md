@@ -102,6 +102,54 @@ removed; sandbox setup and shared schema validation still use Bash. See
 [host development](host/README.md#launcher-verification). Real-host final
 verification is still pending.
 
+## Shell completion
+
+The launcher uses Cobra for flags, help, and completion; configuration stays in
+its existing typed TOML/schema loaders. There are no user-facing subcommands:
+`help`, `completion`, `list`, and even `__complete` remain workspace names.
+Flags may appear between workspace paths; `--` makes everything after it a path.
+
+Build the launcher after updating (`make build-launcher`), then enable completion
+in your **host shell**. No image rebuild or sandbox recreation is needed.
+
+Zsh: add this after `autoload -Uz compinit; compinit` in `~/.zshrc`:
+
+```zsh
+source <(pissbox --completion zsh)
+```
+
+Bash: install/enable your shell's `bash-completion` package first, then add this
+to `~/.bashrc` (or the startup file used by your interactive Bash):
+
+```bash
+source <(pissbox --completion bash)
+```
+
+Fish: generate its autoloaded completion file:
+
+```fish
+mkdir -p ~/.config/fish/completions
+pissbox --completion fish > ~/.config/fish/completions/pissbox.fish
+```
+
+PowerShell: add this to `$PROFILE`:
+
+```powershell
+pissbox --completion powershell | Out-String | Invoke-Expression
+```
+
+Completion suggests flag names, supported shells, and directories for workspace
+arguments, `--delete`, `--pissbox-pi-dir`, and `--pissbox-state-dir`. It does not
+query sandbox names for `--name` or suggest secret arguments. The repeatable
+`--secret ENV_NAME HOST COMMAND` syntax is unchanged. Help, script generation,
+and completion requests do not read project/global configuration, execute secret
+commands, start the bridge, or call SBX. Completion scripts use an internal
+leading `--complete` flag, not Cobra's reserved `__complete` subcommand.
+
+The installer does not change shell startup files or install optional shell
+completion dependencies. Regenerate saved completion files after launcher
+updates; sourcing generated output at shell startup picks up updates directly.
+
 ## Transfer built artifacts
 
 Git carries the launcher, kit, and configuration. `bin/artifacts` transfers only

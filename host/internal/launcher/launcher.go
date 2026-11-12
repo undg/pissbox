@@ -25,12 +25,28 @@ func Main(args []string) int {
 }
 
 func run(root, host string, args []string) int {
+	if len(args) > 0 && args[0] == "--complete" {
+		if err := requestCompletion(args[1:], os.Stdout); err != nil {
+			return fail("%s", err)
+		}
+		return 0
+	}
 	o, err := parse(args)
 	if err != nil {
 		return fail("%s", err)
 	}
 	if o.help {
-		fmt.Fprint(os.Stdout, helpText)
+		cmd := newCLI(&options{})
+		cmd.SetOut(os.Stdout)
+		if err := cmd.Help(); err != nil {
+			return fail("%s", err)
+		}
+		return 0
+	}
+	if o.completion != "" {
+		if err := writeCompletion(o.completion, os.Stdout); err != nil {
+			return fail("%s", err)
+		}
 		return 0
 	}
 	if len(o.secrets) > 0 && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
