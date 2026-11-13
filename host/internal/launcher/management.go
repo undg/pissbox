@@ -100,6 +100,23 @@ func printHeader(title, directory string) {
 		fmt.Fprintf(os.Stdout, "  %s%s%s\n", muted, directory, reset)
 	}
 }
+
+// recreate removes only the sandbox identified by SBX's creation conflict.
+func (p *processes) recreate(name string, o options) (bool, int) {
+	if !validName.MatchString(name) || (o.name != "" && o.name != name) {
+		return false, fail("Unexpected sandbox identity %q; refusing to recreate", name)
+	}
+	fmt.Fprintf(os.Stderr, "Recreating sandbox '%s'. Deletion loses sandbox-local data. Mounted host files remain.\n", name)
+	if !o.yes {
+		yes, status := p.confirm("Delete and recreate it? [y/N]")
+		if status != 0 || !yes {
+			return false, status
+		}
+	}
+	status := p.sbx("rm", "--force", name)
+	return status == 0, status
+}
+
 func (p *processes) manage(o options) int {
 	if (o.deleteDir != "" && o.list) || o.name != "" || len(o.workspaces) != 0 {
 		return fail("Delete and list cannot be combined with each other, --name, or workspaces.")

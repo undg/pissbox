@@ -181,6 +181,21 @@ func run(root, host string, args []string) int {
 		sbxArgs = append(sbxArgs, o.piArgs()...)
 	}
 	diagnostic, status := p.initial(sbxArgs)
+	if status != 0 && o.recreate {
+		name := conflictName(diagnostic, isolation != "", o.name)
+		if name == "" {
+			return status
+		}
+		replaced, recreateStatus := p.recreate(name, o)
+		if !replaced {
+			return recreateStatus
+		}
+		// Retry creation once. Never attach or delete again if this fails.
+		_, status = p.initial(sbxArgs)
+		if status != 0 {
+			return status
+		}
+	}
 	if status == 0 {
 		if isolation == "" {
 			return 0

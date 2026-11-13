@@ -13,6 +13,7 @@ import (
 type options struct {
 	name, deleteDir, piDir, stateDir, completion                       string
 	yes, list, bridgeStop, bridgeReload, ignoreConfig, help, continued bool
+	recreate                                                           bool
 	workspaces                                                         []string
 	secrets                                                            []secret
 }
@@ -39,7 +40,8 @@ func newCLI(o *options) *cobra.Command {
 	f.SortFlags = false
 	f.BoolVarP(&o.continued, "continue", "c", false, "Continue the previous Pi session without the menu")
 	f.StringVarP(&o.deleteDir, "delete", "d", "", "Delete matching sandboxes for `DIR`; loses sandbox-local data")
-	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or delete confirmation")
+	f.BoolVar(&o.recreate, "recreate", false, "Replace the matching sandbox with current config; loses sandbox-local data")
+	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or deletion confirmation")
 	f.BoolVarP(&o.list, "ls", "l", false, "List sandboxes, current-directory matches first")
 	f.StringVar(&o.name, "name", "", "Use an explicit sandbox `NAME`")
 	f.Var(&secretFlag{secrets: &o.secrets}, "secret", "Register a proxy secret on creation only (repeatable): `ENV_NAME HOST COMMAND`")
@@ -78,6 +80,9 @@ func parse(args []string) (options, error) {
 		return o, err
 	}
 	o.workspaces = cmd.Flags().Args()
+	if o.recreate && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
+		return o, fmt.Errorf("--recreate cannot be combined with list, delete, bridge-stop, or bridge-reload")
+	}
 	return o, nil
 }
 

@@ -64,6 +64,11 @@ func testTool() int {
 		return 0
 	}
 	json.NewEncoder(log).Encode(args)
+	conflict := os.Getenv("CONFLICT") != ""
+	if os.Getenv("CONFLICT_UNTIL_REMOVED") == "1" {
+		_, err := os.Stat(os.Getenv("LAUNCHER_LOG") + ".removed")
+		conflict = os.IsNotExist(err)
+	}
 	if os.Getenv("REQUIRE_TTY") == "1" && (!isTerminal(os.Stdin) || !isTerminal(os.Stdout)) {
 		fmt.Fprintln(os.Stderr, "lost terminal identity")
 		return 20
@@ -108,8 +113,12 @@ func testTool() int {
 			n, _ := strconv.Atoi(os.Getenv("CREATE_FAIL"))
 			return n
 		}
-		if os.Getenv("CONFLICT") != "" {
-			fmt.Fprintln(os.Stderr, `sandbox "reported" already exists for this workspace; pass --name to create another, or start the existing sandbox`)
+		if conflict {
+			if name := flagValue(args, "--name"); name != "" {
+				fmt.Fprintf(os.Stderr, "sandbox '%s' already exists; connect to the existing sandbox\n", name)
+			} else {
+				fmt.Fprintln(os.Stderr, `sandbox "reported" already exists for this workspace; pass --name to create another, or start the existing sandbox`)
+			}
 			return 8
 		}
 		for _, arg := range args {
@@ -142,7 +151,7 @@ func testTool() int {
 				time.Sleep(time.Second)
 			}
 		}
-		if initial && os.Getenv("CONFLICT") != "" {
+		if initial && conflict {
 			fmt.Fprintln(os.Stderr, "sandbox 'reported' already exists and can't be given new workspaces")
 			return 8
 		}
@@ -170,6 +179,9 @@ func testTool() int {
 		return n
 	case "rm":
 		n, _ := strconv.Atoi(os.Getenv("REMOVE_STATUS"))
+		if n == 0 && os.Getenv("CONFLICT_UNTIL_REMOVED") == "1" {
+			os.WriteFile(os.Getenv("LAUNCHER_LOG")+".removed", nil, 0600)
+		}
 		return n
 	}
 	return 0

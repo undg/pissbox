@@ -54,7 +54,10 @@ still embed a secret by mistake, and command text is not proof that it did not.
 
 Global entries are registered for every **new** sandbox, sorted by environment
 name, before project setup and Pi. Existing sandboxes keep their registrations;
-attaches never add or update them. Use a new sandbox name to change the set.
+attaches never add or update them. Use a new sandbox name to change the set,
+or run `pissbox --recreate -c` to replace the matching sandbox and resume Pi.
+Recreation confirms data loss: sandbox-local data is deleted; mounted host files
+and shared Pi sessions remain. Add `-y` to skip that confirmation.
 
 `--secret ENV_NAME HOST COMMAND` remains available for one-off additions.
 A CLI entry overrides the same environment name from global config. Duplicate

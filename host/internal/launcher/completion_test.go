@@ -41,6 +41,7 @@ func TestCompletionRequests(t *testing.T) {
 	}{
 		{"flags", []string{"--pissbox-"}, "--pissbox-pi-dir\t"},
 		{"flags after workspace", []string{"project", "--na"}, "--name\t"},
+		{"recreate flag", []string{"--rec"}, "--recreate\t"},
 		{"workspace directories", []string{""}, ":16\n"},
 		{"more workspace directories", []string{"help", "__complete", ""}, ":16\n"},
 		{"directory flag", []string{"--pissbox-pi-dir", ""}, ":16\n"},

@@ -28,6 +28,11 @@ Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
 on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
 existing-sandbox menu, to resume the previous Pi session for that workspace.
 Menu letters act without Enter; `pissbox -c` skips the menu.
+Use `pissbox --recreate` to replace the matching sandbox and apply current
+configuration, mounts, and kit/image changes. It confirms deletion of sandbox-local
+data; mounted host files and shared Pi sessions remain. Add `-c` to resume Pi,
+or `-y` to skip confirmation. `--name NAME` targets that sandbox; without an
+existing match, it creates a fresh sandbox. Creation failures are not retried.
 Workspace edits persist on the host after sandbox removal.
 `make build` builds without installing the launcher link; `make build-image`
 builds only the image and needs no host Go or bridge.

@@ -154,6 +154,10 @@ dependencies but never installs them automatically.
 - Workspaces are live host mounts. New mounts, mappings, kit files, or images
   require a new sandbox name. Never silently remove/recreate a sandbox.
   Sandbox-local data survives restart, not removal; mounted state survives both.
+  Explicit `--recreate` replaces only the sandbox reported by the normal creation
+  conflict after validating current config. Confirm data loss unless `-y`; `-c`
+  does not bypass confirmation. Retry creation once after successful removal,
+  never attach or remove again on retry failure. No match means ordinary creation.
 
 ## Shared configuration and state
 
