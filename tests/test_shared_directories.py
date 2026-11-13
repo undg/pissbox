@@ -56,20 +56,24 @@ class SharedDirectoriesTests(unittest.TestCase):
             (self.home / ".cache/npm").resolve(),
             self.state / "npm",
         )
+        self.assertEqual(
+            (self.home / ".cache/uv").resolve(),
+            self.state / "uv/cache",
+        )
         # Share model files, not the Hugging Face token file.
         self.assertFalse((self.home / ".cache/huggingface").is_symlink())
 
     def test_data_survives_repeated_setup_and_another_sandbox(self):
         result = self.setup_links()
         self.assertEqual(result.returncode, 0, result.stderr)
-        for tool in ("npm", "pnpm"):
+        for tool in ("npm", "pnpm", "uv"):
             cache = self.home / ".cache" / tool / "cached-package"
             cache.write_text("retained")
         for home in (self.home, self.directory / "another home"):
             home.mkdir(exist_ok=True)
             result = self.setup_links(home=home)
             self.assertEqual(result.returncode, 0, result.stderr)
-            for tool in ("npm", "pnpm"):
+            for tool in ("npm", "pnpm", "uv"):
                 self.assertEqual(
                     (home / ".cache" / tool / "cached-package").read_text(), "retained",
                 )

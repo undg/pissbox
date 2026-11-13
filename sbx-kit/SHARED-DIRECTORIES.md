@@ -37,8 +37,9 @@ tool locations as user `1000`.
 | `npm` | `.cache/npm` | npm package cache |
 | `pnpm/store` | `.local/share/pnpm/store` | Content-addressable packages |
 | `pnpm/cache` | `.cache/pnpm` | Package metadata |
+| `uv/cache` | `.cache/uv` | Downloaded Python packages, built wheels, and metadata |
 
-Project `node_modules` stays in the project. Kit setup points npm at the shared
+Project `node_modules` and Python `.venv` directories stay in the project. Kit setup points npm at the shared
 `$HOME/.cache/npm` directory. The image's `$HOME/.npm` is left untouched.
 Existing sandboxes need a new sandbox name to receive the mapping; setup does
 not migrate an existing local cache.
@@ -50,7 +51,7 @@ not migrate an existing local cache.
 - New mappings or a different state root require a new sandbox name. Attaching
   does not change mounts or rerun setup. Keep any old state-path symlinks while
   existing sandboxes still depend on them.
-- Custom `HF_HOME`, `XDG_*`, npm cache, or pnpm store/cache settings may bypass
+- Custom `HF_HOME`, `XDG_*`, `UV_CACHE_DIR`, npm cache, or pnpm store/cache settings may bypass
   these locations. Sharing directories does not install tools or grant network access.
 - Avoid simultaneous colgrep writes to the same project's index until upstream
   locking is verified. Use dedicated state roots and manage ignore rules for
@@ -61,7 +62,8 @@ not migrate an existing local cache.
 ```bash
 sbx exec <sandbox-name> sh -c 'readlink "$HOME/.cache/huggingface/hub"; readlink "$HOME/.local/share/colgrep"; readlink "$HOME/.local/share/pnpm/store"'
 sbx exec <sandbox-name> pnpm store path
+sbx exec <sandbox-name> uv cache dir  # If uv is installed
 ```
 
 The [regression suite](../AGENTS.md#verification) checks real links in isolated
-fixture homes; it does not run real SBX, colgrep, or pnpm.
+fixture homes; it does not run real SBX, colgrep, pnpm, or uv.
