@@ -16,10 +16,10 @@ import (
 	"pissbox/host/config"
 )
 
-// loadGlobalSecrets resolves, validates, and loads the user-level config. It
+// loadGlobalConfig resolves, validates, and loads the user-level config. It
 // only creates the starter for the default path; an explicit override must
 // already exist. A starter creation failure warns and continues.
-func loadGlobalSecrets(root, cwd string, mounts []string) ([]secret, int) {
+func loadGlobalConfig(root, cwd string, mounts []string) (*config.Settings, int) {
 	explicit := os.Getenv("PISSBOX_CONFIG")
 	path, err := config.Path(explicit, cwd)
 	if err != nil {
@@ -49,17 +49,17 @@ func loadGlobalSecrets(root, cwd string, mounts []string) ([]secret, int) {
 		created, err := config.CreateStarter(path, root)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: Could not create global configuration %s: %v\n", path, err)
-			return nil, 0
+			return &config.Settings{}, 0
 		}
 		if created {
-			return nil, 0
+			return &config.Settings{}, 0
 		}
 	}
-	secrets, err := config.Load(path)
+	settings, err := config.LoadSettings(path)
 	if err != nil {
 		return nil, fail("%s", err)
 	}
-	return secrets, 0
+	return settings, 0
 }
 
 // accessibleSecrets drops global entries whose command cannot run, warning by

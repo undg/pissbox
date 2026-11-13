@@ -171,6 +171,10 @@ func TestInvalidGlobalConfigPrecedesSideEffects(t *testing.T) {
 			f.write(f.userConfig, "[secrets.API]\nhost = \"example.com\"\ncommand = \"get\"\nvalue = \"literal\"\n")
 			return nil
 		}},
+		{"invalid network", func(f fixture) map[string]string {
+			f.write(f.userConfig, "[network]\nblock = ['']\n")
+			return nil
+		}},
 		{"missing override", func(f fixture) map[string]string {
 			return map[string]string{"PISSBOX_CONFIG": filepath.Join(f.configDir, "missing.toml")}
 		}},

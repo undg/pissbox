@@ -86,6 +86,21 @@ command safety, and creation-only registration. This optional feature requires
 SBX `secret set-custom --command` and `--placeholder` support (verified with
 v0.50.0).
 
+## Global network permissions
+
+Add personal or company domains to the same host global configuration instead
+of editing the kit:
+
+```toml
+[network]
+allow = ["repo.mi.ihsmarkit.com", "api.deepseek.com"]
+block = ["blocked.example.com", "*.untrusted.example.com"]
+```
+
+Allow rules extend the kit defaults; block rules take precedence. Both lists are
+optional and apply only when creating a sandbox, not when attaching to one.
+See [network permissions](doc/network.md) for patterns and lifecycle details.
+
 ## Go launcher
 
 `bin/pissbox` is a small Bash wrapper that selects the native Go launcher in

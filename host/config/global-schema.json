@@ -6,6 +6,21 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "network": {
+      "description": "Additional network permissions for new sandboxes. Block rules take precedence over allow rules, including kit defaults.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "description": "Patterns to allow in addition to the base kit permissions.",
+          "$ref": "#/$defs/networkPatterns"
+        },
+        "block": {
+          "description": "Patterns to deny, taking precedence over all kit allow rules.",
+          "$ref": "#/$defs/networkPatterns"
+        }
+      }
+    },
     "vault": {
       "description": "Shared host-only Markdown vaults, available to all bridge sessions. Keys are stable vault names.",
       "type": "object",
@@ -34,6 +49,16 @@
     }
   },
   "$defs": {
+    "networkPatterns": {
+      "description": "SBX network patterns. Use one pattern per entry, without whitespace or comma-separated values. SBX validates supported pattern syntax.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^[^\\s,]+$",
+        "not": { "pattern": "://" }
+      }
+    },
     "vault": {
       "description": "One host-only vault. Never mounted by the launcher.",
       "type": "object",

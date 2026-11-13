@@ -118,11 +118,11 @@ func run(root, host string, args []string) int {
 	if err != nil {
 		return fail("%s", err)
 	}
-	global, status := loadGlobalSecrets(root, cwd, append(append([]string{}, workspaces.paths...), pi, state))
+	global, status := loadGlobalConfig(root, cwd, append(append([]string{}, workspaces.paths...), pi, state))
 	if status != 0 {
 		return status
 	}
-	secrets := mergeSecrets(accessibleSecrets(global, o.secrets), o.secrets)
+	secrets := mergeSecrets(accessibleSecrets(global.Secrets, o.secrets), o.secrets)
 	staged := len(project.Isolated) > 0 || len(secrets) > 0
 	var registrations []registeredSecret
 	if len(secrets) > 0 {
@@ -155,6 +155,14 @@ func run(root, host string, args []string) int {
 	sbxArgs := []string{"run", "--env", "PISSBOX_PI_DIR=" + pi, "--env", "PISSBOX_STATE_DIR=" + state, "--env", "PISSBOX_WORKSPACE_DIR=" + primary}
 	if o.name != "" {
 		sbxArgs = append(sbxArgs, "--name", o.name)
+	}
+	kit, err := networkKit(state, global.Network)
+	if err != nil {
+		return fail("Prepare global network permissions: %s", err)
+	}
+	if kit != "" {
+		defer os.RemoveAll(kit)
+		sbxArgs = append(sbxArgs, "--kit", kit)
 	}
 	bridge := registration{processes: p}
 	defer bridge.stop()

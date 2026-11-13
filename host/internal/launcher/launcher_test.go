@@ -64,6 +64,18 @@ func testTool() int {
 		return 0
 	}
 	json.NewEncoder(log).Encode(args)
+	if kit := flagValue(args, "--kit"); kit != "" {
+		data, err := os.ReadFile(filepath.Join(kit, "spec.yaml"))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 21
+		}
+		if capture := os.Getenv("NETWORK_KIT_CAPTURE"); capture != "" {
+			if err := os.WriteFile(capture, data, 0600); err != nil {
+				return 22
+			}
+		}
+	}
 	conflict := os.Getenv("CONFLICT") != ""
 	if os.Getenv("CONFLICT_UNTIL_REMOVED") == "1" {
 		_, err := os.Stat(os.Getenv("LAUNCHER_LOG") + ".removed")

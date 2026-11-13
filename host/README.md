@@ -4,8 +4,11 @@ The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
 and its implementation and colocated tests together in `internal/bridge`.
 The default Go launcher lives in `cmd/pissbox` and `internal/launcher`.
 The pure host configuration library lives in `host/config`: it owns the global
-secret schema, TOML and JSON Schema validation, path resolution, and starter
-file creation, but never calls SBX or executes configured commands.
+schema for secrets, network permissions, and vaults; TOML and JSON Schema
+validation; path resolution; and starter file creation. It never calls SBX or
+executes configured commands. Global network allow/block lists extend kit
+permissions through a temporary v2 mixin at creation time; see
+[network permissions](../doc/network.md).
 `bin/pissbox` only resolves symlinks, selects the native binary, and execs it.
 
 Optional host-side bridge providing addressed Pi-to-Pi messaging plus Herd sidebar

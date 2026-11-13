@@ -111,6 +111,28 @@ func CreateStarter(path, root string) (created bool, err error) {
 
 // Load reads, validates, and returns global secrets sorted by environment name.
 func Load(path string) ([]Secret, error) {
+	settings, err := LoadSettings(path)
+	if err != nil {
+		return nil, err
+	}
+	return settings.Secrets, nil
+}
+
+// Settings contains validated host-wide launcher configuration.
+type Settings struct {
+	Secrets []Secret
+	Network Network
+}
+
+// Network adds egress permissions to the base kit. Block rules take precedence.
+type Network struct {
+	Allow []string `toml:"allow" json:"allow,omitempty"`
+	Block []string `toml:"block" json:"deny,omitempty"`
+}
+
+// LoadSettings reads and validates the global configuration without performing IO
+// other than reading the file. It never executes configured commands.
+func LoadSettings(path string) (*Settings, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("read global configuration %s: %w", path, err)
@@ -122,12 +144,13 @@ func Load(path string) ([]Secret, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read global configuration %s: %w", path, err)
 	}
-	return parse(data)
+	return parseSettings(data)
 }
 
 type document struct {
 	Secrets map[string]entry `toml:"secrets"`
 	Vaults  map[string]Vault `toml:"vault"`
+	Network Network          `toml:"network"`
 }
 
 type entry struct {
@@ -159,6 +182,14 @@ func (h *hostList) UnmarshalTOML(data any) error {
 type hostList []string
 
 func parse(data []byte) ([]Secret, error) {
+	settings, err := parseSettings(data)
+	if err != nil {
+		return nil, err
+	}
+	return settings.Secrets, nil
+}
+
+func parseSettings(data []byte) (*Settings, error) {
 	var decoded map[string]any
 	if _, err := toml.Decode(string(data), &decoded); err != nil {
 		return nil, fmt.Errorf("invalid global configuration: %w", err)
@@ -185,5 +216,5 @@ func parse(data []byte) ([]Secret, error) {
 		secrets = append(secrets, secret)
 	}
 	sort.Slice(secrets, func(i, j int) bool { return secrets[i].Env < secrets[j].Env })
-	return secrets, nil
+	return &Settings{Secrets: secrets, Network: doc.Network}, nil
 }
