@@ -14,8 +14,8 @@ func TestSecretParserPreservesCommandsAndWorkspaceOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []secret{
-		{Env: "API_ONE", Host: "api.one.com", Command: "security find-generic-password -s 'api one' -w"},
-		{Env: "API_TWO", Host: "*.example.com", Command: "/host/bin/get-token --account two"},
+		{Env: "API_ONE", Hosts: []string{"api.one.com"}, Command: "security find-generic-password -s 'api one' -w"},
+		{Env: "API_TWO", Hosts: []string{"*.example.com"}, Command: "/host/bin/get-token --account two"},
 	}
 	if !reflect.DeepEqual(o.secrets, want) || !reflect.DeepEqual(o.workspaces, []string{"one", "two", "--secret"}) || !o.continued {
 		t.Fatalf("%+v", o)
@@ -103,6 +103,58 @@ func TestSecretCreationScopesToReportedIdentityBeforeSetupAndPi(t *testing.T) {
 				t.Fatal("launcher executed secret command")
 			}
 		})
+	}
+}
+
+func TestGlobalSecretRegistersAllHosts(t *testing.T) {
+	for _, stale := range []bool{false, true} {
+		name := "new registration"
+		if stale {
+			name = "stale registration"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.write(f.userConfig, `[secrets.API]
+host = ["repo.mi.example.com", "repo.example.com"]
+command = "true"
+`)
+			env := map[string]string{}
+			if stale {
+				env["SECRET_CONFLICT"] = "sbx-cs-stale"
+			}
+			out, status, calls := f.launch("", env)
+			wantKinds := "secret,create,secret,exec,run"
+			if stale {
+				wantKinds = "secret,create,secret,secret,secret,exec,run"
+			}
+			if status != 0 || kinds(calls) != wantKinds {
+				t.Fatalf("status=%d calls=%v: %s", status, calls, out)
+			}
+			registration := calls[2]
+			placeholder := argValue(registration, "--placeholder")
+			want := []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "repo.mi.example.com", "--host", "repo.example.com", "--placeholder", placeholder, "--command", "true"}
+			if !reflect.DeepEqual(registration, want) {
+				t.Fatal("wrong multi-host registration:", registration)
+			}
+			if placeholder == "" || !contains(calls[1], "API="+placeholder) {
+				t.Fatal("registration must use the creation placeholder:", calls)
+			}
+			if stale && !reflect.DeepEqual(calls[4], want) {
+				t.Fatal("retry changed multi-host registration:", calls[4])
+			}
+		})
+	}
+}
+
+func TestInvalidGlobalHostArrayFailsBeforeSBX(t *testing.T) {
+	f := newFixture(t)
+	f.write(f.userConfig, "[secrets.API]\nhost = [\"example.com\", \"https://other.com\"]\ncommand = \"true\"\n")
+	out, status, calls := f.launch("", nil)
+	if status == 0 || len(calls) != 0 {
+		t.Fatalf("status=%d calls=%v: %s", status, calls, out)
+	}
+	if _, err := os.Stat(f.state); !os.IsNotExist(err) {
+		t.Fatal("created state before validating all hosts")
 	}
 }
 

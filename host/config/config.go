@@ -25,7 +25,7 @@ import (
 // never inspect its output.
 type Secret struct {
 	Env     string
-	Host    string
+	Hosts   []string
 	Command string
 }
 
@@ -37,9 +37,14 @@ func (s Secret) Validate(existing []Secret) error {
 	if !envName.MatchString(s.Env) || strings.HasPrefix(s.Env, "PISSBOX_") || s.Env == "SANDBOX_NAME" {
 		return fmt.Errorf("secret ENV_NAME must be a non-reserved environment variable name")
 	}
-	if s.Host == "" || strings.HasPrefix(s.Host, "-") || strings.ContainsAny(s.Host, "/\\?#@") ||
-		strings.ContainsFunc(s.Host, unicode.IsSpace) || (strings.Contains(s.Host, ":") && net.ParseIP(s.Host) == nil) {
-		return fmt.Errorf("secret HOST must be a host, IP, or wildcard pattern, not a URL or host:port")
+	if len(s.Hosts) == 0 {
+		return fmt.Errorf("secret HOST must contain at least one host")
+	}
+	for _, host := range s.Hosts {
+		if host == "" || strings.HasPrefix(host, "-") || strings.ContainsAny(host, "/\\?#@") ||
+			strings.ContainsFunc(host, unicode.IsSpace) || (strings.Contains(host, ":") && net.ParseIP(host) == nil) {
+			return fmt.Errorf("secret HOST must be a host, IP, or wildcard pattern, not a URL or host:port")
+		}
 	}
 	if strings.TrimSpace(s.Command) == "" || strings.HasPrefix(s.Command, "-") {
 		return fmt.Errorf("secret COMMAND must be a non-empty quoted command")
@@ -126,9 +131,32 @@ type document struct {
 }
 
 type entry struct {
-	Host    string `toml:"host"`
-	Command string `toml:"command"`
+	Host    hostList `toml:"host"`
+	Command string   `toml:"command"`
 }
+
+// UnmarshalTOML normalizes a single host or an array to the same representation.
+func (h *hostList) UnmarshalTOML(data any) error {
+	switch value := data.(type) {
+	case string:
+		*h = []string{value}
+	case []any:
+		hosts := make([]string, 0, len(value))
+		for _, item := range value {
+			host, ok := item.(string)
+			if !ok {
+				return fmt.Errorf("secret host array must contain only strings")
+			}
+			hosts = append(hosts, host)
+		}
+		*h = hosts
+	default:
+		return fmt.Errorf("secret host must be a string or an array of strings")
+	}
+	return nil
+}
+
+type hostList []string
 
 func parse(data []byte) ([]Secret, error) {
 	var decoded map[string]any
@@ -150,7 +178,7 @@ func parse(data []byte) ([]Secret, error) {
 	}
 	secrets := make([]Secret, 0, len(doc.Secrets))
 	for name, value := range doc.Secrets {
-		secret := Secret{Env: name, Host: value.Host, Command: value.Command}
+		secret := Secret{Env: name, Hosts: value.Host, Command: value.Command}
 		if err := secret.Validate(nil); err != nil {
 			return nil, fmt.Errorf("invalid global secret %s: %w", name, err)
 		}

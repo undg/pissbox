@@ -54,8 +54,15 @@
       ],
       "properties": {
         "host": {
-          "description": "Host, IP address, or quoted wildcard pattern that receives the credential. No scheme, port, or path.",
-          "type": "string"
+          "description": "Host, IP address, or wildcard pattern that receives the credential, or a non-empty array of these. No scheme, port, or path.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          ]
         },
         "command": {
           "description": "Host command whose stdout SBX uses as the credential. The command must fetch the value, not embed it. The launcher probes it for availability before registration and passes it unchanged to SBX.",

@@ -64,7 +64,11 @@ func prepareSecrets(secrets []secret) ([]registeredSecret, error) {
 
 func (p *processes) registerSecrets(name string, secrets []registeredSecret) int {
 	for _, s := range secrets {
-		args := []string{"secret", "set-custom", "--sandbox", name, "--env", s.Env, "--host", s.Host, "--placeholder", s.Placeholder, "--command", s.Command}
+		args := []string{"secret", "set-custom", "--sandbox", name, "--env", s.Env}
+		for _, host := range s.Hosts {
+			args = append(args, "--host", host)
+		}
+		args = append(args, "--placeholder", s.Placeholder, "--command", s.Command)
 		stdout, stderr, status := p.captureCommand("sbx", args)
 		if status == 0 {
 			fmt.Fprint(os.Stdout, stdout)

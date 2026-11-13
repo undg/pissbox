@@ -17,6 +17,10 @@ command = "security find-generic-password -s gh-token -w"
 [secrets.OPENAI_API_KEY]
 host = "api.openai.com"
 command = "op read op://Private/OpenAI/api-key"
+
+[secrets.ARTIFACTORY_AUTH]
+host = ["repo.mi.ihsmarkit.com", "repo.ihsmarkit.com"]
+command = "/absolute/path/to/artifactory-token-helper"
 ```
 
 The path is `PISSBOX_CONFIG` when set, otherwise
@@ -40,9 +44,12 @@ documentation. If starter creation fails, the launcher warns and continues with
 no global entries. A missing explicit `PISSBOX_CONFIG` target is an error;
 possibly mistyped paths are never created silently.
 
-Entries accept only `host` and `command`. Unknown keys, literal value fields,
-invalid environment names, URLs, ports, and empty or dash-prefixed commands are
-rejected. The schema is the single source for shape and key validation; the
+Entries accept only `host` and `command`. `host` accepts a single string or a
+non-empty array of strings; each host becomes a separate SBX `--host` flag for
+the same credential and placeholder. Arrays preserve host order. Every host
+must satisfy the matching rules below. Unknown keys, literal value fields,
+invalid environment names, URLs, ports, empty hosts, and empty or dash-prefixed
+commands are rejected. The schema is the single source for shape and key validation; the
 launcher adds host/command grammar checks. An empty or comment-only file is
 valid and means no global secrets.
 

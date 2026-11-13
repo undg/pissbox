@@ -103,7 +103,7 @@ func normalizeArgs(cmd *cobra.Command, args []string, completing bool) ([]string
 			if i+3 >= len(args) {
 				return nil, fmt.Errorf("--secret requires ENV_NAME HOST COMMAND")
 			}
-			entry := secret{Env: args[i+1], Host: args[i+2], Command: args[i+3]}
+			entry := secret{Env: args[i+1], Hosts: []string{args[i+2]}, Command: args[i+3]}
 			if err := entry.Validate(secrets); err != nil {
 				return nil, err
 			}

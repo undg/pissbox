@@ -169,12 +169,53 @@ command = "get_mid"
 		t.Fatal(err)
 	}
 	want := []Secret{
-		{Env: "ALPHA", Host: "*.example.com", Command: "/host/bin/get-alpha"},
-		{Env: "MID", Host: "127.0.0.1", Command: "get_mid"},
-		{Env: "ZED", Host: "z.example.com", Command: "get_zed --account 'a b'"},
+		{Env: "ALPHA", Hosts: []string{"*.example.com"}, Command: "/host/bin/get-alpha"},
+		{Env: "MID", Hosts: []string{"127.0.0.1"}, Command: "get_mid"},
+		{Env: "ZED", Hosts: []string{"z.example.com"}, Command: "get_zed --account 'a b'"},
 	}
 	if !reflect.DeepEqual(secrets, want) {
 		t.Fatalf("%+v", secrets)
+	}
+}
+
+func TestLoadHostStringsAndArrays(t *testing.T) {
+	for _, tc := range []struct {
+		name, host string
+		want       []string
+	}{
+		{"string", `"repo.example.com"`, []string{"repo.example.com"}},
+		{"single element array", `["repo.example.com"]`, []string{"repo.example.com"}},
+		{"multiple hosts", `["repo.mi.example.com", "repo.example.com", "*.other.com", "::1"]`, []string{"repo.mi.example.com", "repo.example.com", "*.other.com", "::1"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			write(t, path, "[secrets.API]\nhost = "+tc.host+"\ncommand = \"get_token\"\n")
+			secrets, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []Secret{{Env: "API", Hosts: tc.want, Command: "get_token"}}
+			if !reflect.DeepEqual(secrets, want) {
+				t.Fatalf("got %+v, want %+v", secrets, want)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsInvalidHostArrays(t *testing.T) {
+	for _, host := range []string{
+		`[]`, `[5]`, `["example.com", false]`, `[["example.com"]]`,
+		`["example.com", ""]`, `["example.com", "https://other.com"]`,
+		`["example.com", "other.com:443"]`, `["example.com", "other.com/path"]`,
+		`["example.com", "--host"]`, `["example.com", "other .com"]`,
+	} {
+		t.Run(host, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.toml")
+			write(t, path, "[secrets.API]\nhost = "+host+"\ncommand = \"get_token\"\n")
+			if _, err := Load(path); err == nil {
+				t.Fatal("accepted invalid hosts:", host)
+			}
+		})
 	}
 }
 
