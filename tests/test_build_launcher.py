@@ -18,6 +18,7 @@ class BuildLauncherTests(unittest.TestCase):
         env = {key: value for key, value in os.environ.items() if not key.startswith("TEST_GO_")}
         env.update(PATH=str(ROOT / "tests/fixtures") + os.pathsep + env["PATH"])
         env.update(overrides)
+        env.setdefault("PISSBOX_VERSION", "v1.2.3-test")
         result = subprocess.run([str(launcher), *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=5)
         calls = [json.loads(line[3:]) for line in result.stdout.splitlines() if line.startswith("go:")]
         return result, calls
@@ -28,7 +29,10 @@ class BuildLauncherTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual((calls[0]["os"], calls[0]["arch"], calls[0]["cgo"]), ("linux", "arm64", "0"))
         self.assertEqual(calls[0]["cwd"], str(ROOT / "host"))
-        self.assertEqual(calls[0]["args"], ["build", "-trimpath", "-o", str(ROOT / ".cache/bin/pissbox-linux-arm64"), "./cmd/pissbox"])
+        self.assertEqual(calls[0]["args"], [
+            "build", "-trimpath", "-ldflags", "-X pissbox/host/internal/launcher.version=v1.2.3-test",
+            "-o", str(ROOT / ".cache/bin/pissbox-linux-arm64"), "./cmd/pissbox",
+        ])
 
     def test_all_builds_four_targets_without_cgo(self):
         result, calls = self.launch("--all")
@@ -37,6 +41,7 @@ class BuildLauncherTests(unittest.TestCase):
             ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "arm64"), ("linux", "amd64"),
         ])
         self.assertTrue(all(call["cgo"] == "0" for call in calls))
+        self.assertTrue(all("-X pissbox/host/internal/launcher.version=v1.2.3-test" in call["args"] for call in calls))
 
     def test_symlink_resolves_checkout_resources(self):
         fixtures = ROOT / ".cache/test-fixtures"

@@ -107,6 +107,9 @@ See [network permissions](doc/network.md) for patterns and lifecycle details.
 `.cache/bin/pissbox-<os>-<arch>` and executes it without changing arguments or
 the caller's directory. Build explicitly after source changes; the wrapper never
 rebuilds or falls back. A missing binary reports `bin/build-launcher`.
+`pissbox --version` (or `-v`) prints the version stamped by `bin/build-launcher`
+from `git describe`, with `-dirty` for an unclean checkout; it falls back to
+Go's VCS build stamp, then `dev`.
 
 ```bash
 make build-launcher      # Explicit native build

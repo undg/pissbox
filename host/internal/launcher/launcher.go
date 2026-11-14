@@ -43,6 +43,10 @@ func run(root, host string, args []string) int {
 		}
 		return 0
 	}
+	if o.version {
+		fmt.Fprintf(os.Stdout, "pissbox %s\n", resolveVersion())
+		return 0
+	}
 	if o.completion != "" {
 		if err := writeCompletion(o.completion, os.Stdout); err != nil {
 			return fail("%s", err)

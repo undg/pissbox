@@ -13,7 +13,7 @@ import (
 type options struct {
 	name, deleteDir, piDir, stateDir, completion                       string
 	yes, list, bridgeStop, bridgeReload, ignoreConfig, help, continued bool
-	recreate                                                           bool
+	version, recreate                                                  bool
 	workspaces                                                         []string
 	secrets                                                            []secret
 }
@@ -52,6 +52,7 @@ func newCLI(o *options) *cobra.Command {
 	f.BoolVar(&o.bridgeReload, "bridge-reload", false, "Restart the compatible bridge without releasing agents")
 	f.StringVar(&o.completion, "completion", "", "Generate shell integration for `SHELL` (bash, zsh, fish, powershell)")
 	f.BoolVarP(&o.help, "help", "h", false, "Show this help")
+	f.BoolVarP(&o.version, "version", "v", false, "Show the pissbox version")
 	for _, name := range []string{"delete", "pissbox-pi-dir", "pissbox-state-dir"} {
 		if err := cmd.RegisterFlagCompletionFunc(name, completeDirectories); err != nil {
 			panic(err) // These names are defined above, once per command.
