@@ -1,6 +1,6 @@
 {
   "$schema": "https://pi.dev/schemas/settings.schema.json",
-  "lastChangelogVersion": "1.5.0",
+  "lastChangelogVersion": "1.5.2",
   "hideThinkingBlock": true,
   "extensions": [
     "extensions/pi-notifier/index.ts",
