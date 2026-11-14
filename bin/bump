@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+show_help() {
+	cat <<EOF
+Usage: ${0##*/} <patch|minor|major>
+
+Create the next annotated vMAJOR.MINOR.PATCH tag on the current commit.
+The latest semver tag reachable from HEAD is the starting point.
+
+The tag is local. Push it with: git push --follow-tags
+Tracked changes must be committed first; untracked files are ignored.
+
+Options:
+  -h, --help  Show this help
+EOF
+}
+
+MODE=
+for arg in "$@"; do
+	case $arg in
+	-h | --help)
+		show_help
+		exit 0
+		;;
+	patch | minor | major)
+		if [[ -n $MODE ]]; then
+			echo "Expected exactly one bump kind: patch, minor, or major." >&2
+			exit 1
+		fi
+		MODE=$arg
+		;;
+	*)
+		echo "Unexpected argument: $arg. Use --help for usage." >&2
+		exit 1
+		;;
+	esac
+done
+if [[ -z $MODE ]]; then
+	echo "Expected patch, minor, or major. Use --help for usage." >&2
+	exit 1
+fi
+
+SCRIPT_PATH=${BASH_SOURCE[0]}
+while [[ -L $SCRIPT_PATH ]]; do
+	SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+	SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+	if [[ $SCRIPT_PATH != /* ]]; then
+		SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+	fi
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+cd "$ROOT_DIR"
+
+if ! command -v git >/dev/null 2>&1; then
+	echo "Required command not found: git" >&2
+	exit 1
+fi
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+	echo "Repository has no commits to tag." >&2
+	exit 1
+fi
+if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
+	echo "Tracked changes must be committed before bumping. Commit or stash them first." >&2
+	exit 1
+fi
+if EXISTING_TAG=$(git tag --points-at HEAD --list 'v[0-9]*' | head -n 1) && [[ -n $EXISTING_TAG ]]; then
+	echo "HEAD is already tagged $EXISTING_TAG. Commit before bumping again." >&2
+	exit 1
+fi
+
+MAJOR=0
+MINOR=0
+PATCH=0
+while IFS= read -r TAG; do
+	if [[ $TAG =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+		MAJOR=${BASH_REMATCH[1]}
+		MINOR=${BASH_REMATCH[2]}
+		PATCH=${BASH_REMATCH[3]}
+		break
+	fi
+done < <(git tag --merged HEAD --list 'v[0-9]*' --sort=-v:refname)
+
+case $MODE in
+patch) PATCH=$((PATCH + 1)) ;;
+minor)
+	MINOR=$((MINOR + 1))
+	PATCH=0
+	;;
+major)
+	MAJOR=$((MAJOR + 1))
+	MINOR=0
+	PATCH=0
+	;;
+esac
+
+NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+git tag -a "$NEW_VERSION" -m "Release $NEW_VERSION"
+printf 'Created tag %s\n' "$NEW_VERSION"

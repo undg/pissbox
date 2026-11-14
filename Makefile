@@ -9,7 +9,7 @@ export QUALITY_BASE = $(BASE)
 export QUALITY_DRY_RUN = $(DRY_RUN)
 export ARTIFACT_ARCHIVE = $(ARCHIVE)
 
-.PHONY: help install install-local build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts setup-quality-tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
+.PHONY: help install install-local bump-patch bump-minor bump-major build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts setup-quality-tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
 
 ## help: Show available commands (default)
 help:
@@ -23,6 +23,18 @@ install:
 ## install-local: Shortcut for make install with PREFIX=$HOME/.local
 install-local:
 	PREFIX="$(HOME)/.local" bin/install
+
+## bump-patch: Tag the next patch release
+bump-patch:
+	bin/bump patch
+
+## bump-minor: Tag the next minor release
+bump-minor:
+	bin/bump minor
+
+## bump-major: Tag the next major release
+bump-major:
+	bin/bump major
 
 ## build: Build the host launcher/bridge and build, save and import the host sandbox image
 build: build-launcher build-bridge build-image
@@ -87,7 +99,7 @@ vet:
 
 ## syntax: Check Bash syntax
 syntax:
-	for script in bin/pissbox bin/install bin/build-image bin/build-bridge bin/build-launcher bin/build-quality-tools sbx-kit/files/home/.pissbox/scripts/*.sh; do \
+	for script in bin/pissbox bin/install bin/bump bin/build-image bin/build-bridge bin/build-launcher bin/build-quality-tools sbx-kit/files/home/.pissbox/scripts/*.sh; do \
 		bash -n "$$script" || exit; \
 	done
 

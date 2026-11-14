@@ -17,7 +17,7 @@ class MakeBuildTests(unittest.TestCase):
         self.directory = Path(directory.name)
         (self.directory / "bin").mkdir()
         self.log = self.directory / "calls"
-        for name in ("install", "build-image", "build-bridge", "build-launcher", "build-quality-tools", "artifacts"):
+        for name in ("install", "bump", "build-image", "build-bridge", "build-launcher", "build-quality-tools", "artifacts"):
             script = self.directory / "bin" / name
             script.write_text(
                 '#!/bin/sh\n'
@@ -39,6 +39,9 @@ class MakeBuildTests(unittest.TestCase):
         for target, command in (
             ("install", ["bin/install"]),
             ("install-local", ["bin/install"]),
+            ("bump-patch", ["bin/bump", "patch"]),
+            ("bump-minor", ["bin/bump", "minor"]),
+            ("bump-major", ["bin/bump", "major"]),
             ("build-image", ["bin/build-image"]),
             ("build-image-all", ["bin/build-image", "--amd64", "--arm64"]),
             ("build-bridge", ["bin/build-bridge"]),
@@ -105,7 +108,8 @@ class MakeBuildTests(unittest.TestCase):
                 self.assertIn("Error 37", result.stderr)
 
     def test_wrapper_failures_fail_make(self):
-        for target in ("install", "install-local", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+        for target in ("install", "install-local", "bump-patch", "bump-minor", "bump-major",
+                       "build-image", "build-image-all", "build-bridge", "build-bridge-all",
                        "build-launcher", "build-launcher-all", "setup-quality-tools"):
             with self.subTest(target=target):
                 result = self.run_make(target, status="37")
@@ -116,7 +120,8 @@ class MakeBuildTests(unittest.TestCase):
         result = self.run_make("help")
         self.assertEqual(result.returncode, 0, result.stderr)
         names = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("  ")]
-        for target in ("install", "install-local", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+        for target in ("install", "install-local", "bump-patch", "bump-minor", "bump-major", "build",
+                       "build-image", "build-image-all", "build-bridge", "build-bridge-all",
                        "build-launcher", "build-launcher-all", "setup-quality-tools"):
             self.assertIn(target, names)
         self.assertNotIn("build-all", names)

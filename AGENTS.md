@@ -6,7 +6,8 @@ or directory name. User guides start at [README.md](README.md).
 
 ## Layout
 
-- `bin/pissbox`: native Go executable-selection wrapper.
+- `bin/pissbox`: native Go executable-selection wrapper. `bin/bump`: create the
+  next semver release tag.
   `bin/build-image`: build, save, and SBX import.
   `bin/build-quality-tools`: cross-build pinned Gremlins and go-crap.
 - `bin/install`: check host dependencies, build, and link `$PREFIX/bin/pissbox`
@@ -211,6 +212,7 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make vet syntax` | Go vet and Bash syntax only |
 | `make validate-kit` | SBX kit validation; requires Docker sign-in |
 | `make install` / `install-local` | Check host prerequisites, build, and install the launcher symlink (`install-local` forces `PREFIX=$HOME/.local`) |
+| `make bump-patch` / `bump-minor` / `bump-major` | Tag the next release from the latest merged semver tag |
 | `make build` | Build the host launcher/bridge and build/save/import the host image |
 | `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
 | `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |

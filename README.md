@@ -119,6 +119,11 @@ make build-launcher-all  # All four supported OS/architecture targets
 make test-python         # Fresh Go executable with the production wrapper
 ```
 
+Release tags use `vMAJOR.MINOR.PATCH`. `make bump-patch`, `make bump-minor`, and
+`make bump-major` create the next annotated tag from the latest merged semver
+tag, starting at `v0.0.0` when none exists. They require a clean tracked tree and
+do not push; publish with `git push --follow-tags`.
+
 Acceptance tests build a fresh candidate in isolated fixture storage and exercise
 the production wrapper, rather than trusting a previously built executable.
 `make check` also runs instrumented Go launcher tests. The former Bash launcher,
