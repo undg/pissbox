@@ -19,9 +19,11 @@ make install
 
 `make install` checks prerequisites, validates the kit, builds the Go launcher
 and host bridge, and builds/imports the image. It then links
-`~/.local/bin/pissbox` to this checkout's `bin/pissbox` wrapper.
-It updates existing symlinks but refuses regular files/directories; failed
-checks/builds preserve the old link. Keep the checkout in place. Missing
+`$PREFIX/bin/pissbox` to this checkout's `bin/pissbox` wrapper; `PREFIX`
+defaults to `$HOME/.local`, and `make install-local` is the explicit shortcut
+for that user-local installation. Set `PREFIX=/another/prefix` to link
+elsewhere. It updates existing symlinks but refuses regular files/directories;
+failed checks/builds preserve the old link. Keep the checkout in place. Missing
 dependencies, login, and PATH changes remain manual (`bin/install --help`).
 
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox

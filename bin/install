@@ -6,10 +6,13 @@ show_help() {
 	cat <<EOF
 Usage: ${0##*/} [-h | --help]
 
-Check host dependencies, build the Go launcher/bridge and image, and link pissbox into ~/.local/bin.
+Check host dependencies, build the Go launcher/bridge and image, and link pissbox into PREFIX/bin (default: ~/.local/bin).
 
 Options:
   -h, --help  Show this help
+
+Environment:
+  PREFIX      Installation prefix (default: $HOME/.local)
 
 Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, jq, and tomljson.
 Optional --secret needs SBX secret set-custom --command and --placeholder support (verified with v0.50.0).
@@ -58,7 +61,7 @@ while [[ -L $SCRIPT_PATH ]]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
-INSTALL_DIR="${HOME:?Set HOME to your home directory}/.local/bin"
+INSTALL_DIR="${PREFIX:-${HOME:?Set HOME to your home directory}/.local}/bin"
 TARGET="$INSTALL_DIR/pissbox"
 SOURCE="$ROOT_DIR/bin/pissbox"
 check_target

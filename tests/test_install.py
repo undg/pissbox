@@ -58,10 +58,11 @@ if call == ["sbx", "version"]:
             script.chmod(0o755)
 
     def launch(self, *args, installer=None, path=None, **overrides):
-        env = {**os.environ, "HOME": str(self.home), "PATH": str(self.tools) if path is None else path,
-               "INSTALL_TEST_LOG": str(self.log), "INSTALL_TEST_FAIL": "never-fail",
-               "INSTALL_TEST_GO": "go1.25.0", "INSTALL_TEST_SBX": "v0.39.0",
-               **overrides}
+        env = {key: value for key, value in os.environ.items() if key != "PREFIX"}
+        env.update({"HOME": str(self.home), "PATH": str(self.tools) if path is None else path,
+                    "INSTALL_TEST_LOG": str(self.log), "INSTALL_TEST_FAIL": "never-fail",
+                    "INSTALL_TEST_GO": "go1.25.0", "INSTALL_TEST_SBX": "v0.39.0",
+                    **overrides})
         result = subprocess.run(
             [str(installer or self.installer), *args], cwd=self.directory,
             env=env, text=True, capture_output=True, timeout=5,
@@ -81,6 +82,15 @@ if call == ["sbx", "version"]:
         self.assertEqual(self.target.readlink(), self.launcher)
         self.assertIn("add " + str(self.target.parent) + " to PATH", result.stderr)
         self.assertFalse((self.home / ".bashrc").exists())
+
+    def test_prefix_sets_install_directory_without_requiring_home(self):
+        prefix = self.directory / "custom prefix"
+        result, calls = self.launch(PREFIX=str(prefix), HOME="")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        target = prefix / "bin/pissbox"
+        self.assertEqual(target.readlink(), self.launcher)
+        self.assertIn("add " + str(target.parent) + " to PATH", result.stderr)
+        self.assertEqual(calls[-1], ["make", "-C", str(self.checkout), "build"])
 
     def test_installer_symlink_resolves_checkout_not_callers_directory(self):
         link = self.directory / "install-link"
@@ -189,6 +199,7 @@ if call == ["sbx", "version"]:
                     self.assertIn("jq, and tomljson", result.stdout)
                     self.assertIn("build the Go launcher/bridge and image", result.stdout)
                     self.assertIn("wrapper for the explicitly built native Go launcher", result.stdout)
+                    self.assertIn("PREFIX/bin", result.stdout)
 
 
 if __name__ == "__main__":

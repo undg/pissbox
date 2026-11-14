@@ -9,7 +9,8 @@ or directory name. User guides start at [README.md](README.md).
 - `bin/pissbox`: native Go executable-selection wrapper.
   `bin/build-image`: build, save, and SBX import.
   `bin/build-quality-tools`: cross-build pinned Gremlins and go-crap.
-- `bin/install`: check host dependencies, build, and link `~/.local/bin/pissbox`.
+- `bin/install`: check host dependencies, build, and link `$PREFIX/bin/pissbox`
+  (default `~/.local/bin`).
   Repoint existing symlinks, but never overwrite regular files or directories.
 - `sbx-kit/`: Dockerfile, kit spec, and operational guides.
 - `sbx-kit/files/home/.pissbox/`: small setup scripts and shared-directory mappings.
@@ -209,7 +210,7 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make test-python` | Launcher, setup, and quality-wrapper regression tests |
 | `make vet syntax` | Go vet and Bash syntax only |
 | `make validate-kit` | SBX kit validation; requires Docker sign-in |
-| `make install` | Check host prerequisites, build, and install the launcher symlink |
+| `make install` / `install-local` | Check host prerequisites, build, and install the launcher symlink (`install-local` forces `PREFIX=$HOME/.local`) |
 | `make build` | Build the host launcher/bridge and build/save/import the host image |
 | `make build-image` / `make build-image-all` | Host image build/save/import / both architectures without import |
 | `make build-bridge` / `make build-bridge-all` | Host bridge build / all supported cross-builds |

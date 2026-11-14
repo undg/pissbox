@@ -38,6 +38,7 @@ class MakeBuildTests(unittest.TestCase):
     def test_explicit_build_targets_call_wrappers_even_with_matching_files(self):
         for target, command in (
             ("install", ["bin/install"]),
+            ("install-local", ["bin/install"]),
             ("build-image", ["bin/build-image"]),
             ("build-image-all", ["bin/build-image", "--amd64", "--arm64"]),
             ("build-bridge", ["bin/build-bridge"]),
@@ -104,7 +105,7 @@ class MakeBuildTests(unittest.TestCase):
                 self.assertIn("Error 37", result.stderr)
 
     def test_wrapper_failures_fail_make(self):
-        for target in ("install", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+        for target in ("install", "install-local", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
                        "build-launcher", "build-launcher-all", "setup-quality-tools"):
             with self.subTest(target=target):
                 result = self.run_make(target, status="37")
@@ -115,7 +116,7 @@ class MakeBuildTests(unittest.TestCase):
         result = self.run_make("help")
         self.assertEqual(result.returncode, 0, result.stderr)
         names = [line.split()[0] for line in result.stdout.splitlines() if line.startswith("  ")]
-        for target in ("install", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
+        for target in ("install", "install-local", "build", "build-image", "build-image-all", "build-bridge", "build-bridge-all",
                        "build-launcher", "build-launcher-all", "setup-quality-tools"):
             self.assertIn(target, names)
         self.assertNotIn("build-all", names)

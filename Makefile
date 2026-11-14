@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
 PYTHON ?= python3
+PREFIX ?= $(HOME)/.local
 export PYTHONDONTWRITEBYTECODE := 1
 # Export values rather than interpolating user paths into shell commands.
 export QUALITY_FILES = $(FILES)
@@ -8,16 +9,20 @@ export QUALITY_BASE = $(BASE)
 export QUALITY_DRY_RUN = $(DRY_RUN)
 export ARTIFACT_ARCHIVE = $(ARCHIVE)
 
-.PHONY: help install build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts setup-quality-tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
+.PHONY: help install install-local build build-image build-image-all build-bridge build-bridge-all build-launcher build-launcher-all export-artifacts import-artifacts setup-quality-tools test test-go test-js test-python vet syntax check validate-kit coverage coverage-go coverage-js crap crap-go crap-js metrics mutation mutation-go mutation-js mutation-all fmt tidy
 
 ## help: Show available commands (default)
 help:
 	@awk '/^## / { line = substr($$0, 4); pos = index(line, ":"); printf "  %-22s %s\n", substr(line, 1, pos - 1), substr(line, pos + 2) }' $(MAKEFILE_LIST)
 	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047host/internal/bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
 
-## install: Check dependencies, build this host's environment and link ~/.local/bin/pissbox
+## install: Check dependencies, build this host's environment and link $PREFIX/bin/pissbox
 install:
-	bin/install
+	PREFIX="$(PREFIX)" bin/install
+
+## install-local: Shortcut for make install with PREFIX=$HOME/.local
+install-local:
+	PREFIX="$(HOME)/.local" bin/install
 
 ## build: Build the host launcher/bridge and build, save and import the host sandbox image
 build: build-launcher build-bridge build-image
