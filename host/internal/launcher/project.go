@@ -1,13 +1,13 @@
 package launcher
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 func fail(format string, args ...any) int { fmt.Fprintf(os.Stderr, format+"\n", args...); return 1 }
@@ -50,38 +50,74 @@ func (w *workspaceSet) append(path string) {
 }
 
 type project struct {
-	Workspaces []string `json:"workspaces"`
-	Isolated   []string `json:"isolated_directories"`
+	Setup      []string `toml:"setup"`
+	Workspaces []string `toml:"workspaces"`
+	Isolated   []string `toml:"isolated_directories"`
 }
 
-func (p *processes) readProject(root, primary string) (project, int) {
-	var config project
+func (p *processes) readProject(primary string) (project, int) {
 	path := primary + "/.pissbox.toml"
 	if _, err := os.Lstat(path); os.IsNotExist(err) {
-		return config, 0
+		return project{}, 0
 	}
-	f, err := os.Open(path)
-	if err != nil || !isFile(path) {
-		if f != nil {
-			f.Close()
-		}
-		return config, fail("Project configuration must be a readable TOML file: %s", path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return project{}, fail("Project configuration must be a readable TOML file: %s", path)
 	}
-	f.Close()
-	//  @TODO (undg) 2026-10-30: refactor needed. Never use scripts designed for sbx on the host. This is SRP violation. Validation can be done when json schema validation engine will be implemented. JSON schema will become one source of true. https://pkg.go.dev/github.com/wasilibs/go-tombi is a good candidate, but research need to be done.
-	for _, tool := range []string{"tomljson", "jq"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			return config, fail("Reading .pissbox.toml requires %s on the host; install it before launching.", tool)
-		}
-	}
-	data, status := p.capture("bash", []string{filepath.Join(root, "sbx-kit/files/home/.pissbox/scripts/project-setup.sh"), "--validate", path}, os.Stdin)
-	if status != 0 {
-		return config, status
-	}
-	if err := json.Unmarshal([]byte(data), &config); err != nil {
-		return config, fail("Invalid project validation result: %s", err)
+	config, err := parseProject(data)
+	if err != nil {
+		return project{}, fail("Invalid project configuration %s: %s", path, err)
 	}
 	return config, 0
+}
+
+// parseProject keeps host-side validation in Go. Project setup still validates
+// independently before running commands inside the sandbox.
+func parseProject(data []byte) (project, error) {
+	var config project
+	metadata, err := toml.Decode(string(data), &config)
+	if err != nil {
+		return project{}, err
+	}
+	if unknown := metadata.Undecoded(); len(unknown) != 0 {
+		return project{}, fmt.Errorf("unknown key %q; supported keys: setup, workspaces, isolated_directories", unknown[0])
+	}
+	for _, command := range config.Setup {
+		if strings.ContainsRune(command, 0) {
+			return project{}, fmt.Errorf("setup commands must not contain NUL bytes")
+		}
+	}
+	for _, workspace := range config.Workspaces {
+		if workspace == "" || strings.ContainsAny(workspace, "\r\n\x00") {
+			return project{}, fmt.Errorf("workspaces paths must not be empty or contain NUL bytes or line breaks")
+		}
+	}
+	if err := validateIsolatedDirectories(config.Isolated); err != nil {
+		return project{}, err
+	}
+	return config, nil
+}
+
+func validateIsolatedDirectories(paths []string) error {
+	for _, path := range paths {
+		normalized := path != "" && !strings.HasPrefix(path, "/") && safeMountPath(path)
+		for _, part := range strings.Split(path, "/") {
+			if part == "" || part == "." || part == ".." {
+				normalized = false
+			}
+		}
+		if !normalized {
+			return fmt.Errorf("isolated_directories paths must be normalized relative directories without colons or control characters")
+		}
+	}
+	for i, path := range paths {
+		for _, other := range paths[i+1:] {
+			if path == other || strings.HasPrefix(path, other+"/") || strings.HasPrefix(other, path+"/") {
+				return fmt.Errorf("isolated_directories paths must not duplicate or overlap")
+			}
+		}
+	}
+	return nil
 }
 
 func settingsProfile(host string) string {

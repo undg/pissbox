@@ -137,8 +137,9 @@ A sandbox can use the credential through the proxy even without reading it;
 use narrow host patterns and scoped credentials.
 
 Global config validation uses the embedded JSON Schema with Go libraries, not
-the sandbox project-setup script, `tomljson`, or `jq`. Project configuration
-validation still needs `tomljson` and `jq`.
+the sandbox project-setup script, `tomljson`, or `jq`. The launcher parses
+project configuration with the same Go TOML library; the sandbox project-setup
+script still validates it before running commands.
 
 Launcher tests use stubbed SBX with real project setup. Real placeholder
 injection and proxy substitution still need a host SBX smoke test.

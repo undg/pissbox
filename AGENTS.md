@@ -77,8 +77,9 @@ dependencies but never installs them automatically.
 ## Launcher and lifecycle contracts
 
 - Read only the primary workspace's `.pissbox.toml` on the host, before settings,
-  shared state, bridge registration, or SBX launch. Host `tomljson` and `jq` are
-  required when the config exists; keep `bin/install` checks and docs aligned.
+  shared state, bridge registration, or SBX launch. Parse and validate it in Go;
+  `jq` remains required only for sandbox listing and deletion. Keep `bin/install`
+  checks and docs aligned.
   Parse as data, never execute `setup` on the host. `workspaces` adds directories
   after CLI workspaces, without changing the primary; paths are literal and
   relative to the primary project, not the config symlink target. Validate

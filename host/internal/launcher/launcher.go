@@ -96,7 +96,7 @@ func run(root, host string, args []string) int {
 	for _, workspace := range o.workspaces {
 		workspaces.append(workspace)
 	}
-	project, status := p.readProject(root, primary)
+	project, status := p.readProject(primary)
 	if status != 0 {
 		return status
 	}

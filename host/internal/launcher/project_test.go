@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,5 +78,73 @@ func TestBrokenConfigLinkPreventsEffects(t *testing.T) {
 	}
 	if _, err := os.Stat(f.state); !os.IsNotExist(err) {
 		t.Fatal("created state")
+	}
+}
+
+func TestParseProjectConfigAcceptsDocumentedValues(t *testing.T) {
+	for name, test := range map[string]struct {
+		text string
+		want project
+	}{
+		"empty": {"", project{}},
+		"all keys": {
+			"setup = [\"pnpm install --frozen-lockfile\"]\nworkspaces = [\"..\", \"../shared-tools\"]\nisolated_directories = [\"node_modules\"]\n",
+			project{
+				Setup:      []string{"pnpm install --frozen-lockfile"},
+				Workspaces: []string{"..", "../shared-tools"},
+				Isolated:   []string{"node_modules"},
+			},
+		},
+		"nested isolated directories": {
+			"isolated_directories = [\"node_modules\", \"packages/app/node_modules\"]",
+			project{Isolated: []string{"node_modules", "packages/app/node_modules"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := parseProject([]byte(test.text))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fmt.Sprint(got) != fmt.Sprint(test.want) {
+				t.Fatalf("got %#v, want %#v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestParseProjectConfigRejectsInvalidDocuments(t *testing.T) {
+	for _, text := range []string{
+		"not toml",
+		"[]",
+		"\"top-level string\"",
+		"setup = [\"a\"]\nsetup = []",
+		"unknown = []",
+		"[setup]\ncommands = []",
+		"workspaces = \"..\"",
+		"setup = 5",
+		"setup = [7]",
+		"setup = [\"a\\u0000b\"]",
+		"workspaces = [\"\"]",
+		"workspaces = [\"a\\nb\"]",
+		"workspaces = [\"a\\u0000b\"]",
+		"isolated_directories = [\"\"]",
+		"isolated_directories = [\"/node_modules\"]",
+		"isolated_directories = [\".\"]",
+		"isolated_directories = [\"..\"]",
+		"isolated_directories = [\"a/../node_modules\"]",
+		"isolated_directories = [\"a/./node_modules\"]",
+		"isolated_directories = [\"a//node_modules\"]",
+		"isolated_directories = [\"node_modules/\"]",
+		"isolated_directories = [\"a:b\"]",
+		"isolated_directories = [\"a\\nb\"]",
+		"isolated_directories = [\"a\\u007fb\"]",
+		"isolated_directories = [\"a\\u0085b\"]",
+		"isolated_directories = [\"a\", \"a\"]",
+		"isolated_directories = [\"a\", \"a/b\"]",
+		"isolated_directories = [\"a/b\", \"a\"]",
+	} {
+		if _, err := parseProject([]byte(text)); err == nil {
+			t.Errorf("accepted %q", text)
+		}
 	}
 }

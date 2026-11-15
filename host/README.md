@@ -55,8 +55,8 @@ The Go launcher locates resources relative to its resolved executable under
 separate CLI process. Global secret configuration uses the Go-only
 `github.com/BurntSushi/toml` and `github.com/santhosh-tekuri/jsonschema/v6`
 dependencies with an embedded schema; no new host CLI dependency was added.
-Host Bash, jq and tomljson remain necessary only for the shared project-schema
-validator.
+The launcher parses project configuration in Go; host `jq` remains necessary
+only for listing and deleting sandboxes.
 
 Go subprocess tests re-execute the instrumented test binary, including signal
 forwarding and bridge cleanup. Linux PTY tests check single-key mode, terminal

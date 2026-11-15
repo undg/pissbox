@@ -52,7 +52,7 @@ if call == ["go", "env", "GOVERSION"]:
 if call == ["sbx", "version"]:
     print("sbx version " + os.environ.get("INSTALL_TEST_SBX", "v0.39.0") + " test-hash")
 '''
-        for name in ("make", "go", "docker", "sbx", "jq", "tomljson"):
+        for name in ("make", "go", "docker", "sbx", "jq"):
             script = self.tools / name
             script.write_text(stub)
             script.chmod(0o755)
@@ -142,7 +142,7 @@ if call == ["sbx", "version"]:
         self.assertTrue(self.target.is_dir())
 
     def test_missing_dependencies_fail_before_any_build(self):
-        for name in ("make", "go", "docker", "sbx", "jq", "tomljson"):
+        for name in ("make", "go", "docker", "sbx", "jq"):
             with self.subTest(name=name):
                 tool = self.tools / name
                 hidden = self.tools / (name + ".hidden")
@@ -196,7 +196,7 @@ if call == ["sbx", "version"]:
                     self.assertIn("These optional vault dependencies are not checked or installed here", result.stdout)
                     self.assertIn("Optional --secret needs SBX secret set-custom --command and --placeholder support", result.stdout)
                     self.assertIn("base SBX version check does not verify this optional capability", result.stdout)
-                    self.assertIn("jq, and tomljson", result.stdout)
+                    self.assertIn("SBX v0.39.0+, and jq", result.stdout)
                     self.assertIn("build the Go launcher/bridge and image", result.stdout)
                     self.assertIn("wrapper for the explicitly built native Go launcher", result.stdout)
                     self.assertIn("PREFIX/bin", result.stdout)

@@ -17,11 +17,6 @@ def flag(call, name):
 
 
 class SecretTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if not shutil.which("tomljson") or not shutil.which("jq"):
-            raise unittest.SkipTest("Secret setup tests require tomljson and jq")
-
     def setUp(self):
         fixtures = ROOT / ".cache/test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)

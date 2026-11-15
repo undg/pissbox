@@ -15,11 +15,6 @@ TOOL_PATH = os.environ["PATH"] + os.pathsep + str(ROOT / ".cache/bin")
 
 
 class IsolatedDirectoriesTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        if not shutil.which("tomljson", path=TOOL_PATH) or not shutil.which("jq", path=TOOL_PATH):
-            raise unittest.SkipTest("Isolation integration tests require tomljson and jq")
-
     def setUp(self):
         fixtures = ROOT / ".cache/test-fixtures"
         fixtures.mkdir(parents=True, exist_ok=True)

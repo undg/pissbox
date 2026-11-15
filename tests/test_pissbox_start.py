@@ -588,22 +588,19 @@ class LauncherTests(unittest.TestCase):
             self.assertIn("readable TOML file", result.stderr)
             self.assertEqual(calls, [])
 
-    def test_config_requires_host_parser_tools_before_launching(self):
+    def test_project_config_needs_no_external_parser_tools(self):
         fixtures = FIXTURES
         with tempfile.TemporaryDirectory(dir=fixtures) as directory:
             project = Path(directory)
-            (project / ".pissbox.toml").write_text("workspaces = []\n")
-            for missing in ("tomljson", "jq"):
-                with self.subTest(missing=missing):
-                    tools = project / missing
-                    tools.mkdir()
-                    for tool in ("bash", "dirname", "readlink", "uname", "tomljson", "jq"):
-                        if tool != missing:
-                            (tools / tool).symlink_to(shutil.which(tool))
-                    result, calls = self.launch(cwd=project, PATH=str(tools))
-                    self.assertNotEqual(result.returncode, 0)
-                    self.assertIn("requires " + missing + " on the host", result.stderr)
-                    self.assertEqual(calls, [])
+            (project / ".pissbox.toml").write_text('workspaces = []\nisolated_directories = []\n')
+            tools = project / "tools"
+            tools.mkdir()
+            (tools / "sbx").symlink_to(ROOT / "tests/fixtures/sbx")
+            for tool in ("bash", "dirname", "python3", "readlink", "uname"):
+                (tools / tool).symlink_to(shutil.which(tool))
+            result, calls = self.launch(cwd=project, PATH=str(tools))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(calls), 1)
 
     def test_management_and_help_ignore_project_config(self):
         fixtures = FIXTURES

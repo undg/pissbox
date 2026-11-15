@@ -13,7 +13,6 @@ Host prerequisites: Make, Go **1.25+**, running Docker with buildx, SBX
 normally `~/go/bin`) on PATH, then from this checkout:
 
 ```bash
-go install github.com/pelletier/go-toml/v2/cmd/tomljson@v2.4.3
 make install
 ```
 
@@ -219,8 +218,8 @@ than merging or overwriting them. It restores into the checkout containing the
 script, regardless of the caller's directory. An interrupted or failed write can
 leave partial artifacts; inspect these before retrying. Nothing loads an image,
 recreates a sandbox, installs dependencies, or changes the launcher link
-automatically. The destination still needs Docker/SBX, plus `jq` and `tomljson`
-when using project configuration. Supply the image and bridge binaries matching its
+automatically. The destination still needs Docker/SBX, plus `jq` for sandbox
+listing and deletion. Supply the image and bridge binaries matching its
 architecture, including the launcher binary; installed sandbox npm dependencies
 must also support that architecture. A packaged host does not need Go to launch.
 

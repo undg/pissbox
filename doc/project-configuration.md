@@ -12,8 +12,9 @@ setup = ["pnpm install --frozen-lockfile", "colgrep init"]
 All keys are optional arrays of strings; omitted keys and empty arrays do
 nothing. Unknown keys, wrong types, and NUL bytes are rejected. Only the primary
 config is read—no parent or additional-workspace search. Help/list/delete skip it.
-The host requires `jq` and `tomljson` on PATH, even for an empty config;
-see [installation](../README.md#start).
+The launcher parses and validates this file in Go before settings, state, or
+SBX effects. The sandbox validates it again before running `setup`, where
+`tomljson` and `jq` are available in the image.
 
 **Review unfamiliar configs:** mounts are read-write, and setup can modify
 mounted host files, including shared Pi/tool state. Setup never runs on the host.
