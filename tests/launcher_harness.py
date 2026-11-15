@@ -37,6 +37,7 @@ def checkout_root():
     )
     # Copy only public fixtures/resources, never credentials or generated Pi state.
     shutil.copytree(SOURCE_ROOT / "sbx-kit", checkout / "sbx-kit")
+    shutil.copy2(SOURCE_ROOT / "README.md", checkout / "README.md")
     shutil.copytree(SOURCE_ROOT / "tests/fixtures", checkout / "tests/fixtures", symlinks=True)
     pi = checkout / "pi-agent"
     pi.mkdir()

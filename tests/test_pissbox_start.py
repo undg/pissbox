@@ -986,14 +986,17 @@ class LauncherTests(unittest.TestCase):
                 self.assertIn("Usage:", result.stdout)
                 self.assertEqual(calls, [])
 
-    def test_help_is_a_quick_reference_with_examples_and_documentation(self):
+    def test_help_is_a_quick_reference_with_workspaces_and_documentation(self):
         result, calls = self.launch("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         for text in ("Options:", "--secret ENV_NAME HOST COMMAND", "creation only (repeatable)",
-                     "loses sandbox-local data", "Examples:", "pissbox --continue",
-                     "pissbox --secret GH_TOKEN api.github.com", "sbx-kit/README.md", "doc/secrets.md"):
+                     "loses sandbox-local data", "pissbox --ls", "pissbox --delete DIR",
+                     "pissbox --name pi-sbx-and-cfg", "Documentation:",
+                     str(ROOT / "README.md")):
             with self.subTest(text=text):
                 self.assertIn(text, result.stdout)
+        self.assertNotIn("Examples:", result.stdout)
+        self.assertTrue((ROOT / "README.md").is_file())
         self.assertEqual(calls, [])
 
     def test_help_needs_only_wrapper_utilities_not_runtime_commands(self):

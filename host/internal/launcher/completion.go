@@ -54,6 +54,33 @@ func writeCompletion(shell string, out io.Writer) error {
 	return err
 }
 
+func exclusiveFlags(args []string) bool {
+	for _, name := range []string{"--bridge-stop", "--bridge-reload", "--ls", "--help", "--version", "-l", "-h", "-v"} {
+		if flagBeforeSeparator(args, name, false) {
+			return true
+		}
+	}
+	return flagBeforeSeparator(args, "--completion", true)
+}
+
+// flagBeforeSeparator reports a flag before `--`; everything after the separator
+// is a workspace path. valueOnly matches an attached value, not the bare flag.
+func flagBeforeSeparator(args []string, name string, valueOnly bool) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if valueOnly {
+			if strings.HasPrefix(arg, name+"=") {
+				return true
+			}
+		} else if arg == name {
+			return true
+		}
+	}
+	return false
+}
+
 // requestCompletion is entered only through the leading internal --complete
 // flag. It never loads config, probes commands, or enters the launch lifecycle.
 func requestCompletion(args []string, out io.Writer) error {
@@ -66,6 +93,19 @@ func requestCompletion(args []string, out io.Writer) error {
 		// An incomplete secret triple (or invalid earlier input) must not leak
 		// commands into diagnostics or trigger unrelated filesystem completion.
 		_, err = fmt.Fprintf(out, ":%d\n", cobra.ShellCompDirectiveNoFileComp)
+		return err
+	}
+	if exclusiveFlags(normalized) {
+		_, err := fmt.Fprintf(out, ":%d\n", cobra.ShellCompDirectiveNoFileComp)
+		return err
+	}
+	if flagBeforeSeparator(normalized, "--delete", true) {
+		if flagBeforeSeparator(normalized, "--yes", false) || flagBeforeSeparator(normalized, "-y", false) {
+			_, err := fmt.Fprintf(out, ":%d\n", cobra.ShellCompDirectiveNoFileComp)
+			return err
+		}
+		yes := cmd.Flags().Lookup("yes")
+		_, err := fmt.Fprintf(out, "--yes\t%s\n-y\t%s\n:%d\n", yes.Usage, yes.Usage, cobra.ShellCompDirectiveNoFileComp)
 		return err
 	}
 	cmd.SetOut(out)

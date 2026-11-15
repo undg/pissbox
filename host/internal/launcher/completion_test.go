@@ -47,6 +47,11 @@ func TestCompletionRequests(t *testing.T) {
 		{"directory flag", []string{"--pissbox-pi-dir", ""}, ":16\n"},
 		{"directory equals", []string{"--pissbox-state-dir=par"}, ":16\n"},
 		{"delete directories", []string{"-d", ""}, ":16\n"},
+		{"missing delete value", []string{"--delete", ""}, ":16\n"},
+		{"after delete value", []string{"--delete", "/tmp", ""}, "--yes\t"},
+		{"after delete value with yes", []string{"--delete", "/tmp", "--yes", ""}, ":4\n"},
+		{"after delete short", []string{"-d", "/tmp", ""}, "--yes\t"},
+		{"delete flag as workspace", []string{"--", "--delete=/tmp", ""}, ":16\n"},
 		{"after separator", []string{"--", "--na"}, ":16\n"},
 		{"sandbox name", []string{"--name", ""}, ":4\n"},
 		{"shell names", []string{"--completion", ""}, "bash\nzsh\nfish\npowershell\n:4\n"},
@@ -56,6 +61,16 @@ func TestCompletionRequests(t *testing.T) {
 		{"secret command", []string{"--secret", "API", "example.com", ""}, ":4\n"},
 		{"after secret", []string{"--secret", "API", "example.com", "get_token --name help", "--na"}, "--name\t"},
 		{"workspace after secret", []string{"--secret", "API", "example.com", "get_token", ""}, ":16\n"},
+		{"after bridge reload", []string{"--bridge-reload", ""}, ":4\n"},
+		{"after bridge stop", []string{"--bridge-stop", ""}, ":4\n"},
+		{"after list", []string{"--ls", ""}, ":4\n"},
+		{"after short list", []string{"-l", ""}, ":4\n"},
+		{"after help", []string{"--help", ""}, ":4\n"},
+		{"after short help", []string{"-h", ""}, ":4\n"},
+		{"after version", []string{"--version", ""}, ":4\n"},
+		{"after short version", []string{"-v", ""}, ":4\n"},
+		{"after completion shell", []string{"--completion", "zsh", ""}, ":4\n"},
+		{"exclusive flag as workspace", []string{"--", "--bridge-reload", ""}, ":16\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
@@ -152,8 +167,13 @@ func TestHelpAndCompletionHaveNoLaunchSideEffects(t *testing.T) {
 					t.Fatalf("unexpected side effect at %s: %v", path, err)
 				}
 			}
-			if args[0] == "--help" && (strings.Contains(out, "Available Commands:") || !strings.Contains(out, "--completion SHELL")) {
-				t.Fatalf("unexpected help: %s", out)
+			if args[0] == "--help" {
+				if strings.Contains(out, "Available Commands:") || !strings.Contains(out, "--completion SHELL") {
+					t.Fatalf("unexpected help: %s", out)
+				}
+				if !strings.Contains(out, filepath.Join(f.root, "README.md")) {
+					t.Fatalf("help lacks documentation path: %s", out)
+				}
 			}
 		})
 	}

@@ -25,7 +25,6 @@ func newCLI(o *options) *cobra.Command {
 		Use:                   "pissbox [OPTIONS] [WORKSPACE ...]",
 		DisableFlagsInUseLine: true,
 		Short:                 "Start Pi in an SBX sandbox.",
-		Example:               "  pissbox\n  pissbox --continue\n  pissbox --secret GH_TOKEN api.github.com '/usr/local/bin/get-token'\n  pissbox --completion zsh",
 		Args:                  cobra.ArbitraryArgs,
 		SilenceUsage:          true,
 		SilenceErrors:         true,
@@ -35,12 +34,11 @@ func newCLI(o *options) *cobra.Command {
 	}
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	cmd.SetHelpTemplate(helpTemplate)
 	f := cmd.Flags()
 	f.SortFlags = false
 	f.BoolVarP(&o.continued, "continue", "c", false, "Continue the previous Pi session without the menu")
 	f.StringVarP(&o.deleteDir, "delete", "d", "", "Delete matching sandboxes for `DIR`; loses sandbox-local data")
-	f.BoolVarP(&o.recreate, "recreate", "r", false, "Replace the matching sandbox with current config; loses sandbox-local data")
+	f.BoolVarP(&o.recreate, "recreate", "r", false, "Replace the matching sandbox or create it when absent; loses sandbox-local data")
 	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or deletion confirmation")
 	f.BoolVarP(&o.list, "ls", "l", false, "List sandboxes, current-directory matches first")
 	f.StringVar(&o.name, "name", "", "Use an explicit sandbox `NAME`")
@@ -49,7 +47,7 @@ func newCLI(o *options) *cobra.Command {
 	f.StringVar(&o.piDir, "pissbox-pi-dir", "", "Override the shared sandbox Pi configuration directory: `DIR`")
 	f.StringVar(&o.stateDir, "pissbox-state-dir", "", "Override the shared Linux tool-state directory: `DIR`")
 	f.BoolVar(&o.bridgeStop, "bridge-stop", false, "Stop the compatible host bridge daemon")
-	f.BoolVar(&o.bridgeReload, "bridge-reload", false, "Restart the compatible bridge without releasing agents")
+	f.BoolVar(&o.bridgeReload, "bridge-reload", false, "Restart the compatible bridge and re-read host configuration without releasing agents")
 	f.StringVar(&o.completion, "completion", "", "Generate shell integration for `SHELL` (bash, zsh, fish, powershell)")
 	f.BoolVarP(&o.help, "help", "h", false, "Show this help")
 	f.BoolVarP(&o.version, "version", "v", false, "Show the pissbox version")
@@ -80,6 +78,8 @@ func parse(args []string) (options, error) {
 	if err := cmd.ParseFlags(normalized); err != nil {
 		return o, err
 	}
+	// pflag parses interspersed options, so workspaces and flags may alternate;
+	// `--` ends option parsing natively.
 	o.workspaces = cmd.Flags().Args()
 	if o.recreate && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
 		return o, fmt.Errorf("--recreate cannot be combined with list, delete, bridge-stop, or bridge-reload")

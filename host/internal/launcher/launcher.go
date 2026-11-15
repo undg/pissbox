@@ -38,6 +38,7 @@ func run(root, host string, args []string) int {
 	if o.help {
 		cmd := newCLI(&options{})
 		cmd.SetOut(os.Stdout)
+		cmd.SetHelpTemplate(helpText(root))
 		if err := cmd.Help(); err != nil {
 			return fail("%s", err)
 		}
