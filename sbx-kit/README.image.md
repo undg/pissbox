@@ -62,7 +62,9 @@ bin/build-image -- --build-arg PI_VERSION=latest --no-cache
 
 Pins/defaults live in the Dockerfile. These do not pin apt packages. The
 image installs `libatomic1` because upstream Node binaries link
-`libatomic.so.1` and the base template does not ship it.
+`libatomic.so.1` and the base template does not ship it. It installs
+`libc6-dev` alongside `gcc` because `--no-install-recommends` drops the headers
+cgo needs for `go test -race`.
 mise 2026.10.21 is installed from checksum-verified upstream Linux archives for
 amd64 and arm64 into `/usr/local/bin/mise`. Update its version and both checksums
 together. `mise use -g node@26.9.0 pnpm@12.15.0` installs the default Node and
