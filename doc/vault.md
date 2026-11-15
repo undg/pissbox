@@ -33,13 +33,14 @@ per-user daemon, the first launcher that starts it selects `PISSBOX_CONFIG`;
 subsequent sessions do not switch vault configurations. Prefer the normal
 per-user configuration for notes shared across all projects.
 
-Rebuild the host launcher and bridge after upgrading, then **explicitly restart
-the bridge yourself** and reattach through the launcher. Reload Pi to discover
-new tools and the skill. No image rebuild or new vault mount is needed. Changing
-vault configuration also requires an explicit bridge restart. A missing default
-configuration leaves vaults unconfigured; invalid configuration or unavailable
-vault directories disable vault operations without disabling agent messaging.
-The old `~/.config/pi/vault.json` is neither read nor changed.
+Rebuild the host launcher and bridge after upgrading, then restart the bridge
+with `pissbox --bridge-reload` (use `pissbox --bridge-stop` only for a daemon
+that predates reload support) and reattach through the launcher. Reload Pi to
+discover new tools and the skill. No image rebuild or new vault mount is needed.
+The same reload re-reads vault configuration from the global file. A missing
+default configuration leaves vaults unconfigured; invalid configuration or
+unavailable vault directories disable vault operations without disabling agent
+messaging. The old `~/.config/pi/vault.json` is neither read nor changed.
 
 ## Usage
 

@@ -82,12 +82,13 @@ Herd handles notifications according to its settings.
 
 Missing binaries/extensions or bridge failures warn without blocking Pi. No
 network port, MCP server, or new mount is needed; the control socket stays on
-the host. Launcher exit unregisters only its mailbox, not the daemon. Explicit
-`stop` with the matching binary terminates the daemon and releases all agents.
-`reload` replaces the daemon without rotating agent addresses or releasing Herd
-panes, and re-reads the global configuration. After daemon failure, existing
-sessions need launcher reattachment to register fresh mailboxes; a new launch
-does not restore old registrations. Direct SBX launches bypass this integration.
+the host. Launcher exit unregisters only its mailbox, not the daemon.
+`pissbox --bridge-reload` replaces the daemon without rotating agent addresses
+or releasing Herd panes and re-reads the global configuration, including vault
+tables. `pissbox --bridge-stop` terminates the daemon and releases all agents.
+After daemon failure, existing sessions need launcher reattachment to register
+fresh mailboxes; a new launch does not restore old registrations. Direct SBX
+launches bypass this integration.
 See the [bridge guide](../host/README.md) for control commands, limitations,
 shared-state security, testing, and future packaging.
 
