@@ -40,7 +40,7 @@ func newCLI(o *options) *cobra.Command {
 	f.SortFlags = false
 	f.BoolVarP(&o.continued, "continue", "c", false, "Continue the previous Pi session without the menu")
 	f.StringVarP(&o.deleteDir, "delete", "d", "", "Delete matching sandboxes for `DIR`; loses sandbox-local data")
-	f.BoolVar(&o.recreate, "recreate", false, "Replace the matching sandbox with current config; loses sandbox-local data")
+	f.BoolVarP(&o.recreate, "recreate", "r", false, "Replace the matching sandbox with current config; loses sandbox-local data")
 	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or deletion confirmation")
 	f.BoolVarP(&o.list, "ls", "l", false, "List sandboxes, current-directory matches first")
 	f.StringVar(&o.name, "name", "", "Use an explicit sandbox `NAME`")
