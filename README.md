@@ -26,6 +26,8 @@ failed checks/builds preserve the old link. Keep the checkout in place. Missing
 dependencies, login, and PATH changes remain manual (`bin/install --help`).
 Optional [read-only GitHub tools](doc/github.md) require host `gh` with existing
 GitHub.com authentication; the installer does not check or install it.
+Optional [host clipboard copying](doc/clipboard.md) uses `pbcopy` (macOS),
+`wl-copy` (Wayland), or `xclip`/`xsel` (X11), also not checked or installed.
 
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
 on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
@@ -273,6 +275,10 @@ checks through `github_pr_*`, using host `gh` authentication. Reads are explicit
 and paginated; there is no polling, arbitrary command passthrough, or write
 operation. See [GitHub tools](doc/github.md).
 
+The write-only `clipboard_copy({ text })` tool copies text to your host clipboard
+using `pbcopy`, `wl-copy`, `xclip`, or `xsel`, with platform-aware fallback. It
+never reads clipboard contents. See [host clipboard](doc/clipboard.md).
+
 The bridge also provides shared host-only Markdown vaults through `vault_*`
 tools and the `vault-manager` skill. Configure `[vault.<name>]` tables in the
 host global config; vaults are never mounted by this feature. Notes are saved
@@ -334,6 +340,7 @@ validates the kit with SBX and requires Docker sign-in.
 ## Guides
 
 - [Read-only GitHub PR and CI tools through the host bridge](doc/github.md)
+- [Write-only host clipboard through the bridge](doc/clipboard.md)
 - [Usage, settings, and sandbox lifecycle](sbx-kit/README.md)
 - [Image builds, optional CA, and bundled search model](sbx-kit/README.image.md)
 - [Shared Linux tool state](sbx-kit/SHARED-DIRECTORIES.md)

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"syscall"
+
+	"pissbox/host/internal/clipboard"
 )
 
 const handoffVersion = 1
@@ -16,11 +18,12 @@ const maxHandoffBytes = 256 * 1024
 const maxRegistrations = 256
 
 type handoffRegistration struct {
-	ID      string `json:"id"`
-	Mailbox string `json:"mailbox"`
-	Owner   int    `json:"owner"`
-	Socket  string `json:"socket,omitempty"`
-	Pane    string `json:"pane,omitempty"`
+	ID      string                        `json:"id"`
+	Mailbox string                        `json:"mailbox"`
+	Owner   int                           `json:"owner"`
+	Socket  string                        `json:"socket,omitempty"`
+	Pane    string                        `json:"pane,omitempty"`
+	Desktop *clipboard.DesktopEnvironment `json:"desktop,omitempty"`
 }
 
 type handoffFile struct {

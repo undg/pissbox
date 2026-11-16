@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"pissbox/host/internal/clipboard"
 	"pissbox/host/internal/github"
 	"pissbox/host/internal/vault"
 )
@@ -55,17 +56,18 @@ type agentCapabilities struct {
 	Steering bool `json:"steering"`
 }
 type agentRequest struct {
-	Version      int             `json:"version"`
-	ID           string          `json:"id"`
-	Op           string          `json:"op"`
-	To           string          `json:"to,omitempty"`
-	Text         string          `json:"text,omitempty"`
-	Delivery     string          `json:"delivery,omitempty"`
-	InReplyTo    string          `json:"inReplyTo,omitempty"`
-	VaultOp      string          `json:"vaultOp,omitempty"`
-	Params       *vault.Request  `json:"params,omitempty"`
-	GitHubOp     string          `json:"githubOp,omitempty"`
-	GitHubParams *github.Request `json:"githubParams,omitempty"`
+	Version       int             `json:"version"`
+	ID            string          `json:"id"`
+	Op            string          `json:"op"`
+	To            string          `json:"to,omitempty"`
+	Text          string          `json:"text,omitempty"`
+	Delivery      string          `json:"delivery,omitempty"`
+	InReplyTo     string          `json:"inReplyTo,omitempty"`
+	VaultOp       string          `json:"vaultOp,omitempty"`
+	Params        *vault.Request  `json:"params,omitempty"`
+	GitHubOp      string          `json:"githubOp,omitempty"`
+	GitHubParams  *github.Request `json:"githubParams,omitempty"`
+	ClipboardText *string         `json:"clipboardText,omitempty"`
 }
 type peerMessage struct {
 	Version   int           `json:"version"`
@@ -100,6 +102,7 @@ type receiptRecord struct {
 	Status  string `json:"status"`
 }
 type liveAgent struct {
+	desktop         *clipboard.DesktopEnvironment
 	identity        agentIdentity
 	registration    string
 	root            *os.Root
@@ -119,13 +122,15 @@ type pendingMessage struct {
 	deadline  time.Time
 }
 type messageRouter struct {
-	agents        map[string]*liveAgent
-	retired       map[string]bool
-	pending       map[string]*pendingMessage
-	vaultJobs     chan vaultJob
-	vaultResults  chan vaultResult
-	githubJobs    chan githubJob
-	githubResults chan githubResult
+	agents           map[string]*liveAgent
+	retired          map[string]bool
+	pending          map[string]*pendingMessage
+	vaultJobs        chan vaultJob
+	vaultResults     chan vaultResult
+	githubJobs       chan githubJob
+	githubResults    chan githubResult
+	clipboardJobs    chan clipboardJob
+	clipboardResults chan clipboardResult
 }
 
 func randomID() string {
@@ -217,10 +222,13 @@ func validIdentity(a agentIdentity) bool {
 }
 func (r *messageRouter) discover(d *daemon, now time.Time) {
 	d.mu.Lock()
-	type launch struct{ mailbox, generation string }
+	type launch struct {
+		mailbox, generation string
+		desktop             *clipboard.DesktopEnvironment
+	}
 	registrations := make(map[string]launch, len(d.regs))
 	for id, reg := range d.regs {
-		registrations[id] = launch{reg.mailbox, reg.generation}
+		registrations[id] = launch{reg.mailbox, reg.generation, reg.desktop}
 	}
 	d.mu.Unlock()
 	// Silence or filesystem errors are not evidence of process death.
@@ -281,6 +289,7 @@ func (r *messageRouter) discover(d *daemon, now time.Time) {
 				ar.Close()
 			}
 			a.identity = p.Agent
+			a.desktop = launch.desktop
 			a.lastSeen = info.ModTime()
 			a.responsive = now.Sub(a.lastSeen) <= presenceTTL
 		}
@@ -382,6 +391,10 @@ func (r *messageRouter) requests(a *liveAgent) {
 			continue
 		}
 		switch req.Op {
+		case "clipboard_copy":
+			if r.queueClipboard(a, req, &response) {
+				continue
+			}
 		case "github":
 			if r.queueGitHub(a, req, &response) {
 				continue
@@ -563,7 +576,8 @@ func (d *daemon) runMessaging(ctx context.Context) {
 	}()
 	vaultDone := r.startVaultWorker(ctx)
 	githubDone := r.startGitHubWorker(ctx)
-	defer func() { <-vaultDone; <-githubDone }()
+	clipboardDone := r.startClipboardWorker(ctx)
+	defer func() { <-vaultDone; <-githubDone; <-clipboardDone }()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -575,6 +589,10 @@ func (d *daemon) runMessaging(ctx context.Context) {
 				r.respond(a, result.response)
 			}
 		case result := <-r.githubResults:
+			if a := r.agents[result.agent]; a != nil {
+				r.respond(a, result.response)
+			}
+		case result := <-r.clipboardResults:
 			if a := r.agents[result.agent]; a != nil {
 				r.respond(a, result.response)
 			}

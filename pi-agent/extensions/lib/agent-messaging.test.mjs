@@ -140,6 +140,28 @@ test("Pi tools exchange acknowledged messages, native queue options, replies and
 	assert.equal(renamed.agentName, callsign, "renaming the session title does not change agentName");
 });
 
+test("clipboard_copy reaches the host through the live session transport without echoing copied text", async (t) => {
+	const tools = mkdtempSync(path.join(fixtures, "clipboard-tools-"));
+	const output = path.join(tools, "copied");
+	for (const name of ["pbcopy", "wl-copy", "xclip", "xsel"]) {
+		const command = path.join(tools, name);
+		writeFileSync(command, '#!/bin/sh\n/bin/cat > "$CLIP_TEST_OUT"\n');
+		chmodSync(command, 0o700);
+	}
+	const mailbox = daemon(t, "", { PATH: tools, DISPLAY: ":99", WAYLAND_DISPLAY: "wayland-99", CLIP_TEST_OUT: output });
+	const session = nativeSession(mailbox());
+	t.after(() => session.emit("session_shutdown"));
+	session.emit("session_start");
+	for (const text of ["clipboard text 世界\n\t", ""]) {
+		const result = await session.call("clipboard_copy", { text });
+		assert.equal(readFileSync(output, "utf8"), text);
+		assert.deepEqual(result.structuredContent, { backend: process.platform === "darwin" ? "pbcopy" : "wl-copy" });
+		assert.deepEqual(result.details, result.structuredContent);
+		assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
+		assert.equal(session.messages.length, 0);
+	}
+});
+
 test("explicit steering reaches the native queue without changing peer authority or the follow-up default", async (t) => {
 	const mailbox = daemon(t);
 	const rootA = mailbox(), rootB = mailbox();

@@ -18,6 +18,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"pissbox/host/internal/clipboard"
 )
 
 const protocolVersion = 4
@@ -25,13 +27,14 @@ const controlTimeout = 2 * time.Second
 
 // Control is host-only. The sandbox only receives its mailbox directory.
 type controlRequest struct {
-	Version int    `json:"version"`
-	Op      string `json:"op"`
-	Mailbox string `json:"mailbox,omitempty"`
-	Socket  string `json:"socket,omitempty"`
-	Pane    string `json:"pane,omitempty"`
-	Owner   int    `json:"owner,omitempty"`
-	ID      string `json:"id,omitempty"`
+	Version int                           `json:"version"`
+	Op      string                        `json:"op"`
+	Mailbox string                        `json:"mailbox,omitempty"`
+	Socket  string                        `json:"socket,omitempty"`
+	Pane    string                        `json:"pane,omitempty"`
+	Owner   int                           `json:"owner,omitempty"`
+	ID      string                        `json:"id,omitempty"`
+	Desktop *clipboard.DesktopEnvironment `json:"desktop,omitempty"`
 }
 
 type controlResponse struct {
@@ -187,6 +190,9 @@ func controlCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	flags := flag.NewFlagSet(op, flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	req := controlRequest{Op: op}
+	if op == "register" || op == "reconnect" {
+		req.Desktop = clipboard.CurrentDesktop()
+	}
 	switch op {
 	case "register", "reconnect":
 		flags.StringVar(&req.Mailbox, "mailbox", "", "existing mailbox directory")
@@ -355,6 +361,7 @@ func ownerAlive(pid int) bool {
 }
 
 type registration struct {
+	desktop    *clipboard.DesktopEnvironment
 	mailbox    string
 	owner      int
 	generation string
@@ -454,7 +461,7 @@ func (d *daemon) adopt(records []handoffRegistration) []handoffRegistration {
 			dead = append(dead, record)
 			continue
 		}
-		req, err := canonicalRegistration(controlRequest{Mailbox: record.Mailbox, Owner: record.Owner, Socket: record.Socket, Pane: record.Pane})
+		req, err := canonicalRegistration(controlRequest{Mailbox: record.Mailbox, Owner: record.Owner, Socket: record.Socket, Pane: record.Pane, Desktop: record.Desktop})
 		if err != nil || d.duplicate(req) {
 			continue
 		}
@@ -472,7 +479,7 @@ func (d *daemon) adopt(records []handoffRegistration) []handoffRegistration {
 			root.Close()
 			continue
 		}
-		d.regs[record.ID] = &registration{mailbox: req.Mailbox, owner: req.Owner, generation: record.ID, socket: req.Socket, pane: req.Pane, root: root, done: make(chan struct{})}
+		d.regs[record.ID] = &registration{mailbox: req.Mailbox, owner: req.Owner, generation: record.ID, socket: req.Socket, pane: req.Pane, desktop: req.Desktop, root: root, done: make(chan struct{})}
 	}
 	return dead
 }
@@ -528,7 +535,7 @@ func (d *daemon) reload() error {
 	d.reloading = true
 	records := make([]handoffRegistration, 0, len(d.regs))
 	for id, r := range d.regs {
-		records = append(records, handoffRegistration{ID: id, Mailbox: r.mailbox, Owner: r.owner, Socket: r.socket, Pane: r.pane})
+		records = append(records, handoffRegistration{ID: id, Mailbox: r.mailbox, Owner: r.owner, Socket: r.socket, Pane: r.pane, Desktop: r.desktop})
 	}
 	d.mu.Unlock()
 	if err := writeHandoff(d.dir, records); err != nil {
@@ -556,6 +563,7 @@ func (d *daemon) register(req controlRequest) (string, error) {
 	for id, r := range d.regs {
 		if r.mailbox == req.Mailbox || (req.Socket != "" && r.socket == req.Socket && r.pane == req.Pane) {
 			if req.Op == "reconnect" && r.mailbox == req.Mailbox && r.owner == req.Owner && r.socket == req.Socket && r.pane == req.Pane {
+				r.desktop = req.Desktop
 				return id, nil
 			}
 			return "", errors.New("mailbox or Herd pane already registered")
@@ -584,7 +592,7 @@ func (d *daemon) register(req controlRequest) (string, error) {
 		root.Close()
 		return "", errors.New("cannot publish mailbox generation")
 	}
-	r := &registration{mailbox: req.Mailbox, owner: req.Owner, generation: id, socket: req.Socket, pane: req.Pane, root: root, done: make(chan struct{})}
+	r := &registration{mailbox: req.Mailbox, owner: req.Owner, generation: id, socket: req.Socket, pane: req.Pane, desktop: req.Desktop, root: root, done: make(chan struct{})}
 	d.regs[id] = r
 	d.launch(r)
 	return id, nil

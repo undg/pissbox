@@ -1,7 +1,10 @@
 # Host Go code
 
 The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
-and its implementation and colocated tests together in `internal/bridge`.
+and its transport implementation and colocated tests together in `internal/bridge`.
+Host services live alongside it in `internal/clipboard`, `internal/github`, and
+`internal/vault`; the bridge owns their mailbox adapters and worker queues, not
+their domain logic. They share the host module and daemon, not separate processes.
 The default Go launcher lives in `cmd/pissbox` and `internal/launcher`.
 The pure host configuration library lives in `host/config`: it owns the global
 schema for secrets, network permissions, and vaults; TOML and JSON Schema
@@ -74,8 +77,8 @@ preventing Pi from starting.
 The selected Pi directory must contain `extensions/pissbox-bridge.js`,
 `extensions/agent-names.txt`, and the helpers under `extensions/lib/`:
 `agent-messaging.js`, `agent-lifetime.js`, `agent-identity.js`, `vault-tools.js`,
-and `github-tools.js`. The repository's default `pi-agent/` already does;
-alternate Pi directories need these resources too. The footer and bridge share
+`github-tools.js`, and `clipboard-tools.js`. The repository's default `pi-agent/`
+already does; alternate Pi directories need these resources too. The footer and bridge share
 the identity helper and callsign list. Pi discovers the root extension automatically. These
 files are plain JS/text; tests use Node and Go, not a TS compiler.
 
@@ -107,6 +110,13 @@ supervise or stop sandbox Pi. Reattaching through the launcher's Pi choice gets
 a new registration and mailbox; shell/quit/delete do not register another.
 Help/list/delete commands never contact the daemon. Direct `sbx run` bypasses
 this integration.
+
+The bridge also exposes write-only `clipboard_copy({ text })` through host
+`pbcopy`, `wl-copy`, `xclip`, or `xsel`. Each launch supplies its own host desktop
+connection environment over the control socket; daemon reload preserves it.
+Clipboard writes run in a separate serialized worker and never read existing
+clipboard contents. See [host clipboard](../doc/clipboard.md) for backend
+selection, optional dependencies, and failure semantics.
 
 ## Daemon control and restart
 
@@ -184,9 +194,10 @@ the launcher retries its initial registration briefly.
 
 In-flight sends and vault mutations are not transactional across a reload. A
 send that crossed the restart can time out as indeterminate because pending-send
-metadata is deliberately not handed off; vault jobs in the old process are
-cancelled. Never resend automatically. The first upgrade from a daemon built
-before reload support still needs one explicit `--bridge-stop` and launch; the
+metadata is deliberately not handed off; vault and clipboard jobs in the old
+process are cancelled. Clipboard writes may already have completed. Never resend
+automatically. The first upgrade from a daemon built before reload support still
+needs one explicit `--bridge-stop` and launch; the
 old daemon rejects the unknown operation instead of silently doing a destructive
 cold restart.
 

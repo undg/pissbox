@@ -285,7 +285,7 @@ func (f fixture) bridge() {
 	if err := os.Symlink(f.exe, binary); err != nil {
 		f.t.Fatal(err)
 	}
-	for _, path := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-lifetime.js", "extensions/lib/vault-tools.js", "extensions/lib/github-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
+	for _, path := range []string{"extensions/pissbox-bridge.js", "extensions/lib/agent-messaging.js", "extensions/lib/agent-lifetime.js", "extensions/lib/vault-tools.js", "extensions/lib/github-tools.js", "extensions/lib/clipboard-tools.js", "extensions/lib/agent-identity.js", "extensions/agent-names.txt"} {
 		f.write(filepath.Join(f.pi, path), "")
 	}
 }
