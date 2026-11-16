@@ -14,7 +14,7 @@ export ARTIFACT_ARCHIVE = $(ARCHIVE)
 ## help: Show available commands (default)
 help:
 	@awk '/^## / { line = substr($$0, 4); pos = index(line, ":"); printf "  %-22s %s\n", substr(line, 1, pos - 1), substr(line, pos + 2) }' $(MAKEFILE_LIST)
-	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047host/internal/bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
+	@printf '\nMutation scope: BASE=origin/main or FILES="path ..." (required except mutation-all).\nUse DRY_RUN=1 to discover mutants and verify baseline tests without testing mutants.\nQuote paths with spaces inside FILES, e.g. FILES="\047host/bridge/my file.go\047".\nCRAP scope is optional; omitted means all supported source files.\n'
 
 ## install: Check dependencies, build this host's environment and link $PREFIX/bin/pissbox
 install:

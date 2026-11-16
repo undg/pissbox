@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"pissbox/host/internal/clipboard"
-	"pissbox/host/internal/github"
-	"pissbox/host/internal/vault"
+	"pissbox/host/bridge/services/clipboard"
+	"pissbox/host/bridge/services/github"
+	"pissbox/host/bridge/services/vault"
 )
 
 const maxRecordBytes = 32 * 1024

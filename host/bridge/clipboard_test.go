@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"pissbox/host/internal/clipboard"
+	"pissbox/host/bridge/services/clipboard"
 )
 
 func clipboardDirectory(t *testing.T) string {

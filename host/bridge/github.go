@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"pissbox/host/internal/github"
+	"pissbox/host/bridge/services/github"
 )
 
 type githubJob struct {

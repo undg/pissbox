@@ -45,18 +45,18 @@ No global npm installation, image changes, or ignore-rule changes are needed.
 make mutation BASE=origin/main
 make mutation-go BASE=origin/main
 make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
-make mutation-go FILES="host/internal/bridge/mailbox.go host/internal/bridge/herdr.go"
-make mutation-go FILES="host/internal/bridge/mailbox.go" DRY_RUN=1
+make mutation-go FILES="host/bridge/mailbox.go host/bridge/herdr.go"
+make mutation-go FILES="host/bridge/mailbox.go" DRY_RUN=1
 make mutation-all  # Deliberate, potentially expensive full scan
 ```
 
 `FILES` is a shell-quoted list of exact checkout-relative filenames, **not globs**.
 It overrides `BASE`. To preserve a space in a filename, quote it inside the value:
-`FILES="'host/internal/bridge/my file.go' host/internal/bridge/mailbox.go"`. The wrapper parses this as
+`FILES="'host/bridge/my file.go' host/bridge/mailbox.go"`. The wrapper parses this as
 data, without `eval`. Direct invocation accepts individual path arguments:
 
 ```bash
-python3 tools/quality/run.py mutation-go -- 'host/internal/bridge/my file.go'
+python3 tools/quality/run.py mutation-go -- 'host/bridge/my file.go'
 python3 tools/quality/run.py mutation-js --base origin/main --list
 ```
 
@@ -65,7 +65,7 @@ This includes feature commits, staged and unstaged changes, and untracked,
 nonignored files. It does not fetch refs. Added files and rename destinations
 are included. Deleted files, tests, generated-code-marked files, vendor,
 node_modules, and Go testdata are excluded. Supported implementation scope is
-`host/**/*.go` (including nested `cmd/` and `internal/` packages) and
+`host/**/*.go` (including `cmd/`, `launcher/`, and nested `bridge/services/` packages) and
 `pi-agent/extensions/**/*.js`.
 
 A bare mutation target refuses to run without a scope. Invalid refs, missing

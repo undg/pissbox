@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"pissbox/host/internal/github"
+	"pissbox/host/bridge/services/github"
 )
 
 func TestGitHubQueueRefusesMissingParamsAndOverload(t *testing.T) {

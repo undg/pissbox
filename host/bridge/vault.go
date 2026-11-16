@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"pissbox/host/bridge/services/vault"
 	"pissbox/host/config"
-	"pissbox/host/internal/vault"
 )
 
 type vaultJob struct {

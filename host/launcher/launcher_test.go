@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	hostbridge "pissbox/host/internal/bridge"
+	hostbridge "pissbox/host/bridge"
 )
 
 // Re-execute the instrumented test executable, never an ordinary go-build
@@ -209,7 +209,7 @@ func newFixture(t *testing.T) fixture {
 	t.Helper()
 	base := os.Getenv("PISSBOX_BRIDGE_TEST_FIXTURE_DIR")
 	if base == "" {
-		base = filepath.Join("..", "..", "..", ".cache", "test-fixtures")
+		base = filepath.Join("..", "..", ".cache", "test-fixtures")
 	}
 	if err := os.MkdirAll(base, 0700); err != nil {
 		t.Fatal(err)
@@ -266,7 +266,7 @@ func (f fixture) config(text string) {
 	resources := os.Getenv("PISSBOX_LAUNCHER_TEST_RESOURCE_DIR")
 	if resources == "" {
 		_, source, _, _ := runtime.Caller(0)
-		resources = filepath.Join(filepath.Dir(source), "..", "..", "..")
+		resources = filepath.Join(filepath.Dir(source), "..", "..")
 	}
 	source := filepath.Join(resources, "sbx-kit/files/home/.pissbox/scripts/project-setup.sh")
 	data, err := os.ReadFile(source)

@@ -117,7 +117,7 @@ Do not print or commit credentials.
 This kit does not use upstream Anthropic credential injection: it can overwrite
 Pi's shared auth store at startup.
 
-Before every launch, `settingsProfile` in `host/internal/launcher/project.go`
+Before every launch, `settingsProfile` in `host/launcher/project.go`
 selects a tracked `settings-*.json` profile and links `pi-agent/settings.json` to it. Hosts `cm`
 and `di-7415` use `settings-go.json`; others fall back to `settings-co.json`.
 Edit the map to add a host, or add another tracked profile. Do not edit the

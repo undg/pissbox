@@ -93,8 +93,8 @@ headers, token, or shell fragment. There are no checkout, comment, approval,
 merge, workflow-rerun, or other write operations. The GraphQL transport uses POST
 for fixed read queries; it accepts no mutations.
 
-The host implementation is `host/internal/github/`, with thin worker glue in
-`host/internal/bridge/github.go`. Pi schemas and result conversion live in
+The host implementation is `host/bridge/services/github/`, with thin worker glue in
+`host/bridge/github.go`. Pi schemas and result conversion live in
 `pi-agent/extensions/lib/github-tools.js`, registered by the existing bridge
 extension's session transport. No discovery/registration framework was added.
 

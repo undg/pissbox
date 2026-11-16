@@ -10,7 +10,7 @@ import (
 	"sort"
 	"syscall"
 
-	"pissbox/host/internal/clipboard"
+	"pissbox/host/bridge/services/clipboard"
 )
 
 const handoffVersion = 1

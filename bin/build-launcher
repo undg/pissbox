@@ -75,7 +75,7 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 OUTPUT_DIR="$ROOT_DIR/.cache/bin"
 VERSION=$(version_from_git)
-LDFLAGS="-X pissbox/host/internal/launcher.version=$VERSION"
+LDFLAGS="-X pissbox/host/launcher.version=$VERSION"
 
 if ! command -v go >/dev/null 2>&1; then
 	echo "Building the launcher requires Go 1.25 or newer; packaged hosts do not need Go." >&2

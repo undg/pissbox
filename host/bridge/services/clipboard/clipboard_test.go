@@ -15,7 +15,7 @@ func clipboardDirectory(t *testing.T) string {
 	t.Helper()
 	base := os.Getenv("PISSBOX_BRIDGE_TEST_FIXTURE_DIR")
 	if base == "" {
-		base = filepath.Join("..", "..", "..", ".cache", "test-fixtures")
+		base = filepath.Join("..", "..", "..", "..", ".cache", "test-fixtures")
 	}
 	base, err := filepath.Abs(base)
 	if err != nil {

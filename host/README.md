@@ -1,11 +1,26 @@
 # Host Go code
 
 The `pissbox/host` module keeps the bridge executable in `cmd/pissbox-bridge`
-and its transport implementation and colocated tests together in `internal/bridge`.
-Host services live alongside it in `internal/clipboard`, `internal/github`, and
-`internal/vault`; the bridge owns their mailbox adapters and worker queues, not
-their domain logic. They share the host module and daemon, not separate processes.
-The default Go launcher lives in `cmd/pissbox` and `internal/launcher`.
+and its transport implementation and colocated tests together in `bridge/`.
+Host services live under `bridge/services/`; the bridge owns their mailbox
+adapters and worker queues, not their domain logic. They share the host module
+and daemon, not separate processes. The default Go launcher lives in
+`cmd/pissbox` and `launcher/`.
+
+```text
+host/
+├── cmd/
+│   ├── pissbox/
+│   └── pissbox-bridge/
+├── config/
+├── bridge/
+│   └── services/
+│       ├── clipboard/
+│       ├── github/
+│       └── vault/
+└── launcher/
+```
+
 The pure host configuration library lives in `host/config`: it owns the global
 schema for secrets, network permissions, and vaults; TOML and JSON Schema
 validation; path resolution; and starter file creation. It never calls SBX or
@@ -431,7 +446,7 @@ is required. See [GitHub tools](../doc/github.md) for pagination and limits.
 
 ## Extend
 
-Under `internal/bridge`, `mailbox.go` owns the envelope and safe file reads;
+Under `bridge/`, `mailbox.go` owns the envelope and safe file reads;
 `herdr.go` owns Herd requests; `main.go` owns mailbox polling, retries, readiness,
 and final drain; `control.go` owns the host CLI, singleton lock/socket,
 registrations, and owner liveness. `messaging.go` owns the separate
@@ -440,8 +455,8 @@ stalled Herd adapter cannot delay peer messages. The small adapter
 interface separates transport from host integration. Add capabilities explicitly
 with validation and tests, not a generic host RPC passthrough.
 
-`internal/github` owns fixed GitHub queries, host `gh` execution, and result
-bounds. `internal/bridge/github.go` owns its independent bounded worker and
+`bridge/services/github` owns fixed GitHub queries, host `gh` execution, and
+result bounds. `bridge/github.go` owns its independent bounded worker and
 queue adapter; the router only dispatches and returns results.
 `pi-agent/extensions/lib/github-tools.js` defines the five Pi tools over the
 existing session transport. There is no tool discovery or plugin registry.

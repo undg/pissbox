@@ -1,6 +1,6 @@
 package main
 
-import "pissbox/host/internal/bridge"
+import "pissbox/host/bridge"
 
 func main() {
 	bridge.Main()

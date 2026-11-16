@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"pissbox/host/internal/clipboard"
+	"pissbox/host/bridge/services/clipboard"
 )
 
 const protocolVersion = 4

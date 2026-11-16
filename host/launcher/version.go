@@ -2,7 +2,7 @@ package launcher
 
 import "runtime/debug"
 
-// version is set at build time via -ldflags "-X pissbox/host/internal/launcher.version=...".
+// version is set at build time via -ldflags "-X pissbox/host/launcher.version=...".
 // Without an injected release, Go's VCS build stamp is used.
 var version = "dev"
 

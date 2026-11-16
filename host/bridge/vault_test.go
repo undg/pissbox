@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"pissbox/host/internal/vault"
+	"pissbox/host/bridge/services/vault"
 )
 
 func TestVaultRequestsAreDeduplicatedAcrossLostResponses(t *testing.T) {

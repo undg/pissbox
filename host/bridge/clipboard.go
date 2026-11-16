@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"pissbox/host/internal/clipboard"
+	"pissbox/host/bridge/services/clipboard"
 )
 
 type clipboardJob struct {

@@ -22,9 +22,11 @@ or directory name. User guides start at [README.md](README.md).
   during environment work. Use the `bash-cli-style` skill for Bash changes.
 - `.cache/`: gitignored per-worktree build/test artifacts, bridge binaries, and test fixtures.
   Shared Linux tool state lives outside the checkout.
-- `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, implementation
-  and tests in `internal/bridge`. Default launcher entrypoint in `cmd/pissbox`,
-  implementation/tests in `internal/launcher`. `host/config` is the pure global
+- `host/`: host Go module; bridge entrypoint in `cmd/pissbox-bridge`, transport
+  and tests in `bridge/`, and host capabilities in `bridge/services/{clipboard,github,vault}/`.
+  Service packages stay independent of Pi and mailbox transport; bridge adapters
+  own worker queues and routing. Default launcher entrypoint in `cmd/pissbox`,
+  implementation/tests in `launcher/`. `host/config` is the pure global
   configuration library (path resolution, starter creation, embedded JSON Schema,
   TOML/schema validation, deterministic secrets). It must not call SBX or execute
   configured commands. Requires Go 1.25+ to build.
@@ -107,7 +109,7 @@ dependencies but never installs them automatically.
 - `isolated_directories` is opt-in intent, relative to the primary workspace.
   Omitted/empty keeps the ordinary `sbx run` creation path unless `--secret` needs
   staged creation too. Keep the replaceable
-  hidden-mount mechanism in `host/internal/launcher/isolation.go`: create with
+  hidden-mount mechanism in `host/launcher/isolation.go`: create with
   project setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
   mailbox, mount fresh per-instance backing directories, verify markers before
   writable probes, then finalize the same project setup as UID 1000 before Pi.
@@ -175,7 +177,7 @@ dependencies but never installs them automatically.
   or other private data, alert the user before staging. Report paths, never
   secret contents. Do not delete files or change ignore rules without asking.
 - `pi-agent/settings.json` is an ignored generated link. The host-name map
-  `settingsProfile` in `host/internal/launcher/project.go` selects `settings-go.json`
+  `settingsProfile` in `host/launcher/project.go` selects `settings-go.json`
   for `cm`/`di-7415`, otherwise `settings-co.json`, before every launch. Add hosts there and track
   new `settings-*.json` profiles rather than editing the generated link.
   Regular settings files are backed up as `settings.json.replaced*`. Pi writes
@@ -222,10 +224,10 @@ Read affected kit files before editing. Start with `make help`; use:
 | `make coverage` | Fresh Go and JS coverage reports |
 | `make coverage-go` / `make coverage-js` | Coverage for one language |
 | `make metrics BASE=origin/main` | Fresh coverage and scoped CRAP/complexity reports |
-| `make crap-go FILES="host/internal/bridge/mailbox.go"` | CRAP report for one exact Go source file |
+| `make crap-go FILES="host/bridge/mailbox.go"` | CRAP report for one exact Go source file |
 | `make crap-js FILES="pi-agent/extensions/session-name.js"` | CRAP report for one exact extension |
 | `make mutation BASE=origin/main` | Mutants for feature changes in both languages |
-| `make mutation-go FILES="host/internal/bridge/mailbox.go host/internal/bridge/herdr.go"` | Mutants for exact Go files |
+| `make mutation-go FILES="host/bridge/mailbox.go host/bridge/herdr.go"` | Mutants for exact Go files |
 | `make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"` | Mutants for one exact extension |
 
 Replace `origin/main` with the actual feature base; do not assume or fetch it.

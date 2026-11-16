@@ -30,7 +30,7 @@ class BuildLauncherTests(unittest.TestCase):
         self.assertEqual((calls[0]["os"], calls[0]["arch"], calls[0]["cgo"]), ("linux", "arm64", "0"))
         self.assertEqual(calls[0]["cwd"], str(ROOT / "host"))
         self.assertEqual(calls[0]["args"], [
-            "build", "-trimpath", "-ldflags", "-X pissbox/host/internal/launcher.version=v1.2.3-test",
+            "build", "-trimpath", "-ldflags", "-X pissbox/host/launcher.version=v1.2.3-test",
             "-o", str(ROOT / ".cache/bin/pissbox-linux-arm64"), "./cmd/pissbox",
         ])
 
@@ -41,7 +41,7 @@ class BuildLauncherTests(unittest.TestCase):
             ("darwin", "arm64"), ("darwin", "amd64"), ("linux", "arm64"), ("linux", "amd64"),
         ])
         self.assertTrue(all(call["cgo"] == "0" for call in calls))
-        self.assertTrue(all("-X pissbox/host/internal/launcher.version=v1.2.3-test" in call["args"] for call in calls))
+        self.assertTrue(all("-X pissbox/host/launcher.version=v1.2.3-test" in call["args"] for call in calls))
 
     def test_symlink_resolves_checkout_resources(self):
         fixtures = ROOT / ".cache/test-fixtures"

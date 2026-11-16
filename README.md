@@ -317,7 +317,7 @@ make setup-quality-tools  # Install pinned quality tools into shared state
 make coverage    # Fresh Go and JavaScript coverage reports
 make metrics     # Fresh coverage plus complexity and CRAP risk reports
 make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
-make mutation-go FILES="host/internal/bridge/mailbox.go"
+make mutation-go FILES="host/bridge/mailbox.go"
 ```
 
 `make check` does not install quality tools or run mutation testing. `make setup-quality-tools`

@@ -171,11 +171,11 @@ library dependency.
 
 ## Implementation
 
-`host/internal/vault` is an independent domain package with no Pi, SBX, mailbox,
+`host/bridge/services/vault` is an independent domain package with no Pi, SBX, mailbox,
 or configuration-file dependencies. It handles boundaries, note operations,
 frontmatter, scanning, history, and the injectable desktop opener.
 `host/config` only parses/validates trusted configuration.
-`host/internal/bridge/vault.go` adapts configuration and dispatches operations
+`host/bridge/vault.go` adapts configuration and dispatches operations
 through one bounded worker, leaving messaging and heartbeat processing responsive.
 `pi-agent/extensions/lib/vault-tools.js` declares tools over the existing
 session-bound mailbox transport. The host control socket is never exposed.
