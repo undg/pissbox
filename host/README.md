@@ -72,10 +72,11 @@ messaging enabled. Missing binaries/extensions and startup failures warn without
 preventing Pi from starting.
 
 The selected Pi directory must contain `extensions/pissbox-bridge.js`,
-`extensions/lib/agent-messaging.js`, `extensions/lib/agent-identity.js`, and
-`extensions/agent-names.txt`. The repository's default `pi-agent/` already does;
-alternate Pi directories need all four. The footer and bridge share the identity
-helper and callsign list. Pi discovers the root extension automatically. These
+`extensions/agent-names.txt`, and the helpers under `extensions/lib/`:
+`agent-messaging.js`, `agent-lifetime.js`, `agent-identity.js`, `vault-tools.js`,
+and `github-tools.js`. The repository's default `pi-agent/` already does;
+alternate Pi directories need these resources too. The footer and bridge share
+the identity helper and callsign list. Pi discovers the root extension automatically. These
 files are plain JS/text; tests use Node and Go, not a TS compiler.
 
 ```text
@@ -408,6 +409,15 @@ Consumed records are removed; abandoned agent directories and incomplete pending
 files are retained, never silently migrated or deleted. Shared writable state is
 a trusted local transport, not an authorization boundary.
 
+## GitHub reads
+
+The `github_pr_*` tools provide read-only PR lists/details, unified diffs,
+conversation/review/inline comments, and current-head CI checks using host `gh`
+authentication. `gh` is optional and resolved only on an explicit GitHub request;
+missing authentication or CLI does not disable messaging or vault tools. No
+repository checkout, credential mount, startup auth probe, or background polling
+is required. See [GitHub tools](../doc/github.md) for pagination and limits.
+
 ## Extend
 
 Under `internal/bridge`, `mailbox.go` owns the envelope and safe file reads;
@@ -419,8 +429,14 @@ stalled Herd adapter cannot delay peer messages. The small adapter
 interface separates transport from host integration. Add capabilities explicitly
 with validation and tests, not a generic host RPC passthrough.
 
-Review comments, session-log visibility, automatic session restore, and binary
-bundle packaging are not implemented. Herd's notification delivery and active-tab
+`internal/github` owns fixed GitHub queries, host `gh` execution, and result
+bounds. `internal/bridge/github.go` owns its independent bounded worker and
+queue adapter; the router only dispatches and returns results.
+`pi-agent/extensions/lib/github-tools.js` defines the five Pi tools over the
+existing session transport. There is no tool discovery or plugin registry.
+
+Herd-specific review comments, session-log visibility, automatic session restore,
+and binary bundle packaging are not implemented. Herd's notification delivery and active-tab
 suppression settings still apply.
 
 ## Verify

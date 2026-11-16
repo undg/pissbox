@@ -61,7 +61,7 @@ function nativeSession(mailbox, mode = "rpc") {
 		},
 	};
 }
-function daemon(t, configText = "") {
+function daemon(t, configText = "", extraEnv = {}) {
 	const dir = mkdtempSync(path.join(fixtures, "b"));
 	const socket = path.join(dir, "control.sock");
 	assert.ok(Buffer.byteLength(socket) <= 103,
@@ -70,7 +70,7 @@ function daemon(t, configText = "") {
 	execFileSync("go", ["build", "-o", binary, "./cmd/pissbox-bridge"], { cwd: path.join(root, "host"), timeout: 60000 });
 	const config = path.join(dir, "config.toml");
 	writeFileSync(config, configText);
-	const env = { ...process.env, PISSBOX_BRIDGE_RUNTIME_DIR: dir, PISSBOX_CONFIG: config };
+	const env = { ...process.env, ...extraEnv, PISSBOX_BRIDGE_RUNTIME_DIR: dir, PISSBOX_CONFIG: config };
 	const cli = (...args) => execFileSync(binary, args, { env, encoding: "utf8", timeout: 6000 });
 	cli("ensure");
 	t.after(async () => {
@@ -409,6 +409,35 @@ test("shared host-only vault tools persist notes, fence stale writers and keep h
 	await assert.rejects(a.call("vault_read", { path: "../outside.md" }), /vault-relative/);
 	assert.equal(git("rev-list", "--count", "HEAD"), "2", "every successful mutation records one note automatically");
 	assert.match(readFileSync(path.join(notes, "ideas.md"), "utf8"), /Verified shared findings/);
+});
+
+test("GitHub tools cross the real mailbox transport using only explicit host gh reads", async (t) => {
+	const tools = mkdtempSync(path.join(fixtures, "github-tools-"));
+	const calls = path.join(tools, "calls");
+	writeFileSync(path.join(tools, "gh"), `#!/bin/sh
+printf 'call\\n' >> "$GITHUB_TEST_CALLS"
+case "$*" in
+  *pullRequests*) printf '%s' '{"data":{"repository":{"pullRequests":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}' ;;
+  *contexts*) printf '%s' '{"data":{"repository":{"pullRequest":{"headRefOid":"head","commits":{"nodes":[]}}}}}' ;;
+  *graphql*) printf '%s' '{"data":{"repository":{"pullRequest":{"number":7,"headRefOid":"head","body":"PR description"}}}}' ;;
+  *github.diff*) printf '%s' 'diff --git a/file b/file' ;;
+  *) printf '%s' '[{"id":1,"user":{"login":"alice"},"body":"Review comment","html_url":"https://github.com/acme/project/pull/7#comment"}]' ;;
+esac
+`, { mode: 0o700 });
+	const mailbox = daemon(t, "", { PATH: `${tools}${path.delimiter}${process.env.PATH}`, GITHUB_TEST_CALLS: calls });
+	const s = nativeSession(mailbox());
+	t.after(() => s.emit("session_shutdown"));
+	s.emit("session_start");
+	assert.equal(existsSync(calls), false, "startup must not probe GitHub authentication or repositories");
+	assert.deepEqual((await s.call("github_pr_list", { repo: "acme/project", state: "all" })).details.nodes, []);
+	assert.equal((await s.call("github_pr_view", { repo: "acme/project", number: 7 })).structuredContent.body, "PR description");
+	assert.equal((await s.call("github_pr_diff", { repo: "acme/project", number: 7 })).details.diff, "diff --git a/file b/file");
+	assert.equal((await s.call("github_pr_comments", { repo: "acme/project", number: 7, kind: "inline" })).details.items[0].user.login, "alice");
+	assert.equal((await s.call("github_pr_checks", { repo: "acme/project", number: 7 })).details.state, "NONE");
+	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(5), "one host invocation per explicit read");
+	await assert.rejects(s.call("github_pr_view", { repo: "../../outside", number: 7 }), /owner\/repo/);
+	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(5), "host validation rejects unsafe input before gh");
+	assert.equal((await s.call("agent_list")).details.status, "ok");
 });
 
 test("vault startup failures leave agent messaging available and report no false saves", async (t) => {

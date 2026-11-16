@@ -16,6 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"pissbox/host/internal/github"
 	"pissbox/host/internal/vault"
 )
 
@@ -54,15 +55,17 @@ type agentCapabilities struct {
 	Steering bool `json:"steering"`
 }
 type agentRequest struct {
-	Version   int            `json:"version"`
-	ID        string         `json:"id"`
-	Op        string         `json:"op"`
-	To        string         `json:"to,omitempty"`
-	Text      string         `json:"text,omitempty"`
-	Delivery  string         `json:"delivery,omitempty"`
-	InReplyTo string         `json:"inReplyTo,omitempty"`
-	VaultOp   string         `json:"vaultOp,omitempty"`
-	Params    *vault.Request `json:"params,omitempty"`
+	Version      int             `json:"version"`
+	ID           string          `json:"id"`
+	Op           string          `json:"op"`
+	To           string          `json:"to,omitempty"`
+	Text         string          `json:"text,omitempty"`
+	Delivery     string          `json:"delivery,omitempty"`
+	InReplyTo    string          `json:"inReplyTo,omitempty"`
+	VaultOp      string          `json:"vaultOp,omitempty"`
+	Params       *vault.Request  `json:"params,omitempty"`
+	GitHubOp     string          `json:"githubOp,omitempty"`
+	GitHubParams *github.Request `json:"githubParams,omitempty"`
 }
 type peerMessage struct {
 	Version   int           `json:"version"`
@@ -116,11 +119,13 @@ type pendingMessage struct {
 	deadline  time.Time
 }
 type messageRouter struct {
-	agents       map[string]*liveAgent
-	retired      map[string]bool
-	pending      map[string]*pendingMessage
-	vaultJobs    chan vaultJob
-	vaultResults chan vaultResult
+	agents        map[string]*liveAgent
+	retired       map[string]bool
+	pending       map[string]*pendingMessage
+	vaultJobs     chan vaultJob
+	vaultResults  chan vaultResult
+	githubJobs    chan githubJob
+	githubResults chan githubResult
 }
 
 func randomID() string {
@@ -377,6 +382,10 @@ func (r *messageRouter) requests(a *liveAgent) {
 			continue
 		}
 		switch req.Op {
+		case "github":
+			if r.queueGitHub(a, req, &response) {
+				continue
+			}
 		case "vault":
 			if req.Params == nil || r.vaultJobs == nil {
 				response.Error = "vault service unavailable; rebuild and restart the host bridge"
@@ -553,7 +562,8 @@ func (d *daemon) runMessaging(ctx context.Context) {
 		}
 	}()
 	vaultDone := r.startVaultWorker(ctx)
-	defer func() { <-vaultDone }()
+	githubDone := r.startGitHubWorker(ctx)
+	defer func() { <-vaultDone; <-githubDone }()
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -561,6 +571,10 @@ func (d *daemon) runMessaging(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case result := <-r.vaultResults:
+			if a := r.agents[result.agent]; a != nil {
+				r.respond(a, result.response)
+			}
+		case result := <-r.githubResults:
 			if a := r.agents[result.agent]; a != nil {
 				r.respond(a, result.response)
 			}

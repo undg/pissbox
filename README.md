@@ -24,6 +24,8 @@ for that user-local installation. Set `PREFIX=/another/prefix` to link
 elsewhere. It updates existing symlinks but refuses regular files/directories;
 failed checks/builds preserve the old link. Keep the checkout in place. Missing
 dependencies, login, and PATH changes remain manual (`bin/install --help`).
+Optional [read-only GitHub tools](doc/github.md) require host `gh` with existing
+GitHub.com authentication; the installer does not check or install it.
 
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
 on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
@@ -265,6 +267,11 @@ the global configuration, including vault tables. In-flight sends and vault
 writes can still fail as indeterminate; never resend them automatically.
 `make build-bridge-all` cross-compiles for macOS/Linux on arm64/amd64. See the
 [bridge guide](host/README.md) for setup and daemon lifecycle.
+
+The bridge also exposes read-only PR lists/details, diffs, discussion, and CI
+checks through `github_pr_*`, using host `gh` authentication. Reads are explicit
+and paginated; there is no polling, arbitrary command passthrough, or write
+operation. See [GitHub tools](doc/github.md).
 
 The bridge also provides shared host-only Markdown vaults through `vault_*`
 tools and the `vault-manager` skill. Configure `[vault.<name>]` tables in the

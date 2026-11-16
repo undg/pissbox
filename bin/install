@@ -24,6 +24,7 @@ Dependencies are checked, never installed automatically.
 Optional bin/artifacts transfers require Python 3; it is not checked here.
 Optional vault history requires host Git; Obsidian opening requires its URI handler and open (macOS) or xdg-open (Linux).
 These optional vault dependencies are not checked or installed here.
+Optional read-only GitHub tools require host gh with existing authentication; it is not checked or installed here.
 Existing symlinks are updated; regular files and directories are never replaced.
 The link targets bin/pissbox, a wrapper for the explicitly built native Go launcher.
 The checkout must stay in place. Shell configuration is not modified.

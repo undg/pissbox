@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getAgentCallsign } from "./agent-identity.js";
 import { registerVaultTools } from "./vault-tools.js";
+import { registerGitHubTools } from "./github-tools.js";
 
 const MAX_RECORD = 32 * 1024;
 const MAX_TEXT = 16 * 1024;
@@ -306,6 +307,7 @@ export function registerMessaging(pi, mailbox) {
 		});
 	}
 	registerVaultTools(pi, request);
+	registerGitHubTools(pi, request);
 	// JSON Schema is also the wire representation used by Pi's TypeBox tools.
 	pi.registerTool({
 		name: "agent_list", label: "Agent list",
