@@ -1,2 +1,5 @@
 [tools]
 go = "1.27.3"
+
+[env]
+_.file = { path = ".env", optional = true }

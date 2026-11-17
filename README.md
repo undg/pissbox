@@ -324,6 +324,36 @@ make mutation-js FILES="pi-agent/extensions/pissbox-bridge.js"
 make mutation-go FILES="host/bridge/mailbox.go"
 ```
 
+### Local package registry configuration
+
+The committed `mise.toml` optionally loads `.env` from the checkout root. Keep
+machine-specific `GOPROXY`, `GOAUTH`, `NPM_CONFIG_REGISTRY`, and
+`NPM_CONFIG_USERCONFIG` overrides there; `.env` is ignored by Git. Without it,
+Go and npm retain their existing environment and defaults. Do not put credential
+values in `.env`: authentication helpers and npm configuration should reference
+credentials already supplied by the environment. Keep checksum verification enabled.
+
+Use mise to apply the configuration to the complete command, including Make's
+subprocesses; plain `make` does not load `.env` itself:
+
+```bash
+mise exec -- make setup-quality-tools
+mise exec -- make check
+```
+
+To share one local file across worktrees, keep it in the main checkout and add
+this line to the local `.wk.toml` setup hook (for worktrees under `.wk/<name>`):
+
+```sh
+if [ -f ../../.env ]; then ln -s ../../.env .; fi
+```
+
+Keep referenced authentication configuration outside disposable worktree caches.
+Mise is optional for development; an already-configured shell can still run the
+ordinary Make commands directly.
+
+### Quality tooling
+
 `make check` does not install quality tools or run mutation testing. `make setup-quality-tools`
 installs Gremlins and go-crap for Go, plus StrykerJS, c8, and crap4ts for
 JavaScript. Building these tools requires Go 1.26.2+ (or automatic toolchain
