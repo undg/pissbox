@@ -28,6 +28,12 @@ func clipboardRequest(text string) agentRequest {
 	return agentRequest{Op: "clipboard_copy", ClipboardText: &text}
 }
 
+func clipboardCommandRequest(text string) agentRequest {
+	req := clipboardRequest(text)
+	req.ClipboardShellCommand = true
+	return req
+}
+
 func TestClipboardQueueValidationAndOverload(t *testing.T) {
 	mailbox, root := fixture(t)
 	if err := publishRecord(root, "generation", randomID()); err != nil {
@@ -43,6 +49,7 @@ func TestClipboardQueueValidationAndOverload(t *testing.T) {
 		{agentRequest{Op: "clipboard_copy"}, "required"},
 		{clipboardRequest(strings.Repeat("a", maxTextBytes+1)), "16384"},
 		{clipboardRequest("text"), "unavailable"},
+		{clipboardCommandRequest(strings.Repeat("<", 5300)), "cannot fit"},
 	} {
 		id := a.request(t, tc.req)
 		r.requests(live)
@@ -75,6 +82,11 @@ func TestClipboardQueueValidationAndOverload(t *testing.T) {
 	}
 	if cached, ok := live.requests[id]; !ok || cached != nil {
 		t.Fatal("queued request not marked pending")
+	}
+	id = a.request(t, clipboardCommandRequest("make check"))
+	r.requests(live)
+	if got := <-r.clipboardJobs; got.id != id || got.text != "make check" || !got.shellCommand {
+		t.Fatal("command mode did not reach worker", got)
 	}
 }
 
@@ -187,5 +199,16 @@ while [ ! -f "$CLIP_TEST_RELEASE" ]; do /bin/sleep 0.02; done
 	data, err = os.ReadFile(calls)
 	if err != nil || string(data) != wantCalls+"wrong-reload|wrong-reload|/run/test-43|wrong-reload\n" {
 		t.Fatalf("reconnect did not refresh desktop: %q, %v", data, err)
+	}
+	got = a.response(t, a.request(t, clipboardCommandRequest("make check")))
+	data, _ = json.Marshal(got.Result)
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "ok" || result["backend"] != wantBackend || !strings.Contains(result["copiedText"], "make check\n} 2>&1 | tee /dev/tty | "+wantBackend) {
+		t.Fatal("command was not prepared", got)
+	}
+	if data, err := os.ReadFile(out); err != nil || string(data) != result["copiedText"] {
+		t.Fatalf("prepared result differs from clipboard: %q, %v", data, err)
 	}
 }

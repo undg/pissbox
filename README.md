@@ -27,7 +27,8 @@ dependencies, login, and PATH changes remain manual (`bin/install --help`).
 Optional [read-only GitHub tools](doc/github.md) require host `gh` with existing
 GitHub.com authentication; the installer does not check or install it.
 Optional [host clipboard copying](doc/clipboard.md) uses `pbcopy` (macOS),
-`wl-copy` (Wayland), or `xclip`/`xsel` (X11), also not checked or installed.
+`wl-copy` (Wayland), or `xclip`/`xsel` (X11). Its shell-command capture mode also
+uses Bash/zsh and `tee`; these optional capabilities are not checked or installed.
 
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
 on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
@@ -276,8 +277,11 @@ and paginated; there is no polling, arbitrary command passthrough, or write
 operation. See [GitHub tools](doc/github.md).
 
 The write-only `clipboard_copy({ text })` tool copies text to your host clipboard
-using `pbcopy`, `wl-copy`, `xclip`, or `xsel`, with platform-aware fallback. It
-never reads clipboard contents. See [host clipboard](doc/clipboard.md).
+using `pbcopy`, `wl-copy`, `xclip`, or `xsel`, with platform-aware fallback. Agents
+are instructed to copy a single command for you automatically; `shellCommand: true`
+prepares a Bash/zsh wrapper that displays output and copies it back for your reply.
+The bridge never executes that command or reads clipboard contents. See
+[host clipboard](doc/clipboard.md).
 
 The bridge also provides shared host-only Markdown vaults through `vault_*`
 tools and the `vault-manager` skill. Configure `[vault.<name>]` tables in the

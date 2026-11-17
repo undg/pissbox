@@ -56,18 +56,19 @@ type agentCapabilities struct {
 	Steering bool `json:"steering"`
 }
 type agentRequest struct {
-	Version       int             `json:"version"`
-	ID            string          `json:"id"`
-	Op            string          `json:"op"`
-	To            string          `json:"to,omitempty"`
-	Text          string          `json:"text,omitempty"`
-	Delivery      string          `json:"delivery,omitempty"`
-	InReplyTo     string          `json:"inReplyTo,omitempty"`
-	VaultOp       string          `json:"vaultOp,omitempty"`
-	Params        *vault.Request  `json:"params,omitempty"`
-	GitHubOp      string          `json:"githubOp,omitempty"`
-	GitHubParams  *github.Request `json:"githubParams,omitempty"`
-	ClipboardText *string         `json:"clipboardText,omitempty"`
+	Version               int             `json:"version"`
+	ID                    string          `json:"id"`
+	Op                    string          `json:"op"`
+	To                    string          `json:"to,omitempty"`
+	Text                  string          `json:"text,omitempty"`
+	Delivery              string          `json:"delivery,omitempty"`
+	InReplyTo             string          `json:"inReplyTo,omitempty"`
+	VaultOp               string          `json:"vaultOp,omitempty"`
+	Params                *vault.Request  `json:"params,omitempty"`
+	GitHubOp              string          `json:"githubOp,omitempty"`
+	GitHubParams          *github.Request `json:"githubParams,omitempty"`
+	ClipboardText         *string         `json:"clipboardText,omitempty"`
+	ClipboardShellCommand bool            `json:"clipboardShellCommand,omitempty"`
 }
 type peerMessage struct {
 	Version   int           `json:"version"`

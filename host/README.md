@@ -130,8 +130,11 @@ The bridge also exposes write-only `clipboard_copy({ text })` through host
 `pbcopy`, `wl-copy`, `xclip`, or `xsel`. Each launch supplies its own host desktop
 connection environment over the control socket; daemon reload preserves it.
 Clipboard writes run in a separate serialized worker and never read existing
-clipboard contents. See [host clipboard](../doc/clipboard.md) for backend
-selection, optional dependencies, and failure semantics.
+clipboard contents. With `shellCommand: true`, the service prepares (but does not
+execute) a Bash/zsh command that displays stdout/stderr and copies the output back.
+Pi guidelines request automatic use for a single command handed to the user.
+See [host clipboard](../doc/clipboard.md) for backend selection, optional
+dependencies, and failure semantics.
 
 ## Daemon control and restart
 

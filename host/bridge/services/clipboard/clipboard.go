@@ -67,33 +67,70 @@ func Copy(ctx context.Context, desktop *DesktopEnvironment, text string) (string
 	return copyClipboard(ctx, runtime.GOOS, desktop, text)
 }
 
+// CommandResult identifies the backend and the exact prepared command copied.
+type CommandResult struct {
+	Backend    string `json:"backend"`
+	CopiedText string `json:"copiedText"`
+}
+
+// CopyCommand prepares a Bash/zsh command that displays combined stdout/stderr
+// and copies it back through the successful host clipboard backend. It only
+// copies the command text; it never executes that command.
+func CopyCommand(ctx context.Context, desktop *DesktopEnvironment, command string) (CommandResult, error) {
+	return copyText(ctx, runtime.GOOS, desktop, command, true)
+}
+
+func captureCommand(command string, args []string) string {
+	// All executable names and arguments come from clipboardCommands, not callers.
+	backend := args[0]
+	for _, arg := range args[1:] {
+		backend += " '" + arg + "'"
+	}
+	return "(set -o pipefail; {\n" + command + "\n} 2>&1 | tee /dev/tty | " + backend + ")"
+}
+
 func copyClipboard(ctx context.Context, platform string, desktop *DesktopEnvironment, text string) (string, error) {
+	result, err := copyText(ctx, platform, desktop, text, false)
+	return result.Backend, err
+}
+
+func copyText(ctx context.Context, platform string, desktop *DesktopEnvironment, text string, shellCommand bool) (CommandResult, error) {
 	if err := ValidateText(text); err != nil {
-		return "", err
+		return CommandResult{}, err
+	}
+	if shellCommand && (strings.TrimSpace(text) == "" || strings.ContainsRune(text, 0)) {
+		return CommandResult{}, errors.New("shell command must be nonempty and contain no NUL bytes")
 	}
 	if desktop == nil {
 		desktop = CurrentDesktop()
 	}
 	interrupted := errors.New("clipboard request expired or cancelled; clipboard may have changed; do not retry automatically")
 	if ctx.Err() != nil {
-		return "", interrupted
+		return CommandResult{}, interrupted
 	}
 	for _, args := range clipboardCommands(platform, desktop) {
+		copiedText := text
+		if shellCommand {
+			copiedText = captureCommand(text, args)
+		}
+		if err := ValidateText(copiedText); err != nil {
+			return CommandResult{}, errors.New("prepared clipboard text exceeds 16384 bytes; shorten the command")
+		}
 		// Bound each failed backend so a broken Wayland tool cannot prevent X11
 		// fallback. Discard output: clipboard helpers can echo sensitive input.
 		attempt, cancel := context.WithTimeout(ctx, 2*time.Second)
 		cmd := exec.CommandContext(attempt, args[0], args[1:]...)
 		cmd.Env = desktop.environ()
-		cmd.Stdin = strings.NewReader(text)
+		cmd.Stdin = strings.NewReader(copiedText)
 		cmd.WaitDelay = 100 * time.Millisecond
 		err := cmd.Run()
 		cancel()
 		if err == nil {
-			return args[0], nil
+			return CommandResult{Backend: args[0], CopiedText: copiedText}, nil
 		}
 		if ctx.Err() != nil {
-			return "", interrupted
+			return CommandResult{}, interrupted
 		}
 	}
-	return "", errors.New("host clipboard unavailable: use pbcopy on macOS, wl-copy on Wayland, or xclip/xsel on X11; check host PATH and graphical-session access, then reattach if the desktop environment changed")
+	return CommandResult{}, errors.New("host clipboard unavailable: use pbcopy on macOS, wl-copy on Wayland, or xclip/xsel on X11; check host PATH and graphical-session access, then reattach if the desktop environment changed")
 }

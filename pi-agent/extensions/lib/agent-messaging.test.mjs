@@ -140,7 +140,7 @@ test("Pi tools exchange acknowledged messages, native queue options, replies and
 	assert.equal(renamed.agentName, callsign, "renaming the session title does not change agentName");
 });
 
-test("clipboard_copy reaches the host through the live session transport without echoing copied text", async (t) => {
+test("clipboard_copy preserves plain text and prepares shell commands through the live host transport", async (t) => {
 	const tools = mkdtempSync(path.join(fixtures, "clipboard-tools-"));
 	const output = path.join(tools, "copied");
 	for (const name of ["pbcopy", "wl-copy", "xclip", "xsel"]) {
@@ -155,11 +155,15 @@ test("clipboard_copy reaches the host through the live session transport without
 	for (const text of ["clipboard text 世界\n\t", ""]) {
 		const result = await session.call("clipboard_copy", { text });
 		assert.equal(readFileSync(output, "utf8"), text);
-		assert.deepEqual(result.structuredContent, { backend: process.platform === "darwin" ? "pbcopy" : "wl-copy" });
+		assert.deepEqual(result.structuredContent, { backend: process.platform === "darwin" ? "pbcopy" : "wl-copy", copiedText: text });
 		assert.deepEqual(result.details, result.structuredContent);
 		assert.deepEqual(JSON.parse(result.content[0].text), result.structuredContent);
 		assert.equal(session.messages.length, 0);
 	}
+	const prepared = await session.call("clipboard_copy", { text: "printf 'test output'", shellCommand: true });
+	assert.equal(readFileSync(output, "utf8"), prepared.structuredContent.copiedText);
+	assert.match(prepared.structuredContent.copiedText, /^\(set -o pipefail; \{\nprintf 'test output'\n\} 2>&1 \| tee \/dev\/tty \| /);
+	assert.equal(prepared.structuredContent.backend, process.platform === "darwin" ? "pbcopy" : "wl-copy");
 });
 
 test("explicit steering reaches the native queue without changing peer authority or the follow-up default", async (t) => {
