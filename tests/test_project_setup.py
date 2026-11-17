@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,13 +39,33 @@ class ProjectSetupTests(unittest.TestCase):
         command = next(line.split("command: '", 1)[1][:-1]
                        for line in SPEC.read_text().splitlines()
                        if SCRIPT.name in line)
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith("PISSBOX_")
+                       and key not in ("SANDBOX_NAME", "BASH_ENV", "ENV")}
         return subprocess.run(
             ["sh", "-c", command + ' "$@"', "project-setup", *args], cwd=self.root,
-            env={**os.environ, "HOME": str(self.home), "PATH": TOOL_PATH,
+            env={**environment, "HOME": str(self.home), "PATH": TOOL_PATH,
                  "PISSBOX_WORKSPACE_DIR": str(self.workspace) if workspace is None else workspace,
                  **env},
             text=True, capture_output=True, timeout=5,
         )
+
+    def test_ordinary_setup_ignores_ambient_isolation_and_shell_hooks(self):
+        outer_state = self.root / "outer-isolation"
+        outer_state.mkdir()
+        hook = self.root / "ambient-shell-hook"
+        hook.write_text('touch "$HOME/ambient-hook-ran"\nexit 91\n')
+        self.config.write_text('setup = ["touch project-setup-ran"]\n')
+        with patch.dict(os.environ, {
+            "PISSBOX_ISOLATION_DIR": str(outer_state), "SANDBOX_NAME": "outer-sandbox",
+            "BASH_ENV": str(hook), "ENV": str(hook),
+        }):
+            result = self.run_setup()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.workspace / "project-setup-ran").is_file())
+        self.assertEqual(list(outer_state.iterdir()), [])
+        self.assertFalse((self.home / "ambient-hook-ran").exists())
+        self.assertFalse((self.home / ".pissbox/isolation-started").exists())
 
     def test_validation_only_returns_data_without_workspace_env_or_running_commands(self):
         self.config.write_text('workspaces = [".."]\nsetup = ["touch host-marker"]\n')
