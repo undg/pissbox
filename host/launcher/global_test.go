@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"pissbox/host/config"
 )
 
 func TestGlobalSecretsRegisterOnCreationAndNotOnAttach(t *testing.T) {
@@ -127,8 +125,9 @@ command = "/definitely/not/a/real/command"
 func TestDefaultGlobalStarterCreationAndCreationFailureWarning(t *testing.T) {
 	f := newFixture(t)
 	xdg := filepath.Join(f.configDir, "xdg")
-	// The fixture lives under the checkout, which may itself be under HOME.
-	// A separate HOME keeps the expected schema path independent of that.
+	// Force different parent/child HOME values even outside a user's checkout.
+	// The starter must use the launcher's HOME, not the test process's HOME.
+	t.Setenv("HOME", filepath.Dir(f.root))
 	home := t.TempDir()
 	out, status, calls := f.launch("", map[string]string{"PISSBOX_CONFIG": "", "XDG_CONFIG_HOME": xdg, "HOME": home})
 	if status != 0 || kinds(calls) != "run" {
@@ -139,7 +138,7 @@ func TestDefaultGlobalStarterCreationAndCreationFailureWarning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := config.Starter(f.root)
+	want := "#:schema " + filepath.Join(f.root, "host", "config", "global-schema.json") + "\n"
 	if string(data) != want {
 		t.Fatalf("got %q want %q", data, want)
 	}

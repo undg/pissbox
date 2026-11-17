@@ -15,7 +15,9 @@ export function resolvePiEntry(executable) {
 	for (const anchor of ["../libexec/lib/pi.cjs", "../libexec/pi.cjs"]) {
 		const require = createRequire(new URL(anchor, cli));
 		try {
-			return require.resolve("@earendil-works/pi-coding-agent");
+			// Resolve the published API file directly: Pi's exports can be ESM-only,
+			// so resolving the bare package through createRequire would reject it.
+			return require.resolve("./node_modules/@earendil-works/pi-coding-agent/dist/index.js");
 		} catch (error) {
 			if (error.code !== "MODULE_NOT_FOUND") throw error;
 		}

@@ -3,9 +3,13 @@ import os
 from pathlib import Path
 import pty
 import platform
+import select
 import shutil
+import signal
 import subprocess
 import tempfile
+import termios
+import time
 import unittest
 
 from launcher_harness import checkout_root
@@ -960,19 +964,60 @@ class LauncherTests(unittest.TestCase):
         for answer in (b"\n", b"p", b"c", b"s"):
             with self.subTest(answer=answer):
                 master, slave = pty.openpty()
+                process = None
+                completed = False
                 try:
-                    os.write(master, answer)
-                    result = subprocess.run(
+                    original = termios.tcgetattr(slave)
+                    original[6] = [value if isinstance(value, int) else value[0] for value in original[6]]
+                    process = subprocess.Popen(
                         [str(LAUNCHER)], cwd=ROOT,
                         env=self.environment(
                             TEST_SBX_REQUIRE_TTY="1", TEST_SBX_MODE="conflict",
+                            TEST_SBX_TTY_OUTPUT_BYTES="65536",
+                            TEST_SBX_EXPECT_TERMIOS=json.dumps(original),
                         ),
                         stdin=slave, stdout=slave, stderr=subprocess.PIPE,
-                        text=True, timeout=5,
+                        start_new_session=True,
                     )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertIn("Choose [P/c/s/d/q]:", result.stderr)
+                    output, diagnostics = bytearray(), bytearray()
+                    sent = False
+                    deadline = time.monotonic() + 5
+                    while True:
+                        # communicate() cannot drain stdout when it is a PTY,
+                        # and a blocked SBX child keeps the launcher's stderr open.
+                        for stream in select.select([master, process.stderr], [], [], 0.01)[0]:
+                            fd = master if stream == master else stream.fileno()
+                            data = os.read(fd, 65536)
+                            (output if stream == master else diagnostics).extend(data)
+                        # Wait for single-key mode, not merely its earlier prompt.
+                        if not sent and not termios.tcgetattr(slave)[3] & (termios.ICANON | termios.ECHO):
+                            os.write(master, answer)
+                            sent = True
+                        if process.poll() is not None:
+                            _, tail = process.communicate(timeout=5)
+                            diagnostics.extend(tail)
+                            break
+                        if time.monotonic() >= deadline:
+                            self.fail(
+                                f"PTY menu timed out (input sent={sent}): "
+                                f"{diagnostics.decode(errors='replace')}\n"
+                                f"Terminal output tail: {output[-4096:].decode(errors='replace')}"
+                            )
+                    stderr = diagnostics.decode()
+                    self.assertTrue(sent, stderr)
+                    self.assertEqual(process.returncode, 0, stderr)
+                    self.assertIn("Choose [P/c/s/d/q]:", stderr)
+                    self.assertGreaterEqual(output.count(b"x"), 65536)
+                    completed = True
                 finally:
+                    if process is not None:
+                        if not completed:
+                            try:
+                                os.killpg(process.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                        process.wait(timeout=5)
+                        process.stderr.close()
                     os.close(master)
                     os.close(slave)
 

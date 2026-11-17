@@ -19,17 +19,22 @@ test("resolves Pi's API through npm symlinks and Homebrew wrappers", () => {
 	assert.equal(resolvePiEntry(path.join(npmBin, "pi")), path.join(npmDist, "index.js"));
 
 	for (const location of ["libexec/lib", "libexec"]) {
-		const formula = path.join(root, location.replaceAll("/", "-"));
-		const packageRoot = path.join(formula, location, "node_modules/@earendil-works/pi-coding-agent");
-		mkdirSync(path.join(packageRoot, "dist"), { recursive: true });
-		writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ main: "dist/index.js" }));
-		writeFileSync(path.join(packageRoot, "dist/index.js"), "");
-		mkdirSync(path.join(formula, "bin"));
-		const wrapper = path.join(formula, "bin/pi");
-		writeFileSync(wrapper, "#!/bin/sh\n# Homebrew executable wrapper\n");
-		const link = path.join(root, location.replaceAll("/", "-") + "-pi");
-		symlinkSync(wrapper, link);
-		assert.equal(resolvePiEntry(link), path.join(packageRoot, "dist/index.js"));
+		for (const [name, manifest] of [
+			["legacy", { main: "dist/index.js" }],
+			["esm-only", { type: "module", main: "./dist/index.js", exports: { ".": { import: "./dist/index.js" } } }],
+		]) {
+			const formula = path.join(root, `${location.replaceAll("/", "-")}-${name}`);
+			const packageRoot = path.join(formula, location, "node_modules/@earendil-works/pi-coding-agent");
+			mkdirSync(path.join(packageRoot, "dist"), { recursive: true });
+			writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify(manifest));
+			writeFileSync(path.join(packageRoot, "dist/index.js"), "");
+			mkdirSync(path.join(formula, "bin"));
+			const wrapper = path.join(formula, "bin/pi");
+			writeFileSync(wrapper, "#!/bin/sh\n# Homebrew executable wrapper\n");
+			const link = `${formula}-pi`;
+			symlinkSync(wrapper, link);
+			assert.equal(resolvePiEntry(link), path.join(packageRoot, "dist/index.js"));
+		}
 	}
 	const missing = path.join(root, "unsupported-pi");
 	writeFileSync(missing, "");
