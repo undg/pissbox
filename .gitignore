@@ -1,5 +1,6 @@
 # common
 Session.vim
+# Machine-local registry settings; worktrees may link to the main checkout.
 .env
 .tmp/
 __pycache__/
