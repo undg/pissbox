@@ -29,7 +29,8 @@ def conflict(create):
 
 if args[0] == "secret":
     if args[1] == "rm":
-        sys.exit(0)
+        print("delete custom secret: An invalid attempt to change the owner of an item. (-25244)", file=sys.stderr)
+        sys.exit(19)
     assert args[1] == "set-custom"
     if args[2:] == ["--help"]:
         print("--command string --sandbox string --env string --placeholder string")
@@ -37,13 +38,11 @@ if args[0] == "secret":
     data = json.loads(metadata.read_text())
     assert args[args.index("--sandbox") + 1] == data["name"]
     placeholder = args[args.index("--placeholder") + 1]
-    env = args[args.index("--env") + 1]
-    assert data["env"][env] == placeholder, "creation did not receive the registered placeholder"
+    assert placeholder in data["env"].values(), "creation did not receive the registered placeholder"
     assert not (root / "home/.pissbox/isolation-ready").exists(), "secret registered after setup"
-    stale = os.environ.get("TEST_ISOLATION_SECRET_CONFLICT")
-    if stale and not (root / "secret-conflict").exists():
-        (root / "secret-conflict").touch()
-        print(f'error: custom secret env "{env}" already exists in scope "{data["name"]}" with placeholder "{stale}"', file=sys.stderr)
+    stale_env = os.environ.get("TEST_ISOLATION_STALE_SECRET_ENV")
+    if stale_env and "--env" in args and args[args.index("--env") + 1] == stale_env:
+        print(f'error: custom secret env "{stale_env}" already exists in scope "{data["name"]}" with placeholder "sbx-cs-stale"', file=sys.stderr)
         sys.exit(1)
     # Deliberately never execute the resolver; this fixture tests orchestration.
     sys.exit(int(os.environ.get("TEST_ISOLATION_SECRET_STATUS", "0")))

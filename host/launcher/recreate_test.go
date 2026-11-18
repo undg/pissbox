@@ -110,7 +110,7 @@ func TestRecreateRegistersCurrentGlobalSecrets(t *testing.T) {
 		t.Fatalf("status=%d calls=%v: %s", status, calls, out)
 	}
 	secret := calls[4]
-	if flagValue(secret, "--sandbox") != "reported" || flagValue(secret, "--env") != "API" || flagValue(secret, "--host") != "api.example.com" || flagValue(secret, "--command") != "true" {
+	if flagValue(secret, "--sandbox") != "reported" || contains(secret, "--env") || flagValue(secret, "--host") != "api.example.com" || flagValue(secret, "--command") != "true" {
 		t.Fatal("current global secret not registered:", secret)
 	}
 	if !contains(calls[3], "API="+flagValue(secret, "--placeholder")) || !contains(calls[6], "--continue") {

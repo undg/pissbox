@@ -59,7 +59,7 @@ class SecretTests(unittest.TestCase):
         placeholder = flag(calls[2], "--placeholder")
         self.assertTrue(placeholder.startswith("sbx-cs-"), placeholder)
         self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "API", "--host", "*.example.com",
+                                    "--host", "*.example.com",
                                     "--placeholder", placeholder, "--command", command])
         self.assertIn("API=" + placeholder, calls[1])
         self.assertEqual((self.project / "setup-marker").read_text(), "ready")
@@ -82,10 +82,10 @@ class SecretTests(unittest.TestCase):
         api, zed = flag(calls[2], "--placeholder"), flag(calls[3], "--placeholder")
         self.assertNotEqual(api, zed)
         self.assertEqual(calls[2], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "API", "--host", "global.example.com",
+                                    "--host", "global.example.com",
                                     "--placeholder", api, "--command", "printf api"])
         self.assertEqual(calls[3], ["secret", "set-custom", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--env", "ZED", "--host", "z.example.com",
+                                    "--host", "z.example.com",
                                     "--placeholder", zed, "--command", "printf zed"])
         self.assertIn("API=" + api, calls[1])
         self.assertIn("ZED=" + zed, calls[1])
@@ -96,10 +96,10 @@ class SecretTests(unittest.TestCase):
         result, calls = self.launch("--secret", "API", "cli.example.com", "cli_command")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["secret", "create", "secret", "secret", "exec", "run"])
-        self.assertEqual(calls[2][calls[2].index("--env") + 1], "API")
+        self.assertNotIn("--env", calls[2])
         self.assertEqual(calls[2][calls[2].index("--host") + 1], "cli.example.com")
         self.assertEqual(calls[2][calls[2].index("--command") + 1], "cli_command")
-        self.assertEqual(calls[3][calls[3].index("--env") + 1], "ZED")
+        self.assertNotIn("--env", calls[3])
         self.assertIn("API=" + flag(calls[2], "--placeholder"), calls[1])
         self.assertIn("ZED=" + flag(calls[3], "--placeholder"), calls[1])
         self.assertEqual(self.global_config.read_text(), original)
@@ -115,17 +115,20 @@ class SecretTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls], ["run", "exec", "run"])
 
-    def test_stale_sandbox_scoped_secret_is_replaced_during_creation(self):
+    def test_stale_sandbox_scoped_secret_does_not_require_deletion(self):
+        (self.project / ".pissbox.toml").write_text(
+            'setup = [\'printf "%s" "$API" > setup-placeholder\']')
         result, calls = self.launch("--secret", "API", "api.example.com", "get_token",
-                                    TEST_ISOLATION_SECRET_CONFLICT="sbx-cs-stale")
+                                    TEST_ISOLATION_STALE_SECRET_ENV="API")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([call[0] for call in calls],
-                         ["secret", "create", "secret", "secret", "secret", "exec", "run"])
-        self.assertEqual(calls[3], ["secret", "rm", "--sandbox", "sbx-assigned-not-guessed",
-                                    "--placeholder", "sbx-cs-stale", "--force"])
-        placeholder = flag(calls[4], "--placeholder")
+                         ["secret", "create", "secret", "exec", "run"])
+        self.assertNotIn("--env", calls[2])
+        placeholder = flag(calls[2], "--placeholder")
         self.assertNotEqual(placeholder, "sbx-cs-stale")
         self.assertIn("API=" + placeholder, calls[1])
+        self.assertEqual((self.project / "setup-placeholder").read_text(), placeholder)
+        self.assertTrue((self.root / "home/.pissbox/isolation-ready").is_file())
 
     def test_failed_registration_blocks_setup_and_later_pi_shell_attaches(self):
         config = self.project / ".pissbox.toml"

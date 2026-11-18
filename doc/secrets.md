@@ -80,19 +80,24 @@ Entries overridden by a CLI `--secret` are not probed. Commands therefore run
 more than once and must be repeatable and free of side effects. Help, list,
 delete, and bridge-stop never probe.
 
-Staged creation makes the sandbox before the launcher knows its name. Because a
-sandbox-scoped custom secret registered after creation does not populate the
-environment, the launcher generates a unique `sbx-cs-...` placeholder for each
-entry, passes it as `--env ENV_NAME=...` during `sbx create`, and registers the
-same value with `--placeholder`. Project setup, Pi, and later shells therefore
-see the placeholder. The placeholder is not a credential; after the availability
-probe the command remains opaque and its output is never captured.
+Staged creation makes the sandbox before the launcher knows its name. The
+launcher generates a unique `sbx-cs-...` placeholder for each entry, passes it as
+`--env ENV_NAME=...` during `sbx create`, and registers the same value with
+`--placeholder` afterward. Registration deliberately omits `set-custom --env`:
+creation already populated the environment, so an SBX-managed binding is not
+needed. Project setup, Pi, and later shells therefore see the placeholder. The
+placeholder is not a credential; after the availability probe the command remains
+opaque and its output is never captured.
 
 A sandbox name can be reused after deletion while its scoped secret survives in
-SBX. When an environment name from the new configuration already exists in the
-new sandbox's scope, the launcher removes that stale registration by placeholder
-and registers the current one. Conflicts in any other scope are errors and are
-never removed automatically.
+SBX. Fresh registrations use new placeholders without rebinding environment
+names, so stale bindings do not require deletion. The launcher never removes
+existing secret registrations automatically. This avoids the stale-name conflict
+and delete/retry path that fails with macOS Keychain error `-25244` on affected
+SBX installations. It does not repair SBX's secret cleanup: old registrations can
+remain, and sandbox deletion can still report a scoped-secret cleanup failure.
+Real SBX v0.54.0 verification must confirm that explicit creation environment
+values take precedence over stale bindings and proxy substitution works.
 
 To use a different or smaller set for one launch, point `PISSBOX_CONFIG` at
 another file outside writable mounts, including an empty TOML file. To disable

@@ -99,22 +99,12 @@ func testTool() int {
 			return 0
 		}
 		if len(args) > 1 && args[1] == "rm" {
-			return 0
+			fmt.Fprintln(os.Stderr, "delete custom secret: An invalid attempt to change the owner of an item. (-25244)")
+			return 19
 		}
-		if stale := os.Getenv("SECRET_CONFLICT"); stale != "" {
-			marker := os.Getenv("LAUNCHER_LOG") + ".conflict"
-			if _, err := os.Stat(marker); os.IsNotExist(err) {
-				os.WriteFile(marker, nil, 0600)
-				env, scope := flagValue(args, "--env"), flagValue(args, "--sandbox")
-				if override := os.Getenv("SECRET_CONFLICT_ENV"); override != "" {
-					env = override
-				}
-				if override := os.Getenv("SECRET_CONFLICT_SCOPE"); override != "" {
-					scope = override
-				}
-				fmt.Fprintf(os.Stderr, "error: custom secret env %q already exists in scope %q with placeholder %q\n", env, scope, stale)
-				return 1
-			}
+		if staleEnv := os.Getenv("SECRET_STALE_ENV"); staleEnv != "" && flagValue(args, "--env") == staleEnv {
+			fmt.Fprintf(os.Stderr, "error: custom secret env %q already exists in scope %q with placeholder %q\n", staleEnv, flagValue(args, "--sandbox"), "sbx-cs-stale")
+			return 1
 		}
 		n, _ := strconv.Atoi(os.Getenv("SECRET_STATUS"))
 		return n

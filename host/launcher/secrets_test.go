@@ -80,7 +80,7 @@ func TestSecretCreationScopesToReportedIdentityBeforeSetupAndPi(t *testing.T) {
 			if placeholder == "" || argValue(second, "--placeholder") == placeholder {
 				t.Fatal("secret placeholders are not unique", api, second)
 			}
-			if !reflect.DeepEqual(api, []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "*.example.com", "--placeholder", placeholder, "--command", command}) {
+			if !reflect.DeepEqual(api, []string{"secret", "set-custom", "--sandbox", "reported", "--host", "*.example.com", "--placeholder", placeholder, "--command", command}) {
 				t.Fatal(api)
 			}
 			if !contains(calls[1], "API="+placeholder) {
@@ -120,27 +120,21 @@ command = "true"
 `)
 			env := map[string]string{}
 			if stale {
-				env["SECRET_CONFLICT"] = "sbx-cs-stale"
+				env["SECRET_STALE_ENV"] = "API"
 			}
 			out, status, calls := f.launch("", env)
 			wantKinds := "secret,create,secret,exec,run"
-			if stale {
-				wantKinds = "secret,create,secret,secret,secret,exec,run"
-			}
 			if status != 0 || kinds(calls) != wantKinds {
 				t.Fatalf("status=%d calls=%v: %s", status, calls, out)
 			}
 			registration := calls[2]
 			placeholder := argValue(registration, "--placeholder")
-			want := []string{"secret", "set-custom", "--sandbox", "reported", "--env", "API", "--host", "repo.mi.example.com", "--host", "repo.example.com", "--placeholder", placeholder, "--command", "true"}
+			want := []string{"secret", "set-custom", "--sandbox", "reported", "--host", "repo.mi.example.com", "--host", "repo.example.com", "--placeholder", placeholder, "--command", "true"}
 			if !reflect.DeepEqual(registration, want) {
 				t.Fatal("wrong multi-host registration:", registration)
 			}
 			if placeholder == "" || !contains(calls[1], "API="+placeholder) {
 				t.Fatal("registration must use the creation placeholder:", calls)
-			}
-			if stale && !reflect.DeepEqual(calls[4], want) {
-				t.Fatal("retry changed multi-host registration:", calls[4])
 			}
 		})
 	}
@@ -167,42 +161,19 @@ func argValue(call []string, flag string) string {
 	return ""
 }
 
-func TestStaleScopedSecretIsReplacedBeforeSetup(t *testing.T) {
+func TestStaleScopedSecretDoesNotRequireDeletion(t *testing.T) {
 	f := newFixture(t)
-	out, status, calls := f.launch("", map[string]string{"SECRET_CONFLICT": "sbx-cs-stale"}, "--secret", "API", "example.com", "get_token")
-	if status != 0 || kinds(calls) != "secret,create,secret,secret,secret,exec,run" {
+	out, status, calls := f.launch("", map[string]string{"SECRET_STALE_ENV": "API"}, "--secret", "API", "example.com", "get_token")
+	if status != 0 || kinds(calls) != "secret,create,secret,exec,run" {
 		t.Fatalf("%d %v: %s", status, calls, out)
 	}
-	if !reflect.DeepEqual(calls[3], []string{"secret", "rm", "--sandbox", "reported", "--placeholder", "sbx-cs-stale", "--force"}) {
-		t.Fatal(calls[3])
+	registration := calls[2]
+	placeholder := argValue(registration, "--placeholder")
+	if placeholder == "" || placeholder == "sbx-cs-stale" || !contains(calls[1], "API="+placeholder) {
+		t.Fatal("registration did not use the fresh creation placeholder", calls)
 	}
-	placeholder := argValue(calls[4], "--placeholder")
-	if placeholder == "sbx-cs-stale" || !contains(calls[1], "API="+placeholder) {
-		t.Fatal("retry did not register the placeholder given to creation", calls)
-	}
-}
-
-func TestSecretConflictOutsideTheNewScopeStillFails(t *testing.T) {
-	for _, tc := range []map[string]string{
-		{"SECRET_CONFLICT_SCOPE": "global"},
-		{"SECRET_CONFLICT_ENV": "OTHER"},
-	} {
-		t.Run(strings.Join([]string{tc["SECRET_CONFLICT_SCOPE"], tc["SECRET_CONFLICT_ENV"]}, ""), func(t *testing.T) {
-			f := newFixture(t)
-			env := map[string]string{"SECRET_CONFLICT": "sbx-cs-stale"}
-			for key, value := range tc {
-				env[key] = value
-			}
-			out, status, calls := f.launch("", env, "--secret", "API", "example.com", "get_token")
-			if status != 1 || kinds(calls) != "secret,create,secret" || !strings.Contains(out, "already exists") {
-				t.Fatalf("%d %v: %s", status, calls, out)
-			}
-			for _, call := range calls {
-				if len(call) > 1 && call[1] == "rm" {
-					t.Fatal("removed a secret outside the new sandbox scope", call)
-				}
-			}
-		})
+	if contains(registration, "--env") {
+		t.Fatal("registration must not rebind the environment or conflict with stale entries", registration)
 	}
 }
 
@@ -216,7 +187,6 @@ func TestSecretFailuresNeverStartPiOrReplaySetup(t *testing.T) {
 		{"unsupported", map[string]string{"SECRET_UNSUPPORTED": "1"}, "secret", 1},
 		{"missing command", map[string]string{"SECRET_MISSING_FLAG": "--command"}, "secret", 1},
 		{"missing scope", map[string]string{"SECRET_MISSING_FLAG": "--sandbox"}, "secret", 1},
-		{"missing env", map[string]string{"SECRET_MISSING_FLAG": "--env"}, "secret", 1},
 		{"missing placeholder", map[string]string{"SECRET_MISSING_FLAG": "--placeholder"}, "secret", 1},
 		{"creation", map[string]string{"CREATE_FAIL": "7"}, "secret,create", 7},
 		{"missing identity", map[string]string{"NO_IDENTITY": "1"}, "secret,create", 1},
