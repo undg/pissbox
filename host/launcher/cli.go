@@ -13,7 +13,7 @@ import (
 type options struct {
 	name, deleteDir, piDir, stateDir, completion                       string
 	yes, list, bridgeStop, bridgeReload, ignoreConfig, help, continued bool
-	version, recreate                                                  bool
+	version, recreate, shell                                           bool
 	workspaces                                                         []string
 	secrets                                                            []secret
 }
@@ -37,6 +37,7 @@ func newCLI(o *options) *cobra.Command {
 	f := cmd.Flags()
 	f.SortFlags = false
 	f.BoolVarP(&o.continued, "continue", "c", false, "Continue the previous Pi session without the menu")
+	f.BoolVarP(&o.shell, "shell", "s", false, "Open a Bash shell instead of Pi without the menu")
 	f.StringVarP(&o.deleteDir, "delete", "d", "", "Delete matching sandboxes for `DIR`; loses sandbox-local data")
 	f.BoolVarP(&o.recreate, "recreate", "r", false, "Replace the matching sandbox or create it when absent; loses sandbox-local data")
 	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or deletion confirmation")
@@ -81,6 +82,12 @@ func parse(args []string) (options, error) {
 	// pflag parses interspersed options, so workspaces and flags may alternate;
 	// `--` ends option parsing natively.
 	o.workspaces = cmd.Flags().Args()
+	if o.shell && o.continued {
+		return o, fmt.Errorf("--shell cannot be combined with --continue")
+	}
+	if o.shell && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
+		return o, fmt.Errorf("--shell cannot be combined with list, delete, bridge-stop, or bridge-reload")
+	}
 	if o.recreate && (o.deleteDir != "" || o.list || o.bridgeStop || o.bridgeReload) {
 		return o, fmt.Errorf("--recreate cannot be combined with list, delete, bridge-stop, or bridge-reload")
 	}

@@ -467,6 +467,44 @@ func TestContinueFlagsAttachWithoutPrompt(t *testing.T) {
 		})
 	}
 }
+func TestShellFlagOpensBashWithoutPiOrMenu(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		env    map[string]string
+		status int
+		steps  string
+		shell  string
+	}{
+		{"existing", []string{"--shell"}, map[string]string{"CONFLICT": "1", "SHELL_STATUS": "9"}, 9, "create,exec,exec", "reported"},
+		{"new", []string{"-s"}, map[string]string{"CREATED_NAME": "new-sandbox"}, 0, "create,exec,exec", "new-sandbox"},
+		{"existing but not ready", []string{"-s"}, map[string]string{"CONFLICT": "1", "READINESS_STATUS": "19"}, 19, "create,exec", ""},
+		{"new but setup failed", []string{"-s"}, map[string]string{"FINALIZE_STATUS": "23"}, 23, "create,exec", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.bridge()
+			out, status, calls := f.launch("", tc.env, tc.args...)
+			if status != tc.status || kinds(calls) != tc.steps || strings.Contains(out, "Choose [") {
+				t.Fatalf("status=%d calls=%v: %s", status, calls, out)
+			}
+			if tc.shell != "" {
+				if last := calls[len(calls)-1]; fmt.Sprint(last) != fmt.Sprint([]string{"exec", "-it", tc.shell, "bash"}) {
+					t.Fatalf("not a Bash attach: %v", last)
+				}
+			}
+		})
+	}
+}
+
+func TestShellAndContinueAreMutuallyExclusive(t *testing.T) {
+	f := newFixture(t)
+	out, status, calls := f.launch("", nil, "-s", "-c")
+	if status == 0 || len(calls) != 0 || !strings.Contains(out, "--shell cannot be combined with --continue") {
+		t.Fatalf("status=%d calls=%v: %s", status, calls, out)
+	}
+}
+
 func TestBridgeLifecycleDoesNotReplaceSessionFailure(t *testing.T) {
 	for _, failed := range []bool{false, true} {
 		t.Run(strconv.FormatBool(failed), func(t *testing.T) {

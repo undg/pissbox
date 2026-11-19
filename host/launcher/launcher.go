@@ -128,7 +128,7 @@ func run(root, host string, args []string) int {
 		return status
 	}
 	secrets := mergeSecrets(accessibleSecrets(global.Secrets, o.secrets), o.secrets)
-	staged := len(project.Isolated) > 0 || len(secrets) > 0
+	staged := len(project.Isolated) > 0 || len(secrets) > 0 || o.shell
 	var registrations []registeredSecret
 	if len(secrets) > 0 {
 		if status := p.checkSbxSecretFlag(); status != 0 {
@@ -173,7 +173,7 @@ func run(root, host string, args []string) int {
 	defer bridge.stop()
 	isolation := ""
 	if staged {
-		// Reuse the deferred-setup mailbox even when no isolated mounts are needed.
+		// Shell mode also uses the mailbox: get SBX's assigned name without starting Pi.
 		isolation, err = os.MkdirTemp(state, "isolation.")
 		if err != nil {
 			return fail("%s", err)
@@ -217,9 +217,7 @@ func run(root, host string, args []string) int {
 		if status != 0 {
 			return status
 		}
-		bridge.start(root, pi, state)
-		attach := append([]string{"run", "--name", name}, bridge.env...)
-		return p.sbx(append(attach, o.piArgs()...)...)
+		return p.openSession(root, pi, state, name, o, &bridge)
 	}
 	bridge.stop()
 	name := conflictName(diagnostic, isolation != "", o.name)
@@ -252,12 +250,13 @@ func conflictName(diagnostic string, isolated bool, requested string) string {
 	return match[1]
 }
 func (p *processes) existing(root, pi, state, name string, o options, bridge *registration) int {
-	if !o.yes && !o.continued {
+	showMenu := !o.yes && !o.continued && !o.shell
+	if showMenu {
 		fmt.Fprintf(os.Stderr, "Sandbox '%s' already exists.\n\n  p) Open Pi [default]\n  c) Continue previous Pi session\n  s) Open shell\n  d) Delete sandbox\n  q) Quit\n\n", name)
 	}
 	for {
 		choice := "p"
-		if !o.yes && !o.continued {
+		if showMenu {
 			fmt.Fprint(os.Stderr, "Choose [P/c/s/d/q]: ")
 			var status int
 			choice, status = p.readInput(true)
@@ -271,15 +270,9 @@ func (p *processes) existing(root, pi, state, name string, o options, bridge *re
 			if status := p.sbx("exec", "--user", "1000", name, "sh", "-eu", "-c", readinessProbe, "pissbox-readiness"); status != 0 {
 				return status
 			}
-			if strings.EqualFold(choice, "s") {
-				return p.sbx("exec", "-it", name, "bash")
-			}
-			if strings.EqualFold(choice, "c") {
-				o.continued = true
-			}
-			bridge.start(root, pi, state)
-			attach := append([]string{"run", "--name", name}, bridge.env...)
-			return p.sbx(append(attach, o.piArgs()...)...)
+			o.shell = o.shell || strings.EqualFold(choice, "s")
+			o.continued = o.continued || strings.EqualFold(choice, "c")
+			return p.openSession(root, pi, state, name, o, bridge)
 		case "d":
 			fmt.Fprintln(os.Stderr, "Deletion loses sandbox-local data. Mounted host files remain.")
 			yes, status := p.confirm("Do you want to delete it? [y/N]")
@@ -296,6 +289,15 @@ func (p *processes) existing(root, pi, state, name string, o options, bridge *re
 			fmt.Fprintln(os.Stderr, "Please choose p, c, s, d, or q.")
 		}
 	}
+}
+
+func (p *processes) openSession(root, pi, state, name string, o options, bridge *registration) int {
+	if o.shell {
+		return p.sbx("exec", "-it", name, "bash")
+	}
+	bridge.start(root, pi, state)
+	attach := append([]string{"run", "--name", name}, bridge.env...)
+	return p.sbx(append(attach, o.piArgs()...)...)
 }
 
 func defaultStateDir() (string, error) {

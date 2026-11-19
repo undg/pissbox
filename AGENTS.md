@@ -107,8 +107,8 @@ dependencies but never installs them automatically.
   sandbox unless `--name` is supplied; do not add custom discovery/bootstrap
   except the narrow opted-in staged creation handshake below.
 - `isolated_directories` is opt-in intent, relative to the primary workspace.
-  Omitted/empty keeps the ordinary `sbx run` creation path unless `--secret` needs
-  staged creation too. Keep the replaceable
+  Omitted/empty keeps the ordinary `sbx run` creation path unless `--secret` or
+  `--shell` needs staged creation. Keep the replaceable
   hidden-mount mechanism in `host/launcher/isolation.go`: create with
   project setup deferred, receive runtime `SANDBOX_NAME` through a unique mounted launch
   mailbox, mount fresh per-instance backing directories, verify markers before
@@ -142,7 +142,9 @@ dependencies but never installs them automatically.
   never require readiness; failures need a new sandbox or explicit user deletion.
 - On the known existing-sandbox conflict, use the name reported by SBX. Enter
   or `p` runs `sbx run --name NAME`; `c` adds `-- --continue` to resume Pi;
-  `s` runs `sbx exec -it NAME bash`; `q` exits.
+  `s` runs `sbx exec -it NAME bash`; `q` exits. `-s` / `--shell` skips the menu,
+  uses the same shell attach, and never starts Pi. If no sandbox matches, it uses
+  the deferred-setup mailbox to get the assigned name and finish setup first.
   Choices are case-insensitive single keypresses; Enter selects Pi. `d` warns about local data loss, requires a
   separate explicit yes, then runs `sbx rm --force NAME` without recreating.
   Invalid input retries; EOF aborts. Other errors preserve output and status.

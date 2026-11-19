@@ -33,7 +33,9 @@ uses Bash/zsh and `tee`; these optional capabilities are not checked or installe
 Run `pissbox` from your project directory; use Pi's `/login` inside the sandbox
 on first use. Use `pissbox -c` / `pissbox --continue`, or press `c` in the
 existing-sandbox menu, to resume the previous Pi session for that workspace.
-Menu letters act without Enter; `pissbox -c` skips the menu.
+Menu letters act without Enter. `pissbox -s` / `pissbox --shell` skips the menu
+and opens Bash instead of Pi, like pressing `s`. If no sandbox matches, it creates
+one and finishes project setup before opening Bash.
 Use `pissbox -r` / `pissbox --recreate` to replace the matching sandbox and
 apply current configuration, mounts, and kit/image changes. It confirms deletion
 of sandbox-local data; mounted host files and shared Pi sessions remain. Add `-c`
