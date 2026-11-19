@@ -272,9 +272,11 @@ writes can still fail as indeterminate; never resend them automatically.
 [bridge guide](host/README.md) for setup and daemon lifecycle.
 
 The bridge also exposes read-only PR lists/details, diffs, discussion, and CI
-checks through `github_pr_*`, using host `gh` authentication. Reads are explicit
-and paginated; there is no polling, arbitrary command passthrough, or write
-operation. See [GitHub tools](doc/github.md).
+checks through `github_pr_*`, plus Actions run/job details and job logs through
+`github_run_view` and `github_job_logs`, using host `gh` authentication. Give an
+agent an Actions run/job URL to diagnose failures. Reads are explicit and
+paginated; there is no polling, arbitrary command passthrough, or write operation.
+See [GitHub tools](doc/github.md).
 
 The write-only `clipboard_copy({ text })` tool copies text to your host clipboard
 using `pbcopy`, `wl-copy`, `xclip`, or `xsel`, with platform-aware fallback. Agents

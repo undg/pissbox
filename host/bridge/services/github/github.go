@@ -20,6 +20,8 @@ var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za
 // Request selects a fixed operation's inputs, never command arguments or API paths.
 type Request struct {
 	Repo   string `json:"repo"`
+	RunID  int64  `json:"runId,omitempty"`
+	JobID  int64  `json:"jobId,omitempty"`
 	Number int    `json:"number,omitempty"`
 	State  string `json:"state,omitempty"`
 	Kind   string `json:"kind,omitempty"`
@@ -49,6 +51,10 @@ func (Service) Execute(ctx context.Context, op string, req Request) (any, error)
 		result, err = comments(ctx, req)
 	case "pr_diff":
 		result, err = diff(ctx, req)
+	case "run_view":
+		result, err = runView(ctx, req)
+	case "job_logs":
+		result, err = jobLogs(ctx, req)
 	}
 	if err != nil {
 		return nil, err
@@ -64,7 +70,7 @@ func validate(op string, r Request) error {
 	if !repositoryPattern.MatchString(r.Repo) || strings.HasSuffix(r.Repo, "/.") || strings.HasSuffix(r.Repo, "/..") {
 		return errors.New("repo must be a github.com owner/repo name, not a URL or host path")
 	}
-	if r.Number < 0 || r.Number > 2147483647 || (op != "pr_list" && r.Number == 0) {
+	if r.Number < 0 || r.Number > 2147483647 || (strings.HasPrefix(op, "pr_") && op != "pr_list" && r.Number == 0) {
 		return errors.New("a positive PR number is required")
 	}
 	if r.Limit < 0 || r.Limit > 50 || r.Page < 0 || r.Page > 10000 || r.Offset < 0 || r.Offset > maxOutputBytes {
@@ -72,6 +78,12 @@ func validate(op string, r Request) error {
 	}
 	if len(r.Cursor) > 1024 || strings.ContainsAny(r.Cursor, "\x00\r\n") {
 		return errors.New("invalid GitHub cursor")
+	}
+	if op == "run_view" || op == "job_logs" {
+		return validateActions(op, r)
+	}
+	if r.RunID != 0 || r.JobID != 0 {
+		return errors.New("unsupported workflow IDs for PR operation")
 	}
 	switch op {
 	case "pr_list":

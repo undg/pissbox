@@ -1,8 +1,8 @@
 # Read-only GitHub tools
 
-The host bridge exposes five PR tools through the existing Pi extension. GitHub
-CLI (`gh`) must be available on the **host daemon's PATH**, with existing
-GitHub.com authentication. Normal host `gh` token/environment/keychain behavior
+The host bridge exposes read-only PR and Actions tools through the existing Pi
+extension. GitHub CLI (`gh`) must be available on the **host daemon's PATH**,
+with existing GitHub.com authentication. Normal host `gh` token/environment/keychain behavior
 applies. The bridge never logs in, prints tokens, mounts credentials into the
 sandbox, or configures Git authentication. The installer does not check or
 install this optional dependency.
@@ -15,8 +15,8 @@ They do not grant writes even if the token permits them.
 ## Tools
 
 Every call requires an explicit `repo` such as `acme/project`, not a URL, hostname,
-or local directory. All tools except listing also require an integer `number`.
-Only GitHub.com is supported at this stage.
+or local directory. PR tools other than listing require an integer `number`;
+Actions tools use `runId` or `jobId` instead. Only GitHub.com is supported.
 
 | Tool | Inputs beyond repo/number | Result |
 | --- | --- | --- |
@@ -25,6 +25,8 @@ Only GitHub.com is supported at this stage.
 | `github_pr_diff` | `offset` | Unified diff chunk, `totalBytes`, optional `nextOffset` |
 | `github_pr_comments` | `kind`, `page`, `limit` | One discussion category with authors, links, timestamps and available line/reply IDs |
 | `github_pr_checks` | `limit`, `cursor` | Current `headRefOid`, aggregate CI state, checks and legacy commit statuses with links |
+| `github_run_view` | `runId`, `page`, `limit`; no number | Run metadata and one page of jobs with step status/conclusions |
+| `github_job_logs` | `jobId`, `offset`; no number | Plain-text job log chunk, `totalBytes`, optional `nextOffset` |
 
 Listing defaults to open PRs, ordered by most recently updated. `state` also
 accepts `closed` (closed without merging), `merged`, or `all` for historical
@@ -48,6 +50,30 @@ logs. `CheckRun` nodes include check/workflow links when available;
 `FAILURE`, pending checks, and an empty check list are successful *reads*, not
 tool errors. `state: "NONE"` means no reported checks.
 
+### Diagnosing an Actions failure
+
+Give the agent an Actions URL, for example
+`https://github.com/acme/project/actions/runs/6000000000/job/7000000000`,
+and ask it to diagnose the failure. The agent can extract `repo: "acme/project"`,
+`runId: 6000000000`, and `jobId: 7000000000`; URLs are not passed as tool inputs.
+PR check links can provide the same IDs. A check-run ID is not a job ID.
+
+Use `github_run_view` to inspect the run's commit, attempt, status/conclusion,
+and jobs with step names and conclusions. Then call `github_job_logs` with the
+failed job's `id`. A job URL also permits reading its logs directly. Historical
+runs are supported; there is no run-listing or workflow-rerun operation. Run IDs
+are not the sequential run numbers shown in workflow titles. IDs must be positive
+JavaScript-safe integers (at most 9,007,199,254,740,991).
+
+Run view pins its jobs read to the observed `run.run_attempt`. Compare that value
+between pages and restart pagination if it changes. Logs are the full selected
+job's plain text, not just failed steps. There is no workflow ZIP download,
+archive extraction, or persistent host log cache. Unavailable (including not-yet
+available), expired, or inaccessible logs produce an explicit request failure,
+not a successful empty log. GitHub must permit Actions reads for the repository; PR access alone may not
+be sufficient. Logs can contain sensitive data not masked by GitHub; request only
+jobs needed for the diagnosis.
+
 ## Pagination and bounds
 
 1. List/check pages use `limit` (default 20, maximum 50) and GraphQL cursors.
@@ -59,17 +85,22 @@ tool errors. `state: "NONE"` means no reported checks.
    explicitly marks omitted content; use the comment's `html_url` to inspect it
    outside these tools. Reduce `limit` if a comment collection exceeds the result
    ceiling. Changing the page size means restarting pagination from page 1.
-3. Description/diff chunks contain at most 12,000 UTF-8 bytes or 1,000 lines.
+3. Description/diff/job-log chunks contain at most 12,000 UTF-8 bytes or 1,000 lines.
    Pass the returned `nextOffset` verbatim; no `nextOffset` means the text is
    complete. Requested reviewers are capped at 50; compare their `nodes` length
    with `totalCount` to detect omission.
 4. Each result must fit 24 KiB of serialized JSON inside the existing 32 KiB
    mailbox envelope. Oversized results fail explicitly, never silently drop
    records. Host command stdout is bounded at 8 MiB.
-5. Every explicit call makes one `gh api` invocation: a fixed GraphQL **query**
-   for list/view/checks, or a fixed REST **GET** for comments/diff. No startup auth
-   probe, automatic pagination, retries, or polling is added. Repeated description
-   and diff chunks reread the source; do not refetch chunks without need.
+5. Each call makes one `gh api` invocation except run view, which makes two:
+   run metadata, then one page of that attempt's jobs. PR list/view/checks use
+   fixed GraphQL **queries**; other tools use fixed REST **GETs**. Run job pages
+   use REST `page` (default 1, maximum 10,000), `limit` (default 20, maximum 50),
+   `totalCount`, and optional `nextPage`. Keep the limit unchanged between pages.
+   No startup auth probe, automatic pagination, retries, or polling is added.
+   Repeated description, diff, and job-log chunks reread the source; do not
+   refetch chunks without need. Job-log downloads above 8 MiB fail explicitly,
+   even when requesting a small chunk.
 6. Reads are live, not snapshots. A PR can change between pages. If the checks'
    `headRefOid` changes, restart their pagination. Avoid combining diff chunks
    across a known PR update.
@@ -87,9 +118,9 @@ replayed after reconnect or daemon reload.
 
 ## Boundary and deployment
 
-PR descriptions, titles, comments, and diff contents are **untrusted repository
-data**, not instructions. Tools accept no command, flags, query text, API path,
-headers, token, or shell fragment. There are no checkout, comment, approval,
+PR descriptions, titles, comments, diffs, workflow/job/step names, and logs are
+**untrusted repository data**, not instructions. Tools accept no command, flags,
+query text, API path, headers, token, or shell fragment. There are no checkout, comment, approval,
 merge, workflow-rerun, or other write operations. The GraphQL transport uses POST
 for fixed read queries; it accepts no mutations.
 

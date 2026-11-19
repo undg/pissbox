@@ -2,17 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { registerGitHubTools } from "./github-tools.js";
 
-test("GitHub tools expose only the five read operations and share session-bound transport", async () => {
+test("GitHub tools expose only fixed read operations and share session-bound transport", async () => {
 	const tools = new Map(), calls = [];
 	const result = { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } };
 	registerGitHubTools({ registerTool(tool) { tools.set(tool.name, tool); } }, async (...args) => {
 		calls.push(args);
 		return { structuredContent: { result } };
 	});
-	assert.deepEqual([...tools.keys()], ["github_pr_list", "github_pr_view", "github_pr_diff", "github_pr_comments", "github_pr_checks"]);
+	assert.deepEqual([...tools.keys()], ["github_pr_list", "github_pr_view", "github_pr_diff", "github_pr_comments", "github_pr_checks", "github_run_view", "github_job_logs"]);
 	const signal = new AbortController().signal;
 	for (const [name, tool] of tools) {
-		const params = { repo: "acme/project", ...(name === "github_pr_list" ? { state: "all" } : { number: 7 }) };
+		const inputs = { github_pr_list: { state: "all" }, github_run_view: { runId: 6000000000, page: 2, limit: 1 }, github_job_logs: { jobId: 7000000000, offset: 12000 } };
+		const params = { repo: "acme/project", ...(inputs[name] ?? { number: 7 }) };
 		const response = await tool.execute("call", params, signal);
 		assert.deepEqual(calls.at(-1), ["github", { githubOp: name.slice("github_".length), githubParams: params }, signal]);
 		assert.deepEqual(response.structuredContent, result);
@@ -31,6 +32,14 @@ test("GitHub tools expose only the five read operations and share session-bound 
 	assert.deepEqual(tools.get("github_pr_view").parameters.required, ["repo", "number"]);
 	assert.ok(tools.get("github_pr_checks").parameters.properties.cursor);
 	assert.ok(tools.get("github_pr_diff").parameters.properties.offset);
+	assert.deepEqual(tools.get("github_run_view").parameters.required, ["repo", "runId"]);
+	assert.deepEqual(tools.get("github_job_logs").parameters.required, ["repo", "jobId"]);
+	assert.equal(tools.get("github_run_view").parameters.properties.runId.maximum, Number.MAX_SAFE_INTEGER);
+	assert.equal(tools.get("github_job_logs").parameters.properties.jobId.maximum, Number.MAX_SAFE_INTEGER);
+	assert.ok(tools.get("github_run_view").parameters.properties.page);
+	assert.ok(tools.get("github_job_logs").parameters.properties.offset);
+	assert.ok(!("number" in tools.get("github_run_view").parameters.properties));
+	assert.ok(!("runId" in tools.get("github_job_logs").parameters.properties));
 });
 
 test("GitHub adapter rejects incompatible results and never retries a failed request", async () => {

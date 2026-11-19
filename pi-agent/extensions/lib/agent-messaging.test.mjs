@@ -447,6 +447,9 @@ case "$*" in
   *contexts*) printf '%s' '{"data":{"repository":{"pullRequest":{"headRefOid":"head","commits":{"nodes":[]}}}}}' ;;
   *graphql*) printf '%s' '{"data":{"repository":{"pullRequest":{"number":7,"headRefOid":"head","body":"PR description"}}}}' ;;
   *github.diff*) printf '%s' 'diff --git a/file b/file' ;;
+  *actions/runs/6000000000/attempts/2/jobs*) printf '%s' '{"total_count":1,"jobs":[{"id":7000000000,"run_id":6000000000,"name":"test","conclusion":"failure","steps":[{"number":3,"name":"Test","conclusion":"failure"}]}]}' ;;
+  *actions/runs/6000000000) printf '%s' '{"id":6000000000,"run_attempt":2,"head_sha":"head","conclusion":"failure"}' ;;
+  *actions/jobs/7000000000/logs) printf '%s' 'test failed: expected 1, got 2' ;;
   *) printf '%s' '[{"id":1,"user":{"login":"alice"},"body":"Review comment","html_url":"https://github.com/acme/project/pull/7#comment"}]' ;;
 esac
 `, { mode: 0o700 });
@@ -460,9 +463,15 @@ esac
 	assert.equal((await s.call("github_pr_diff", { repo: "acme/project", number: 7 })).details.diff, "diff --git a/file b/file");
 	assert.equal((await s.call("github_pr_comments", { repo: "acme/project", number: 7, kind: "inline" })).details.items[0].user.login, "alice");
 	assert.equal((await s.call("github_pr_checks", { repo: "acme/project", number: 7 })).details.state, "NONE");
-	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(5), "one host invocation per explicit read");
+	const run = (await s.call("github_run_view", { repo: "acme/project", runId: 6000000000 })).structuredContent;
+	assert.equal(run.run.conclusion, "failure");
+	assert.equal(run.jobs[0].steps[0].conclusion, "failure");
+	const log = (await s.call("github_job_logs", { repo: "acme/project", jobId: run.jobs[0].id })).details;
+	assert.equal(log.log, "test failed: expected 1, got 2");
+	assert.equal(log.jobId, 7000000000);
+	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(8), "only run view makes two host reads");
 	await assert.rejects(s.call("github_pr_view", { repo: "../../outside", number: 7 }), /owner\/repo/);
-	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(5), "host validation rejects unsafe input before gh");
+	assert.equal(readFileSync(calls, "utf8"), "call\n".repeat(8), "host validation rejects unsafe input before gh");
 	assert.equal((await s.call("agent_list")).details.status, "ok");
 });
 

@@ -43,6 +43,11 @@ func TestGitHubCLIProcess(t *testing.T) {
 		os.Exit(0)
 	}
 	data, _ = os.ReadFile(os.Getenv("GITHUB_TEST_RESPONSE"))
+	if os.Getenv("GITHUB_TEST_API_RESPONSES") == "1" {
+		var responses map[string]json.RawMessage
+		json.Unmarshal(data, &responses)
+		data = responses[call.Args[len(call.Args)-1]]
+	}
 	os.Stdout.Write(data)
 	fmt.Fprintln(os.Stderr, "private-stderr-marker")
 	code, _ := strconv.Atoi(os.Getenv("GITHUB_TEST_EXIT"))
