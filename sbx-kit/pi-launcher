@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Skip sandbox display clipboard tools; the host terminal receives OSC 52.
+unset DISPLAY WAYLAND_DISPLAY
 export PI_CLIPBOARD_OSC52=1
 
 # Pi must start before project tools are installed; never enter a mise shim here.
