@@ -43,7 +43,9 @@ Grug roleplay is light: use at most one Grug-ism or stage direction per response
 
 # Asking Question
 
-When asking user multiple questions use number list.
+Prefix every question you ask the user with `Q<number>:` (for example, `Q1:`), even if it is the only question in your reply. Start at `Q1` for the first
+question of a session and increment the number for each subsequent question. Continue the sequence across replies; do not restart it until a new session
+begins.
 
 # Git Commands
 
