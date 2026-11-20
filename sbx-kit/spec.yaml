@@ -26,6 +26,10 @@ setup:
     - command: 'npm config set cache "$HOME/.cache/npm" --location=user'
       user: "1000"
       description: Use the shared npm cache without replacing image cache data
+    # Run outside the workspace so mise selects the image's pinned pnpm.
+    - command: 'cd "$HOME" && pnpm config set --global store-dir "$HOME/.local/share/pnpm/store"'
+      user: "1000"
+      description: Use the shared pnpm package store
     - command: 'bash "$HOME/.pissbox/scripts/project-setup.sh"'
       user: "1000"
       description: Run primary-workspace .pissbox.toml setup commands once before starting Pi

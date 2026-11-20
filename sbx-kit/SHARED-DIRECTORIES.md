@@ -41,7 +41,12 @@ tool locations as user `1000`.
 
 Project `node_modules` and Python `.venv` directories stay in the project. Kit setup points npm at the shared
 `$HOME/.cache/npm` directory. The image's `$HOME/.npm` is left untouched.
-Existing sandboxes need a new sandbox name to receive the mapping; setup does
+Kit setup also sets pnpm's global `store-dir` to `$HOME/.local/share/pnpm/store`.
+Without that setting, pnpm can choose a fresh store on the project's filesystem
+instead of following the shared-store symlink, including inside isolated
+`node_modules`. Projects can override it with `storeDir` in `pnpm-workspace.yaml`
+or with `--store-dir`.
+Existing sandboxes need a new sandbox name to receive these settings; setup does
 not migrate an existing local cache.
 
 ## Boundaries
@@ -61,7 +66,7 @@ not migrate an existing local cache.
 
 ```bash
 sbx exec <sandbox-name> sh -c 'readlink "$HOME/.cache/huggingface/hub"; readlink "$HOME/.local/share/colgrep"; readlink "$HOME/.local/share/pnpm/store"'
-sbx exec <sandbox-name> pnpm store path
+sbx exec <sandbox-name> pnpm store path  # Expect ~/.local/share/pnpm/store/v11 with pnpm 12.15.0
 sbx exec <sandbox-name> uv cache dir  # If uv is installed
 ```
 

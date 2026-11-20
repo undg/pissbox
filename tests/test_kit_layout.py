@@ -193,6 +193,13 @@ class KitLayoutTests(unittest.TestCase):
         self.assertIn(cache_command, spec)
         self.assertLess(spec.index("link-shared-directories.sh"), spec.index(cache_command))
 
+    def test_pnpm_shared_store_is_configured_before_project_setup(self):
+        spec = SPEC.read_text()
+        store_command = 'pnpm config set --global store-dir "$HOME/.local/share/pnpm/store"'
+        self.assertIn(store_command, spec)
+        self.assertLess(spec.index("link-shared-directories.sh"), spec.index(store_command))
+        self.assertLess(spec.index(store_command), spec.index("project-setup.sh"))
+
 
 if __name__ == "__main__":
     unittest.main()
