@@ -9,7 +9,9 @@
     "extensions/disable-share.ts",
     "extensions/vault/index.ts"
   ],
-  "packages": ["npm:@gotgenes/pi-colgrep"],
+  "packages": [
+    "npm:@gotgenes/pi-colgrep"
+  ],
   "terminal": {
     "showTerminalProgress": true,
     "clearOnShrink": false
@@ -34,7 +36,7 @@
     "mermaid": "streaming"
   },
   "theme": "system",
-  "tuiMode": "regular",
+  "tuiMode": "fullscreen",
   "defaultProvider": "github-copilot",
   "defaultModel": "gpt-6.2-sol",
   "defaultThinkingLevel": "medium",
@@ -45,5 +47,7 @@
   ],
   "extensionChangelogVersions": {
     "{\"source\":\"npm:@gotgenes/pi-colgrep\",\"scope\":\"user\"}": "2.0.0"
-  }
+  },
+  "fullscreenScrollbar": "auto",
+  "fullscreenCopyOnSelect": true
 }
