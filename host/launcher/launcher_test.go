@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -380,6 +381,44 @@ func TestLaunchPreservesArgumentsAndPhysicalDeduplication(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(f.project, "never-on-host")); !os.IsNotExist(err) {
 		t.Fatal("host executed setup")
+	}
+}
+
+func TestLaunchExpandsHostHomeInConfiguredWorkspaces(t *testing.T) {
+	for _, prefix := range []string{"~", "$HOME", "${HOME}"} {
+		t.Run(prefix, func(t *testing.T) {
+			f := newFixture(t)
+			home := filepath.Join(f.root, "host home")
+			workspace := filepath.Join(home, ".dot")
+			f.write(filepath.Join(workspace, "file"), "")
+			f.config(fmt.Sprintf("workspaces = [%q, %q, %q]\n", prefix+"/.dot", prefix, workspace))
+			out, status, calls := f.launch("", map[string]string{"HOME": home})
+			if status != 0 || kinds(calls) != "run" {
+				t.Fatalf("status=%d calls=%v: %s", status, calls, out)
+			}
+			args := calls[0]
+			kit := slices.Index(args, f.root+"/bin/../sbx-kit")
+			want := []string{f.project, workspace, home, f.pi, f.state}
+			if kit < 0 || !slices.Equal(args[kit+1:], want) {
+				t.Fatalf("got SBX args %q; want workspace args %q", args, want)
+			}
+		})
+	}
+}
+
+func TestConfiguredWorkspaceHomeMustBeAbsoluteUnlessIgnored(t *testing.T) {
+	f := newFixture(t)
+	f.config(`workspaces = ["~/.dot"]`)
+	for _, home := range []string{"", "relative"} {
+		env := map[string]string{"HOME": home}
+		out, status, calls := f.launch("", env)
+		if status == 0 || len(calls) != 0 || !strings.Contains(out, "requires an absolute host HOME") {
+			t.Fatalf("HOME=%q: status=%d calls=%v: %s", home, status, calls, out)
+		}
+	}
+	out, status, calls := f.launch("", map[string]string{"HOME": ""}, "--ignore-config-workspaces")
+	if status != 0 || kinds(calls) != "run" {
+		t.Fatalf("status=%d calls=%v: %s", status, calls, out)
 	}
 }
 

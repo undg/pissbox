@@ -4,7 +4,7 @@ Put `.pissbox.toml` in the primary project: the first CLI directory, or the
 current directory when none is given.
 
 ```toml
-workspaces = ["..", "../shared-tools"]
+workspaces = ["..", "../shared-tools", "~/.dot"]
 isolated_directories = ["node_modules", "packages/app/node_modules"]
 setup = ["pnpm install --frozen-lockfile", "colgrep init"]
 ```
@@ -23,8 +23,10 @@ mounted host files, including shared Pi/tool state. Setup never runs on the host
 
 `workspaces` adds directories after CLI mounts without changing the primary.
 Duplicates are removed in order. Paths must be existing directories, absolute
-or relative to the primary project. No `~`, variable, command, or glob expansion;
-empty paths and line breaks are rejected.
+or relative to the primary project. A leading `~`, `$HOME`, or `${HOME}`
+(as the whole path or followed by `/`) resolves to the launcher host's home
+directory. No other variable expansion, command substitution, or globbing is
+performed. Empty paths and line breaks are rejected.
 
 `--ignore-config-workspaces` skips configured mounts and their directory checks,
 not schema validation, CLI/shared mounts, or setup.
@@ -41,8 +43,9 @@ it is not mounted automatically. Broken/unreadable config links fail.
 listed project paths. Source and lockfiles remain shared with the host.
 List every directory explicitly; there is no monorepo discovery.
 
-Paths must be relative and normalized: no empty, `.` or `..` segments, colons,
-control characters, duplicates, or overlaps. Existing files and symlink
+Paths are literal, relative to the primary project, and not home-expanded.
+They must be normalized: no empty, `.` or `..` segments, colons, control
+characters, duplicates, or overlaps. Existing files and symlink
 components are refused. Primary/state mount paths cannot contain colons or
 control characters either.
 

@@ -102,7 +102,11 @@ func run(root, host string, args []string) int {
 		return status
 	}
 	if !o.ignoreConfig {
-		for _, workspace := range project.Workspaces {
+		for _, configured := range project.Workspaces {
+			workspace, err := expandWorkspaceHome(configured)
+			if err != nil {
+				return fail("%s", err)
+			}
 			if !filepath.IsAbs(workspace) {
 				workspace = primary + "/" + workspace
 			}

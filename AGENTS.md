@@ -83,9 +83,10 @@ dependencies but never installs them automatically.
   `jq` remains required only for sandbox listing and deletion. Keep `bin/install`
   checks and docs aligned.
   Parse as data, never execute `setup` on the host. `workspaces` adds directories
-  after CLI workspaces, without changing the primary; paths are literal and
-  relative to the primary project, not the config symlink target. Validate
-  configured directories and deduplicate physical directory references in order.
+  after CLI workspaces, without changing the primary. Expand only leading `~`,
+  `$HOME`, or `${HOME}` components to the host home; other relative paths resolve
+  from the primary project, not the config symlink target. Validate configured
+  directories and deduplicate physical directory references in order.
   No path arguments (including with `-y`) means current directory plus configured
   extras. `--ignore-config-workspaces` skips configured mounts and directory
   checks, not TOML/schema validation, CLI/shared mounts, or setup execution.
@@ -106,7 +107,7 @@ dependencies but never installs them automatically.
   `--env PISSBOX_WORKSPACE_DIR=...` for the primary project. SBX selects the
   sandbox unless `--name` is supplied; do not add custom discovery/bootstrap
   except the narrow opted-in staged creation handshake below.
-- `isolated_directories` is opt-in intent, relative to the primary workspace.
+- `isolated_directories` is opt-in intent, literal and relative to the primary workspace.
   Omitted/empty keeps the ordinary `sbx run` creation path unless `--secret` or
   `--shell` needs staged creation. Keep the replaceable
   hidden-mount mechanism in `host/launcher/isolation.go`: create with

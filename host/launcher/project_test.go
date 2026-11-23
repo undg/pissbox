@@ -99,6 +99,10 @@ func TestParseProjectConfigAcceptsDocumentedValues(t *testing.T) {
 			"isolated_directories = [\"node_modules\", \"packages/app/node_modules\"]",
 			project{Isolated: []string{"node_modules", "packages/app/node_modules"}},
 		},
+		"isolated directory names stay literal": {
+			`isolated_directories = ["~/.dot", "$HOME/.dot", "${HOME}/.dot"]`,
+			project{Isolated: []string{"~/.dot", "$HOME/.dot", "${HOME}/.dot"}},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := parseProject([]byte(test.text))

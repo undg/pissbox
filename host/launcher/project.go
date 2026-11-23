@@ -49,6 +49,20 @@ func (w *workspaceSet) append(path string) {
 	w.keys = append(w.keys, key)
 }
 
+func expandWorkspaceHome(path string) (string, error) {
+	prefix, _, _ := strings.Cut(path, "/")
+	switch prefix {
+	case "~", "$HOME", "${HOME}":
+		home, err := os.UserHomeDir()
+		if err != nil || !filepath.IsAbs(home) {
+			return "", fmt.Errorf("Configured workspace %q requires an absolute host HOME", path)
+		}
+		return home + path[len(prefix):], nil
+	default:
+		return path, nil
+	}
+}
+
 type project struct {
 	Setup      []string `toml:"setup"`
 	Workspaces []string `toml:"workspaces"`
