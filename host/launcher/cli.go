@@ -16,6 +16,7 @@ type options struct {
 	version, recreate, shell                                           bool
 	workspaces                                                         []string
 	secrets                                                            []secret
+	mcpServers                                                         []string
 }
 
 // newCLI defines flags once for parsing, help, and shell completion. Ordinary
@@ -43,6 +44,7 @@ func newCLI(o *options) *cobra.Command {
 	f.BoolVarP(&o.yes, "yes", "y", false, "Skip the existing-sandbox menu or deletion confirmation")
 	f.BoolVarP(&o.list, "ls", "l", false, "List sandboxes, current-directory matches first")
 	f.StringVar(&o.name, "name", "", "Use an explicit sandbox `NAME`")
+	f.StringSliceVar(&o.mcpServers, "mcp", nil, "Pre-load registered MCP `SERVER` names on creation only (repeatable/comma-separated; default none); Pi connection stays OFF")
 	f.Var(&secretFlag{secrets: &o.secrets}, "secret", "Register a proxy secret on creation only (repeatable): `ENV_NAME HOST COMMAND`")
 	f.BoolVar(&o.ignoreConfig, "ignore-config-workspaces", false, "Skip configured mounts; keep CLI paths and setup")
 	f.StringVar(&o.piDir, "pissbox-pi-dir", "", "Override the shared sandbox Pi configuration directory: `DIR`")
@@ -61,6 +63,9 @@ func newCLI(o *options) *cobra.Command {
 		panic(err)
 	}
 	if err := cmd.RegisterFlagCompletionFunc("secret", noCompletion); err != nil {
+		panic(err)
+	}
+	if err := cmd.RegisterFlagCompletionFunc("mcp", noCompletion); err != nil {
 		panic(err)
 	}
 	if err := cmd.RegisterFlagCompletionFunc("name", noCompletion); err != nil {
@@ -82,6 +87,11 @@ func parse(args []string) (options, error) {
 	// pflag parses interspersed options, so workspaces and flags may alternate;
 	// `--` ends option parsing natively.
 	o.workspaces = cmd.Flags().Args()
+	if !o.help {
+		if err := validateMcpServers(o.mcpServers); err != nil {
+			return o, err
+		}
+	}
 	if o.shell && o.continued {
 		return o, fmt.Errorf("--shell cannot be combined with --continue")
 	}
@@ -160,6 +170,8 @@ func normalizeArgs(cmd *cobra.Command, args []string, completing bool) ([]string
 					metavar = "a sandbox name"
 				} else if flag.Name == "completion" {
 					metavar = "a shell name"
+				} else if flag.Name == "mcp" {
+					metavar = "an MCP server name"
 				}
 				return nil, fmt.Errorf("%s requires %s", name, metavar)
 			}

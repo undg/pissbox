@@ -9,7 +9,7 @@ sandboxes, and shared host-owned Pi configuration and tool state.
 ## Start
 
 Host prerequisites: Make, Go **1.25+**, running Docker with buildx, SBX
-**v0.39.0+** with Docker sign-in, and `jq`. Put Go's binary directory (`GOBIN`,
+**v0.54.0+** with Docker sign-in, and `jq`. Put Go's binary directory (`GOBIN`,
 normally `~/go/bin`) on PATH, then from this checkout:
 
 ```bash
@@ -108,6 +108,22 @@ block = ["blocked.example.com", "*.untrusted.example.com"]
 Allow rules extend the kit defaults; block rules take precedence. Both lists are
 optional and apply only when creating a sandbox, not when attaching to one.
 See [network permissions](doc/network.md) for patterns and lifecycle details.
+
+## Host MCP and browser handover
+
+New sandboxes start in static MCP mode with **no servers**. Pi's SBX gateway
+connection is **OFF by default**, including after reload, resume, fork, and new
+session. Use `/sandbox-mcp on` to connect ad hoc (with confirmation),
+`/sandbox-mcp off` to disconnect, and `/sandbox-mcp status` to inspect the local
+switch. `/mcp` reports the actual connection and tools.
+
+Register trusted MCP servers on the host through SBX, then load them into the
+chosen sandbox. `pissbox --mcp SERVER` pre-loads registered servers on **creation
+only**; repeat the flag or use comma-separated names. It does not turn Pi's
+connection ON or change existing attachments. See [MCP and authenticated browser
+handover](doc/mcp.md) for setup, host load/unload, and security boundaries.
+Optional Chrome DevTools MCP runs on the host; its executable and browser are
+not installed or checked by `bin/install`.
 
 ## Go launcher
 

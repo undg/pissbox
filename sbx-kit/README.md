@@ -20,8 +20,8 @@ A symlink on PATH works. With no workspaces, the current directory is primary;
 otherwise the first path is primary and the rest are additional read-write
 mounts. SBX chooses the name unless `--name` is supplied.
 
-Requires **SBX v0.39.0+** for `sbx run --env`. If `--env` is unknown, check
-`sbx version` and upgrade SBX. For a Homebrew installation:
+Requires **SBX v0.54.0+** for the launcher's static MCP defaults and gateway
+lifecycle. If `--static-mcp` or `--env` is unknown, check `sbx version` and upgrade SBX. For a Homebrew installation:
 
 ```bash
 brew upgrade docker/tap/sbx
@@ -69,6 +69,16 @@ for configuration, lifecycle, experimental SBX support, and failure recovery.
 
 See [first-time project setup](../doc/project-configuration.md#first-time-project-setup)
 for command execution, failure behavior, and direct SBX launches.
+
+## Opt-in host MCP gateway
+
+The launcher creates sandboxes with `--static-mcp none` unless `--mcp SERVER`
+selects registered host servers. Pi stays disconnected until `/sandbox-mcp on`;
+`/sandbox-mcp off` disconnects the current Pi session, and reload/resume/new/fork
+reset to OFF. Use host `sbx mcp load/unload` for sandbox-scoped server access.
+Existing sandboxes retain their original mode and server attachments.
+See [MCP and browser handover](../doc/mcp.md). Direct SBX launches must explicitly
+select static mode; the kit alone does not set the gateway's mode.
 
 ## Optional messaging and Herd reporting
 

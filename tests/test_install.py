@@ -50,7 +50,7 @@ if " ".join(call).startswith(os.environ.get("INSTALL_TEST_FAIL", "never-fail")):
 if call == ["go", "env", "GOVERSION"]:
     print(os.environ.get("INSTALL_TEST_GO", "go1.25.0"))
 if call == ["sbx", "version"]:
-    print("sbx version " + os.environ.get("INSTALL_TEST_SBX", "v0.39.0") + " test-hash")
+    print("sbx version " + os.environ.get("INSTALL_TEST_SBX", "v0.54.0") + " test-hash")
 '''
         for name in ("make", "go", "docker", "sbx", "jq"):
             script = self.tools / name
@@ -61,7 +61,7 @@ if call == ["sbx", "version"]:
         env = {key: value for key, value in os.environ.items() if key != "PREFIX"}
         env.update({"HOME": str(self.home), "PATH": str(self.tools) if path is None else path,
                     "INSTALL_TEST_LOG": str(self.log), "INSTALL_TEST_FAIL": "never-fail",
-                    "INSTALL_TEST_GO": "go1.25.0", "INSTALL_TEST_SBX": "v0.39.0",
+                    "INSTALL_TEST_GO": "go1.25.0", "INSTALL_TEST_SBX": "v0.54.0",
                     **overrides})
         result = subprocess.run(
             [str(installer or self.installer), *args], cwd=self.directory,
@@ -160,8 +160,9 @@ if call == ["sbx", "version"]:
         for env, message in (
             ({"INSTALL_TEST_GO": "go1.24.9"}, "Go 1.25+"),
             ({"INSTALL_TEST_GO": "unrecognized"}, "Go 1.25+"),
-            ({"INSTALL_TEST_SBX": "v0.38.9"}, "SBX v0.39.0+"),
-            ({"INSTALL_TEST_SBX": "unrecognized"}, "SBX v0.39.0+"),
+            ({"INSTALL_TEST_SBX": "v0.53.9"}, "SBX v0.54.0+"),
+            ({"INSTALL_TEST_SBX": "v0.39.0"}, "SBX v0.54.0+"),
+            ({"INSTALL_TEST_SBX": "unrecognized"}, "SBX v0.54.0+"),
         ):
             with self.subTest(env=env):
                 result, calls = self.launch(**env)
@@ -199,7 +200,9 @@ if call == ["sbx", "version"]:
                     self.assertIn("Clipboard command capture also uses Bash/zsh and tee", result.stdout)
                     self.assertIn("Optional --secret needs SBX secret set-custom --command and --placeholder support", result.stdout)
                     self.assertIn("base SBX version check does not verify this optional capability", result.stdout)
-                    self.assertIn("SBX v0.39.0+, and jq", result.stdout)
+                    self.assertIn("SBX v0.54.0+, and jq", result.stdout)
+                    self.assertIn("static MCP gateway and no servers by default", result.stdout)
+                    self.assertIn("Optional Chrome DevTools MCP requires a trusted host MCP executable", result.stdout)
                     self.assertIn("build the Go launcher/bridge and image", result.stdout)
                     self.assertIn("wrapper for the explicitly built native Go launcher", result.stdout)
                     self.assertIn("PREFIX/bin", result.stdout)

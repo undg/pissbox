@@ -14,7 +14,8 @@ Options:
 Environment:
   PREFIX      Installation prefix (default: $HOME/.local)
 
-Requires Make, Go 1.25+, Docker with buildx, SBX v0.39.0+, and jq.
+Requires Make, Go 1.25+, Docker with buildx, SBX v0.54.0+, and jq.
+New sandboxes start with a static MCP gateway and no servers by default.
 Optional --secret needs SBX secret set-custom --command and --placeholder support (verified with v0.50.0).
 The base SBX version check does not verify this optional capability.
 The launcher parses project workspaces before the sandbox exists.
@@ -25,6 +26,7 @@ Optional bin/artifacts transfers require Python 3; it is not checked here.
 Optional vault history requires host Git; Obsidian opening requires its URI handler and open (macOS) or xdg-open (Linux).
 These optional vault dependencies are not checked or installed here.
 Optional read-only GitHub tools require host gh with existing authentication; it is not checked or installed here.
+Optional Chrome DevTools MCP requires a trusted host MCP executable and a dedicated debugging browser; these are not checked or installed here.
 Optional host clipboard copying uses pbcopy (macOS), wl-copy (Wayland), or xclip/xsel (X11); these are not checked or installed here.
 Clipboard command capture also uses Bash/zsh and tee; these optional capabilities are not checked or installed here.
 Existing symlinks are updated; regular files and directories are never replaced.
@@ -89,8 +91,8 @@ if [[ ! $GO_VERSION =~ ^go([0-9]+)\.([0-9]+) ]] ||
 fi
 SBX_VERSION=$(sbx version)
 if [[ ! $SBX_VERSION =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]] ||
-	(( BASH_REMATCH[1] == 0 && BASH_REMATCH[2] < 39 )); then
-	echo "SBX v0.39.0+ is required; found: $SBX_VERSION" >&2
+	(( BASH_REMATCH[1] == 0 && BASH_REMATCH[2] < 54 )); then
+	echo "SBX v0.54.0+ is required; found: $SBX_VERSION" >&2
 	exit 1
 fi
 

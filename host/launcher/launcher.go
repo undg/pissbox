@@ -161,7 +161,9 @@ func run(root, host string, args []string) int {
 	}
 	workspaces.append(pi)
 	workspaces.append(state)
-	sbxArgs := []string{"run", "--env", "PISSBOX_PI_DIR=" + pi, "--env", "PISSBOX_STATE_DIR=" + state, "--env", "PISSBOX_WORKSPACE_DIR=" + primary}
+	// Static mode prevents agents discovering host registrations on their own.
+	// Existing-sandbox attaches below never change the saved MCP mode or set.
+	sbxArgs := []string{"run", "--env", "PISSBOX_PI_DIR=" + pi, "--env", "PISSBOX_STATE_DIR=" + state, "--env", "PISSBOX_WORKSPACE_DIR=" + primary, "--static-mcp", o.staticMcp()}
 	if o.name != "" {
 		sbxArgs = append(sbxArgs, "--name", o.name)
 	}

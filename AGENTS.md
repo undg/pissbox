@@ -253,9 +253,12 @@ concurrent writers for the same language/report. `make check` never installs
 quality tools or runs mutants. `make fmt` and `make tidy` modify files; they are
 not read-only checks.
 
-The launcher requires SBX v0.39.0+ for `--env`; upgrade old hosts rather than
-removing required variables. SBX v0.48.0 requires Docker sign-in even for kit
-validation; installing the CLI or reading help is not validation.
+The launcher requires SBX v0.54.0+ for static MCP defaults and gateway lifecycle;
+upgrade old hosts rather than removing required flags. New sandboxes use
+`--static-mcp none` unless creation-only `--mcp SERVER` selects registered servers.
+Pi's `/sandbox-mcp on|off|status` connection is session-local and OFF by default;
+it does not load/unload host registrations or revoke other clients' access.
+SBX v0.48.0 requires Docker sign-in even for kit validation; installing the CLI or reading help is not validation.
 
 `make test-python` builds one fresh isolated Go launcher and exercises the
 production wrapper in fixture checkouts without ambient project configuration or

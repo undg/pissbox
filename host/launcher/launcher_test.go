@@ -375,7 +375,7 @@ func TestLaunchPreservesArgumentsAndPhysicalDeduplication(t *testing.T) {
 		t.Fatal(calls)
 	}
 	args := calls[0]
-	expected := []string{"run", "--env", "PISSBOX_PI_DIR=" + f.pi, "--env", "PISSBOX_STATE_DIR=" + f.state, "--env", "PISSBOX_WORKSPACE_DIR=" + f.project + "/.", "--name", "last", f.root + "/bin/../sbx-kit", ".", f.root, f.pi, f.state, "--", "--continue"}
+	expected := []string{"run", "--env", "PISSBOX_PI_DIR=" + f.pi, "--env", "PISSBOX_STATE_DIR=" + f.state, "--env", "PISSBOX_WORKSPACE_DIR=" + f.project + "/.", "--static-mcp", "none", "--name", "last", f.root + "/bin/../sbx-kit", ".", f.root, f.pi, f.state, "--", "--continue"}
 	if fmt.Sprint(args) != fmt.Sprint(expected) {
 		t.Fatalf("got %q\nwant %q", args, expected)
 	}

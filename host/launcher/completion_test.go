@@ -55,6 +55,8 @@ func TestCompletionRequests(t *testing.T) {
 		{"delete flag as workspace", []string{"--", "--delete=/tmp", ""}, ":16\n"},
 		{"after separator", []string{"--", "--na"}, ":16\n"},
 		{"sandbox name", []string{"--name", ""}, ":4\n"},
+		{"MCP flag", []string{"--mc"}, "--mcp\t"},
+		{"MCP server names", []string{"--mcp", ""}, ":4\n"},
 		{"shell names", []string{"--completion", ""}, "bash\nzsh\nfish\npowershell\n:4\n"},
 		{"shell prefix", []string{"--completion=z"}, "zsh\n:4\n"},
 		{"secret env", []string{"--secret", ""}, ":4\n"},

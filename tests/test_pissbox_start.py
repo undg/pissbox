@@ -371,6 +371,7 @@ class LauncherTests(unittest.TestCase):
             "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
             "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
             "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}",
+            "--static-mcp", "none",
             str(ROOT / "bin" / "../sbx-kit"), str(ROOT), str(PI_DIR), str(STATE_DIR),
         ]])
         self.assertEqual(result.stderr, "")
@@ -644,6 +645,7 @@ class LauncherTests(unittest.TestCase):
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                     "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
                     "--env", f"PISSBOX_WORKSPACE_DIR={cwd}",
+                    "--static-mcp", "none",
                     str(ROOT / "bin" / "../sbx-kit"), str(cwd), str(PI_DIR), str(STATE_DIR),
                 ]])
 
@@ -660,6 +662,7 @@ class LauncherTests(unittest.TestCase):
                     "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                     "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
                     "--env", f"PISSBOX_WORKSPACE_DIR={cwd}/.",
+                    "--static-mcp", "none",
                     str(ROOT / "bin" / "../sbx-kit"), ".", str(PI_DIR), str(STATE_DIR),
                 ]])
 
@@ -821,6 +824,7 @@ class LauncherTests(unittest.TestCase):
                         "run", "--env", f"PISSBOX_PI_DIR={PI_DIR}",
                         "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
                         "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}/.",
+                        "--static-mcp", "none",
                         str(ROOT / "bin" / "../sbx-kit"), ".", "workspace with spaces",
                         str(PI_DIR), str(STATE_DIR),
                     ]])
@@ -1094,6 +1098,7 @@ class LauncherTests(unittest.TestCase):
             "run", "--env", f"PISSBOX_PI_DIR={pi}",
             "--env", f"PISSBOX_STATE_DIR={STATE_DIR}",
             "--env", f"PISSBOX_WORKSPACE_DIR={ROOT}/workspace with spaces",
+            "--static-mcp", "none",
             "--name", "last", str(ROOT / "bin" / "../sbx-kit"),
             "workspace with spaces", "second workspace", "--path", str(pi),
             str(STATE_DIR),
