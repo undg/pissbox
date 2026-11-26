@@ -9,9 +9,7 @@
     "extensions/disable-share.ts",
     "extensions/vault/index.ts"
   ],
-  "packages": [
-    "npm:@gotgenes/pi-colgrep"
-  ],
+  "packages": ["npm:@gotgenes/pi-colgrep"],
   "terminal": {
     "showTerminalProgress": true,
     "clearOnShrink": false
@@ -38,12 +36,12 @@
   "theme": "system",
   "tuiMode": "fullscreen",
   "defaultProvider": "github-copilot",
-  "defaultModel": "gpt-6.2-sol",
+  "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "medium",
   "enabledModels": [
-    "github-copilot/gpt-6.2-sol",
     "github-copilot/gpt-6-luna",
-    "github-copilot/gpt-6.1-terra"
+    "github-copilot/gpt-6.1-terra",
+    "github-copilot/gpt-6.1-sol"
   ],
   "extensionChangelogVersions": {
     "{\"source\":\"npm:@gotgenes/pi-colgrep\",\"scope\":\"user\"}": "2.0.0"
