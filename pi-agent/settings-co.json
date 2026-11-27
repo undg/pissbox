@@ -43,7 +43,8 @@
   "enabledModels": [
     "github-copilot/gpt-6-luna",
     "github-copilot/gpt-6.1-terra",
-    "github-copilot/gpt-6.1-sol"
+    "github-copilot/gpt-6.1-sol",
+    "github-copilot/claude-opus-5.5"
   ],
   "extensionChangelogVersions": {
     "{\"source\":\"npm:@gotgenes/pi-colgrep\",\"scope\":\"user\"}": "2.0.0"
