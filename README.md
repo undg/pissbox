@@ -315,6 +315,15 @@ New interactive sessions also generate a title from the first prompt. Use
 `/skill:session-name` to refresh it from the conversation, or `/name My title`
 for a manual rename. Automatic naming makes a small additional model request.
 
+The `context-footer` extension shows estimated current context tokens instead of
+Pi's percentage, for example `147k/1.1M (auto)`. The context field is green below
+**80,000 tokens**, orange from **80,000 to below 150,000**, and red at **150,000 or
+more**, regardless of window size. Green and red use the theme's success/error
+colours; orange is explicit. Unknown usage after compaction shows a dim `?`.
+Session token/cache/cost totals, model/thinking level, and extension statuses remain
+visible. Session titles use the theme's accent colour; the path and branch stay dim.
+The extension changes display only, not automatic compaction thresholds.
+
 A third footer line starts with the agent callsign, then shows a live activity
 timer: `Aiden Jasper · working 2m14s` during a run, then
 `Aiden Jasper · idle 12m0s` for time since it finished (including interrupted
