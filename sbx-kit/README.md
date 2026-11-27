@@ -63,7 +63,7 @@ register or change secrets.
 ## Optional dependency isolation
 
 See [dependency isolation](../doc/project-configuration.md#optional-dependency-isolation)
-for configuration, lifecycle, experimental SBX support, and failure recovery.
+for configuration, lifecycle, version-tested SBX support, and restart recovery.
 
 ## First-time project setup
 

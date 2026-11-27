@@ -49,16 +49,25 @@ characters, duplicates, or overlaps. Existing files and symlink
 components are refused. Primary/state mount paths cannot contain colons or
 control characters either.
 
-Isolation is **experimental**, using hidden SBX mounts tested on macOS with
-SBX v0.49.1 for the original Bash launcher. Real-SBX verification of the Go port
-is still pending on real hosts.
+Isolation uses SBX runtime bind mounts through staged creation. Direct tests on
+macOS/SBX v0.54.0 verified ordinary and overlapping mounts and stop/start
+restoration; they did not verify the complete Go launcher flow.
 Use `pissbox`, not direct `sbx run`; `--name` is optional.
 
-Setup runs only after isolated mounts are verified. Failed staging blocks Pi
-and shell attaches; it never falls back to host dependencies or retries setup.
+During creation, setup runs only after isolated mounts are verified. Failed
+staging blocks Pi and shell attaches rather than falling back to host
+dependencies or retrying setup.
 Recover with a new sandbox name or explicitly delete the failed sandbox.
 Backing data under `PISSBOX_STATE_DIR/isolation.*` survives deletion and is not
 cleaned automatically. Do not remove it while a sandbox uses it.
+
+**Known limitation (macOS/SBX v0.54.0):** replacing a host isolated directory
+(rename, then recreate at the same path) can expose host dependencies inside the
+running sandbox, despite its saved mount registration. Attachment checks setup
+completion, not live mounts. **Stop/start the affected sandbox**, not just Pi:
+both reproduction tests reattached the existing Linux data without recreation
+or reinstalling dependencies. Stopping terminates running processes; avoid
+writes through the affected path until isolation is restored.
 
 ## First-time project setup
 
