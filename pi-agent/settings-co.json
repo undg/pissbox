@@ -9,7 +9,9 @@
     "extensions/disable-share.ts",
     "extensions/vault/index.ts"
   ],
-  "packages": ["npm:@gotgenes/pi-colgrep"],
+  "packages": [
+    "npm:@gotgenes/pi-colgrep"
+  ],
   "terminal": {
     "showTerminalProgress": true,
     "clearOnShrink": false
