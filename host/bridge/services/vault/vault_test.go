@@ -578,10 +578,7 @@ func TestDailyAndHostObsidianOpening(t *testing.T) {
 	var uri string
 	s.Open = func(_ context.Context, value string) error { uri = value; return nil }
 	execute(t, s, "open", Request{Path: today})
-	notePath, err := filepath.EvalSymlinks(filepath.Join(dir, filepath.FromSlash(today)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	notePath := filepath.Join(dir, filepath.FromSlash(today))
 	opened, err := url.Parse(uri)
 	if err != nil || opened.Scheme != "obsidian" || opened.Host != "open" || len(opened.Query()) != 1 || opened.Query().Get("path") != notePath {
 		t.Fatal(uri, err)
@@ -593,6 +590,37 @@ func TestDailyAndHostObsidianOpening(t *testing.T) {
 	cancel()
 	if _, err := s.Execute(ctx, "new", Request{Path: "cancelled.md", Content: "x"}); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+func TestOpeningPreservesConfiguredVaultPathThroughSymlinkedParent(t *testing.T) {
+	home := t.TempDir()
+	physical := filepath.Join(home, "CloudStorage", "OneDrive-S&PGlobal", "Documents")
+	if err := os.MkdirAll(filepath.Join(physical, "Work-Notes"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(physical, filepath.Join(home, "Documents")); err != nil {
+		t.Fatal(err)
+	}
+	configured := filepath.Join(home, "Documents", "Work-Notes")
+	s, err := New([]Definition{{Name: "work", Path: configured}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const name = "Folder & notes/note #1?.md"
+	put(t, filepath.Join(physical, "Work-Notes"), name, "body")
+	var uri string
+	s.Open = func(_ context.Context, value string) error { uri = value; return nil }
+	execute(t, s, "open", Request{Path: name})
+	opened, err := url.Parse(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := opened.Query().Get("path"), filepath.Join(configured, filepath.FromSlash(name)); got != want {
+		t.Fatalf("Obsidian path = %q, want configured path %q", got, want)
+	}
+	if _, err := New([]Definition{{Name: "alias", Path: configured}, {Name: "physical", Path: filepath.Join(physical, "Work-Notes")}}); err == nil {
+		t.Fatal("accepted duplicate physical vault through symlink")
 	}
 }
 
@@ -781,10 +809,7 @@ func TestDesktopOpenerUsesHostCommandWithEncodedURI(t *testing.T) {
 	const name = "Folder & notes/note #1?.md"
 	put(t, dir, name, "body")
 	execute(t, s, "open", Request{Path: name})
-	notePath, err := filepath.EvalSymlinks(filepath.Join(dir, filepath.FromSlash(name)))
-	if err != nil {
-		t.Fatal(err)
-	}
+	notePath := filepath.Join(dir, filepath.FromSlash(name))
 	data, err := os.ReadFile(capture)
 	if err != nil || string(data) != "obsidian://open?path="+url.QueryEscape(notePath)+"\n" {
 		t.Fatal(string(data), err)

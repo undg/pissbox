@@ -32,6 +32,9 @@ const MaxContentBytes = 16 * 1024
 type Definition struct {
 	Name, Path string
 	Git        bool
+
+	// Keep the configured spelling for Obsidian's registered vault lookup.
+	openPath string
 }
 
 // Request uses vault-relative paths. Revision is the token from a read or write.
@@ -107,6 +110,7 @@ func New(definitions []Definition) (*Service, error) {
 			return nil, errors.New("vault directories must be distinct existing directories")
 		}
 		seen[canonical] = true
+		d.openPath = d.Path
 		d.Path = canonical
 	}
 	return &Service{definitions: definitions, Open: openDesktop}, nil

@@ -22,8 +22,10 @@ path = "/absolute/host/path/to/work-notes"
 git = false
 ```
 
-Notes open in Obsidian using their absolute host path; no separate Obsidian
-vault name is needed.
+Notes open in Obsidian using their configured absolute host path (with `~/`
+expanded), preserving symlink paths so they match Obsidian's registered vault
+location. Filesystem access and duplicate-vault checks still use the resolved
+physical directory. No separate Obsidian vault name is needed.
 
 Directories must already exist and refer to distinct physical directories.
 Paths must be absolute or start with `~/`. The launcher validates configuration
